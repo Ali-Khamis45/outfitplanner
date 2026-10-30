@@ -1,0 +1,13 @@
+{
+  "name": "virtual-wardrobe",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": ["apps/web", "packages/contracts"],
+  "scripts": {
+    "dev": "npm run dev --workspace @virtual-wardrobe/web",
+    "build": "npm run build --workspace @virtual-wardrobe/web",
+    "lint": "npm run lint --workspace @virtual-wardrobe/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  }
+}
