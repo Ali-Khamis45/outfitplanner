@@ -1,6 +1,7 @@
 "use client";
 import { Cube, Fingerprint, SquaresFour } from "@phosphor-icons/react";
 import type { AssetStatus, ModelInfo, RenderStats } from "./types";
+import { ReconstructionPanel } from "./ReconstructionPanel";
 
 function Value({ label, value }: { label: string; value: string }) { return <div className="data-row"><dt>{label}</dt><dd>{value}</dd></div>; }
 function Toggle({ label, hint, value, onChange }: { label: string; hint: string; value: boolean; onChange: (value: boolean) => void }) {
@@ -14,6 +15,7 @@ export function LeftInspector({ skeleton, wireframe, grid, setSkeleton, setWiref
       <label className="field-label" htmlFor="model-select">ACTIVE MODEL</label><select id="model-select" defaultValue="mhr"><option value="mhr">MHR / Neutral body</option></select>
       <p className="side-note">Official MHR export with a skinned armature.</p>
     </section>
+    <ReconstructionPanel />
     <section className="side-section"><div className="section-title"><SquaresFour size={18} /><h2>Mesh inspection</h2></div>
       <Toggle label="Skeleton" hint="Show joint hierarchy" value={skeleton} onChange={setSkeleton} />
       <Toggle label="Wireframe" hint="Inspect mesh topology" value={wireframe} onChange={setWireframe} />

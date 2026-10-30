@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -29,7 +31,7 @@ class AdapterTests(unittest.TestCase):
         with torch.inference_mode():
             vertices, _ = cls.model(torch.from_numpy(identity[None]), torch.from_numpy(pose[None]), torch.from_numpy(expression[None]))
         cls.data = {"shape_params": identity, "mhr_model_params": pose, "expr_params": expression,
-                    "pred_cam_t": np.array([0, 0, 2], dtype=np.float32),
+                    "pred_cam_t": np.array([0, 0, 2], dtype=np.float32), "focal_length": np.float32(1000),
                     "pred_vertices": vertices[0].numpy() / 100 * np.array([1, -1, -1], dtype=np.float32),
                     "mesh_faces": cls.model.character_torch.mesh.faces.cpu().numpy()}
 
@@ -42,6 +44,9 @@ class AdapterTests(unittest.TestCase):
             path = Path(directory) / "synthetic.glb"
             path.write_bytes(payload)
             result = validate(path)
+            if shutil.which("node"):
+                loader_test = self.adapter.PROJECT / "apps" / "web" / "tests" / "mhr-loader.test.mjs"
+                subprocess.run(["node", str(loader_test), str(path)], check=True, capture_output=True, text=True)
         self.assertEqual((result["vertices"], result["triangles"], result["joint_counts"]), (18439, 36874, [127]))
 
     def test_invalid_dimensions_and_nonfinite_are_rejected(self) -> None:
@@ -58,6 +63,12 @@ class AdapterTests(unittest.TestCase):
         data = dict(self.data)
         data["pred_vertices"] = self.data["pred_vertices"].copy()
         data["pred_vertices"][0, 0] += 0.1
+        with self.assertRaisesRegex(self.adapter.AdapterError, "differ"):
+            self.adapter.evaluate(data, self.model)
+
+    def test_changed_identity_is_not_silently_accepted(self) -> None:
+        data = dict(self.data)
+        data["shape_params"] = self.np.zeros(45, dtype=self.np.float32)
         with self.assertRaisesRegex(self.adapter.AdapterError, "differ"):
             self.adapter.evaluate(data, self.model)
 

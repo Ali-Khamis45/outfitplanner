@@ -6,7 +6,6 @@ before export. A real SAM result has not yet been available for validation.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import sys
 import tempfile
@@ -17,6 +16,7 @@ import numpy as np
 import torch
 
 from validate_glb import validate as validate_glb
+from reconstruct import sha256
 
 PROJECT = Path(__file__).resolve().parents[2]
 VIEWER = PROJECT / "external" / "MHR" / "web-viewer"
@@ -42,6 +42,11 @@ def evaluate(data: Any, model: Any) -> tuple[np.ndarray, np.ndarray, np.ndarray,
     model_parameters = read_vector(data, "mhr_model_params", 204)
     expression = read_vector(data, "expr_params", 72)
     camera_translation = read_vector(data, "pred_cam_t", 3)
+    if "focal_length" not in data:
+        raise AdapterError("Missing required camera field: focal_length")
+    focal = np.asarray(data["focal_length"])
+    if focal.size != 1 or focal.dtype.kind != "f" or not np.isfinite(focal).all() or float(focal.reshape(-1)[0]) <= 0:
+        raise AdapterError("focal_length must be a positive finite floating-point scalar.")
     if "pred_vertices" not in data or "mesh_faces" not in data:
         raise AdapterError("SAM output must include pred_vertices and mesh_faces for cross-checking.")
     predicted = np.asarray(data["pred_vertices"])
@@ -66,7 +71,7 @@ def evaluate(data: Any, model: Any) -> tuple[np.ndarray, np.ndarray, np.ndarray,
     error = float(np.max(np.abs(sam_axes_vertices - predicted)))
     if error > MAX_VERTEX_ERROR_METERS:
         raise AdapterError(f"MHR vertices differ from SAM output by {error:.6g} m (limit {MAX_VERTEX_ERROR_METERS} m); check model versions, parameter semantics and coordinate conventions.")
-    return mhr_vertices, skeleton_state, expected_faces, {"max_vertex_error_m": error, "camera_translation": camera_translation.tolist(), "camera_applied_to_export": False}
+    return mhr_vertices, skeleton_state, expected_faces, {"max_vertex_error_m": error, "camera_translation": camera_translation.tolist(), "focal_length": float(focal.reshape(-1)[0]), "camera_applied_to_export": False}
 
 
 def export(data: Any, model: Any) -> tuple[bytes, dict[str, Any]]:
@@ -111,7 +116,7 @@ def main() -> int:
             temporary = Path(folder) / "avatar.glb"
             temporary.write_bytes(payload)
             metadata["glb_validation"] = validate_glb(temporary)
-        metadata["mhr_model_sha256"] = hashlib.sha256(args.mhr_model.read_bytes()).hexdigest()
+        metadata["mhr_model_sha256"] = sha256(args.mhr_model)
         target.parent.mkdir(parents=True, exist_ok=True)
         metadata_path = target.with_suffix(".json")
         if metadata_path.exists():

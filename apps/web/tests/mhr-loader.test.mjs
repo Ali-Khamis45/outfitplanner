@@ -4,7 +4,7 @@ import { Box3, MeshStandardMaterial, SkeletonHelper, SkinnedMesh, Vector3 } from
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
 
-const bytes = await readFile(new URL("../../../outputs/avatars/mhr-neutral.glb", import.meta.url));
+const bytes = await readFile(process.argv[2] ?? new URL("../../../outputs/avatars/mhr-neutral.glb", import.meta.url));
 const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 const gltf = await new Promise((resolve, reject) => new GLTFLoader().parse(buffer, "", resolve, reject));
 const scene = clone(gltf.scene);
