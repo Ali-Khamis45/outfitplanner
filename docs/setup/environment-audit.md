@@ -2,6 +2,8 @@
 
 Observed in the provided Windows session; availability can differ outside its sandbox.
 
+Update: a subsequent elevated WSL inspection found Ubuntu 26.04 on WSL2 and NVIDIA GPU visibility. Later WSL starts failed with `HCS/ERROR_NO_SYSTEM_RESOURCES`; see [MHR setup](mhr.md).
+
 | Item | Result |
 | --- | --- |
 | OS and architecture | Windows 10 Home 22H2, build 19045, x64 |

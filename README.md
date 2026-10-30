@@ -11,7 +11,9 @@ npm.cmd ci
 npm.cmd run dev
 ```
 
-Open http://localhost:3000. Checks: `npm.cmd run typecheck`, `npm.cmd run lint`, `npm.cmd run test`, and `npm.cmd run build`. The test command only runs available workspace tests; none are defined yet.
+Open http://localhost:3000. Checks: `npm.cmd run typecheck`, `npm.cmd run lint`, `npm.cmd run test`, and `npm.cmd run build`.
+
+The avatar studio is at http://localhost:3000/lab. It reads the generated `outputs/avatars/mhr-neutral.glb` through a fixed local endpoint; generate that asset first using [MHR setup](docs/setup/mhr.md). The loader test also requires the asset. This is an unauthenticated local proof of concept: do not expose the development server to an untrusted network or use it for private avatars.
 
 ## Layout
 

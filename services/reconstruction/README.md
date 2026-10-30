@@ -1,3 +1,3 @@
 # Reconstruction service
 
-Reserved for a future typed Python pipeline, preprocessing, SAM 3D Body and MHR integration, export, and tests. No model or inference code is implemented in this foundation. See the setup and experiment documents before starting.
+MHR proof-of-concept adapters live here. `export_mhr_glb.py` asks the official local viewer to reset to neutral LOD 1 and export its skinned GLB; `validate_glb.py` checks its geometry, joint hierarchy and weights. The viewer owns shared mutable state, so run exports only when nobody else is editing it. See [MHR setup](../../docs/setup/mhr.md) for exact commands and limitations. SAM 3D Body and image reconstruction are not implemented.

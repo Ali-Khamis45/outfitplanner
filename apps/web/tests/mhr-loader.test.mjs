@@ -1,0 +1,26 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { Box3, MeshStandardMaterial, SkeletonHelper, SkinnedMesh, Vector3 } from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
+
+const bytes = await readFile(new URL("../../../outputs/avatars/mhr-neutral.glb", import.meta.url));
+const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+const gltf = await new Promise((resolve, reject) => new GLTFLoader().parse(buffer, "", resolve, reject));
+const scene = clone(gltf.scene);
+let mesh;
+scene.traverse((item) => { if (item instanceof SkinnedMesh) mesh = item; });
+assert.ok(mesh, "Expected a skinned mesh in the official MHR GLB");
+assert.equal(mesh.geometry.getAttribute("position").count, 18439);
+assert.equal(mesh.geometry.index.count / 3, 36874);
+assert.equal(mesh.skeleton.bones.length, 127);
+assert.ok(mesh.geometry.getAttribute("skinIndex"));
+assert.ok(mesh.geometry.getAttribute("skinWeight"));
+const size = new Box3().setFromObject(scene).getSize(new Vector3());
+assert.ok(size.y > 1.7 && size.y < 1.8, "Expected meter-scale full-body bounds");
+const helper = new SkeletonHelper(scene);
+assert.ok(helper.geometry.getAttribute("position").count > 0, "Expected skeleton helper line geometry");
+const material = new MeshStandardMaterial({ wireframe: true });
+assert.equal(material.wireframe, true);
+material.dispose(); helper.dispose();
+console.log(`GLTFLoader parsed MHR: ${mesh.geometry.getAttribute("position").count} vertices, ${mesh.geometry.index.count / 3} triangles, ${mesh.skeleton.bones.length} joints, height ${size.y.toFixed(3)} m`);
