@@ -1,0 +1,7 @@
+# Preserve the user's existing CUDA PyTorch pair while installing upstream dependencies.
+torch==2.7.1+cu126
+torchvision==0.22.1+cu126
+networkx==3.2.1
+numpy==1.26.4
+opencv-python==4.10.0.84
+iopath==0.1.9

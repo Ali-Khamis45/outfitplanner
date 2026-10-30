@@ -1,6 +1,6 @@
 # SAM 3D Body reconstruction setup — work in progress
 
-**Status: BLOCKED_PENDING_APPROVAL.** The user reports that Hugging Face authentication now works and the access request for the official DINOv3 checkpoint is pending approval. Do not download gated checkpoints or run inference until access is granted. The CLI adapter and its tests are preliminary until exercised with real weights, detector and an authorized photo. Do not interpret a model-estimated mesh as an exact digital twin.
+**Status: ACCESS APPROVED; RECONSTRUCTION NOT YET VERIFIED.** The user reports that official DINOv3 access has been accepted. WSL authentication and a CUDA PyTorch operation have been verified; see the Sprint 0.3 report for download and installation progress. The CLI adapter and its tests remain preliminary until exercised with real weights, detector and an authorized photo. Do not interpret a model-estimated mesh as an exact digital twin.
 
 ## Access and source
 
@@ -9,6 +9,10 @@ The official checkout is `external/sam-3d-body`, commit `b5c765a0d89d789985e186d
 Request access to [facebook/sam-3d-body-dinov3](https://huggingface.co/facebook/sam-3d-body-dinov3). Once access is granted, authenticate locally in the AI environment with `hf auth login`; never paste a token into chat, files in this repository, or command history. Download the official snapshot into `external/checkpoints/sam-3d-body-dinov3` using `hf download facebook/sam-3d-body-dinov3 --local-dir <path>`. The adapter requires `model.ckpt`, `model_config.yaml`, and `assets/mhr_model.pt`. An HTTP 401 does not distinguish an invalid credential from an account without access; check the account and approval status.
 
 ## Environment and detector
+
+Sprint 0.3 uses the separately installed Miniforge environment `/home/levi/miniforge3/envs/sam_3d_body`, not the older Pixi environment described below. Its Python 3.11.18, PyTorch 2.7.1+cu126 and torchvision 0.22.1+cu126 were inspected, and a CUDA tensor operation on the RTX 3060 succeeded. The official dependencies and Detectron2 remain to be verified; `services/reconstruction/constraints-sam3d-cu126.txt` contains the provisional constraints used for installation. The historical Pixi setup below is not evidence that the newer environment is complete.
+
+The approved official checkpoint is now present at `/home/levi/sam3d-lab/checkpoints/sam-3d-body-dinov3`; `hf cache verify facebook/sam-3d-body-dinov3 --local-dir /home/levi/sam3d-lab/checkpoints/sam-3d-body-dinov3 --fail-on-missing-files` verified all five files against the official repository. The MHR TorchScript asset also loaded on CPU. Dependency installation and the separately isolated CUDA compiler setup are still in progress; neither SAM initialization nor inference has been verified. The existing CLI's `--checkpoint-dir` option must be set to this WSL directory rather than its older project-local default.
 
 An isolated Pixi Python 3.11 environment was initiated under ignored `external/sam3d-env` in Ubuntu WSL2, using the project-local Pixi executable at `external/pixi-bin/pixi`. Installing CUDA PyTorch and the official research dependencies is not yet verified. Upstream asks for Python 3.11, PyTorch, its dependency list and Detectron2 at revision `a1ce2f9`. Use the official installation instructions rather than a CPU-only environment: the inspected estimator at this commit explicitly sends its batch to `cuda` despite the demo's apparent CPU fallback. The WSL NVIDIA driver reported an RTX 3060 Laptop GPU with 6 GiB VRAM; feasibility of the full detector plus model on this GPU is unknown. `nvcc` was not found on the WSL PATH; a compatible CUDA toolkit/compiler may be needed to build Detectron2 with GPU support. Do not install into the unrelated MHR environment.
 
