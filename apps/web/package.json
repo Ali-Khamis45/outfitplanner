@@ -7,7 +7,8 @@
     "build": "next build",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit --incremental false",
-    "test": "node tests/mhr-loader.test.mjs"
+    "test": "node tests/mhr-loader.test.mjs && node --no-warnings tests/garment-binding.test.mjs && node --no-warnings tests/inspection.test.mjs",
+    "test:garment-quality": "node --no-warnings tests/garment-quality.test.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

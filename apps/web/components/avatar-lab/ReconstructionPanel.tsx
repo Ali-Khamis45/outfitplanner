@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 
-/** Photo stays in the browser; the actual reconstruction pipeline is blocked. */
+/** Photo preview stays in the browser; reconstruction runs separately from the CLI. */
 export function ReconstructionPanel() {
   const [preview, setPreview] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -35,7 +35,7 @@ export function ReconstructionPanel() {
     <input id="reconstruction-photo" className="photo-input" type="file" accept=".jpg,.jpeg,.jfif,.png,.webp,.bmp,.tif,.tiff" onChange={selectPhoto} />
     {preview && <div className="photo-preview"><Image src={preview} width={180} height={150} unoptimized alt="Selected photo preview" onError={() => setError("This image could not be previewed in your browser.")} /><span>{name}</span></div>}
     {error && <p className="reconstruction-error" role="alert">{error}</p>}
-    <button className="reconstruct-button" disabled title="Waiting for the official checkpoint and verified integration">Start reconstruction</button>
-    <p className="reconstruction-blocked" role="status"><strong>BLOCKED · PENDING APPROVAL</strong><br />The official checkpoint and end-to-end integration are not ready.</p>
+    <button className="reconstruct-button" disabled title="Reconstruction runs from the local command line in Sprint 0">Start reconstruction</button>
+    <p className="reconstruction-blocked" role="status"><strong>RECONSTRUCTION RUNS IN THE LOCAL CLI</strong><br />This photo preview does not create or load an avatar. To view an existing result, select <strong>Avatar → Personal</strong>, then choose your exported GLB from <code>outputs/avatars/</code>. The file stays in this browser.</p>
   </section>;
 }

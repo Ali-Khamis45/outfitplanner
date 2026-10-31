@@ -1,6 +1,6 @@
 # SAM 3D Body reconstruction setup — work in progress
 
-**Status: ACCESS APPROVED; RECONSTRUCTION NOT YET VERIFIED.** The user reports that official DINOv3 access has been accepted. WSL authentication and a CUDA PyTorch operation have been verified; see the Sprint 0.3 report for download and installation progress. The CLI adapter and its tests remain preliminary until exercised with real weights, detector and an authorized photo. Do not interpret a model-estimated mesh as an exact digital twin.
+**Status: ONE REAL RECONSTRUCTION VERIFIED (2026-10-31).** The CLI ran end to end on one authorized photo on the RTX 3060 and was exported to a validated rigged MHR GLB. It needs ~0.7 GiB beyond the 6 GiB of dedicated VRAM, which the Windows driver spills to system memory. Pyrender's EGL preview requires the WSL user to be in the `render` and `video` groups. The [Sprint 0.3 report](../sprint-0/sprint-0.3-report.md) has measurements, statuses and exact commands; parts of this page below describe earlier preparation. Do not interpret a model-estimated mesh as an exact digital twin.
 
 ## Access and source
 
