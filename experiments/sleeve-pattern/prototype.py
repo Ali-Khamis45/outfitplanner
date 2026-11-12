@@ -117,4 +117,3 @@ def build():
  print('output',TARGET,'vertices',len(pos),'faces',len(faces),'watertight',mesh.is_watertight,flush=True)
 
 if __name__=='__main__':build()
-
