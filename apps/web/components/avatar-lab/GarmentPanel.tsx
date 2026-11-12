@@ -70,7 +70,7 @@ export function GarmentPanel({ enabled, setEnabled, source, onSource, visible, s
         {source.fileName && <p className="side-note garment-file" title={source.sha256 ?? undefined}>{source.fileName}{source.sha256 ? ` · ${source.sha256.slice(0, 10)}…` : ""}</p>}
       </>}
       <label className="toggle-row"><span><strong>Correctives</strong><small>Pose-driven morph targets</small></span><input type="checkbox" checked={correctives} onChange={event => setCorrectives(event.target.checked)} /><span className="toggle-track" aria-hidden="true"><span /></span></label>
-      <p className="side-note">{Object.entries(weights).length ? Object.entries(weights).map(([name, weight]) => <span key={name}>{name}: {weight.toFixed(2)}<br /></span>) : "No corrective targets loaded."}</p>
+      <p className="side-note">{Object.entries(weights).length ? Object.entries(weights).map(([name, weight]) => <span key={name}>{name}: {weight.toFixed(2)}<br /></span>) : status.state === "loading" ? "Loading corrective targets…" : "No corrective targets loaded."}</p>
       <label className="toggle-row"><span><strong>Visible</strong><small>Hide without unloading</small></span><input type="checkbox" checked={visible} onChange={(event) => setVisible(event.target.checked)} /><span className="toggle-track" aria-hidden="true"><span /></span></label>
       <label className="color-row" htmlFor="garment-color"><span><strong>Base colour</strong><small>PBR base colour (roughness/metalness from the asset)</small></span><input id="garment-color" type="color" value={color} onChange={(event) => setColor(event.target.value)} /></label>
       <p className={status.state === "error" ? "reconstruction-error" : "reconstruction-blocked"} role={status.state === "error" ? "alert" : "status"}>

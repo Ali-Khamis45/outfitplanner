@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { Bone, Object3D, SkinnedMesh } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { DEFAULT_DEMO_VARIANT, createPantsChecker, createSidecarLoader, sidecarUrlForSelection } from "../lib/garment/demoResources.ts";
+import { DEFAULT_DEMO_VARIANT, createPantsChecker, createSidecarCache, createSidecarLoader, sidecarIsPending, sidecarUrlForSelection } from "../lib/garment/demoResources.ts";
 import { createCorrectiveDriver } from "../lib/garment/correctives.ts";
 import { bindGarment, rigFromSkinnedMesh } from "../lib/garment/binding.ts";
 import { applyPose, captureBindPose, findPose } from "../lib/garment/poses.ts";
@@ -15,6 +15,34 @@ const fetcher = async url => {
   return url.includes("sidecar") ? new Response(JSON.stringify(sidecar)) : new Response(null, { status: 404 });
 };
 const select = variant => ({ kind: "demo", variant, url: `/api/demo-garment?variant=${variant}` });
+const initialV5 = sidecarUrlForSelection(select(DEFAULT_DEMO_VARIANT));
+assert.equal(sidecarIsPending(initialV5, null), true, "v5 must wait before rendering its mesh");
+assert.equal(sidecarIsPending(initialV5, { url: initialV5 }), false);
+assert.equal(sidecarIsPending(sidecarUrlForSelection(select("v2")), null), false);
+// Full remounts make new loader instances, unlike an effect replay. They must
+// still share both in-flight and already completed requests for the selection.
+let remountCalls = 0, resolveSidecar;
+const delayed = new Promise(resolve => { resolveSidecar = resolve; });
+const shared = createSidecarCache(async () => { remountCalls++; await delayed; return new Response(JSON.stringify(sidecar)); });
+const loaders = Array.from({ length: 25 }, () => createSidecarLoader(undefined, shared));
+const pendingRemounts = loaders.map(loader => loader(sidecarUrlForSelection(select("v5"))));
+assert.equal(remountCalls, 1);
+resolveSidecar();
+await Promise.all(pendingRemounts);
+await createSidecarLoader(undefined, shared)(sidecarUrlForSelection(select("v5")));
+assert.equal(remountCalls, 1, "a later remount must reuse the completed request");
+await loaders[0](sidecarUrlForSelection(select("v2")));
+await loaders[0](sidecarUrlForSelection(select("v5")));
+assert.equal(remountCalls, 2, "a new v5 selection must fetch again");
+let availabilityCalls = 0;
+const sharedPantsCheck = createPantsChecker("/api/demo-garment?variant=pants", async (_url, options) => {
+  assert.equal(options.method, "HEAD"); availabilityCalls++; return new Response(null, { status: 200 });
+});
+await Promise.all(Array.from({ length: 25 }, () => sharedPantsCheck()));
+await sharedPantsCheck();
+assert.equal(availabilityCalls, 1, "pants availability is checked once across remounts");
+await sharedPantsCheck(true);
+assert.equal(availabilityCalls, 2, "explicit retry starts a new check");
 const load = createSidecarLoader(fetcher);
 const pants = createPantsChecker("/api/demo-garment?variant=pants", fetcher);
 const root = new Object3D();

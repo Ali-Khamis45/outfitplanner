@@ -1,9 +1,10 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createPantsChecker, type PantsAvailability } from "../../lib/garment/demoResources";
 import type { GarmentStatus } from "./types";
 
 export const PANTS_URL = "/api/demo-garment?variant=pants";
+const checkPants = createPantsChecker(PANTS_URL);
 type Availability = "checking" | PantsAvailability;
 export function PantsPanel({ enabled, setEnabled, visible, setVisible, color, setColor, wireframe, setWireframe, correctives, setCorrectives, weights, status, avatarReady }: {
   enabled: boolean; setEnabled: (value: boolean) => void; visible: boolean; setVisible: (value: boolean) => void;
@@ -11,15 +12,14 @@ export function PantsPanel({ enabled, setEnabled, visible, setVisible, color, se
   correctives: boolean; setCorrectives: (value: boolean) => void; weights: Record<string, number>; status: GarmentStatus; avatarReady: boolean;
 }) {
   const [availability, setAvailability] = useState<Availability>("checking");
-  const checkPants = useMemo(() => createPantsChecker(PANTS_URL), []);
   const check = useCallback(async () => {
     setAvailability(await checkPants(true));
-  }, [checkPants]);
+  }, []);
   useEffect(() => {
     let active = true;
     checkPants().then(result => { if (active) setAvailability(result); });
     return () => { active = false; };
-  }, [checkPants]);
+  }, []);
   return <section className="side-section" aria-labelledby="pants-heading">
     <div className="section-title"><h2 id="pants-heading">Pants</h2></div>
     <p className="side-note" role="status">{availability === "checking" ? "Checking pants asset…" : availability === "missing" ? "Pants not generated yet." : availability === "error" ? "Could not check the pants asset." : "Neutral-fit pants available."}</p>

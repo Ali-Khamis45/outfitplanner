@@ -1,5 +1,6 @@
 "use client";
 import { ArrowsClockwise, Camera, Cube, SlidersHorizontal } from "@phosphor-icons/react";
+import { useGLTF } from "@react-three/drei";
 import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from "react";
 import Link from "next/link";
 import { AvatarScene } from "./AvatarScene";
@@ -9,7 +10,7 @@ import { NEUTRAL_SOURCE } from "./AvatarSourcePanel";
 import { DEMO_GARMENT, demoGarment, GarmentPanel } from "./GarmentPanel";
 import { PantsPanel, PANTS_URL } from "./PantsPanel";
 import type { Sidecar } from "../../lib/garment/correctives";
-import { createSidecarLoader, sidecarUrlForSelection } from "../../lib/garment/demoResources";
+import { createSidecarLoader, sidecarIsPending, sidecarUrlForSelection } from "../../lib/garment/demoResources";
 import type { PoseName } from "../../lib/garment/poses";
 import type { AssetStatus, AvatarSource, CameraView, GarmentInfo, GarmentSource, GarmentStatus, ModelInfo, RenderStats } from "./types";
 
@@ -54,6 +55,8 @@ export function AvatarLab() {
   const [demoSidecar, setDemoSidecar] = useState<{ url: string; data: Sidecar | null } | null>(null);
   const sidecarLoader = useMemo(() => createSidecarLoader(), []);
   const demoSidecarUrl = sidecarUrlForSelection(garmentSource);
+  const sidecarPending = sidecarIsPending(demoSidecarUrl, demoSidecar);
+  useEffect(() => { if (garmentEnabled && garmentSource.url) useGLTF.preload(garmentSource.url); }, [garmentEnabled, garmentSource.url]);
   useEffect(() => {
     let active = true;
     sidecarLoader(demoSidecarUrl).then(data => { if (active && demoSidecarUrl) setDemoSidecar({ url: demoSidecarUrl, data }); });
@@ -69,10 +72,10 @@ export function AvatarLab() {
   const pendingGarment = useCallback((enabled: boolean, url: string): GarmentStatus => (enabled && url ? { state: "loading" } : { state: "off" }), []);
   const selectSource = useCallback((next: AvatarSource) => { setSource(next); setModel(null); setStatus("loading"); setGarmentStatus(pendingGarment(garmentEnabled, garmentSource.url)); setPantsStatus({ state: pantsEnabled ? "loading" : "off" }); }, [garmentEnabled, garmentSource.url, pantsEnabled, pendingGarment]);
   const enableGarment = useCallback((value: boolean) => { garmentEnabledRef.current = value; setGarmentEnabled(value); setGarmentStatus(pendingGarment(value, garmentSourceRef.current.url)); }, [pendingGarment]);
-  const chooseGarment = useCallback((next: GarmentSource) => { if (next.url === garmentSourceRef.current.url) return; garmentSourceRef.current = next; setGarmentSource(next); setGarmentStatus(pendingGarment(garmentEnabledRef.current, next.url)); }, [pendingGarment]);
+  const chooseGarment = useCallback((next: GarmentSource) => { if (next.url === garmentSourceRef.current.url) return; garmentSourceRef.current = next; setGarmentSource(next); setDemoSidecar(null); setWeights({}); setGarmentStatus(pendingGarment(garmentEnabledRef.current, next.url)); }, [pendingGarment]);
   const onGarmentReady = useCallback((info: GarmentInfo) => setGarmentStatus({ state: "ready", info }), []);
   const onGarmentError = useCallback((message: string) => setGarmentStatus({ state: "error", message }), []);
-  const garmentLayer = useMemo(() => (garmentEnabled && garmentSource.url ? { sidecar, correctives, onWeights, url: garmentSource.url, color: garmentColor, visible: garmentVisible, onReady: onGarmentReady, onError: onGarmentError } : null), [garmentEnabled, garmentSource.url, sidecar, correctives, onWeights, garmentColor, garmentVisible, onGarmentReady, onGarmentError]);
+  const garmentLayer = useMemo(() => (garmentEnabled && garmentSource.url && !sidecarPending ? { sidecar, correctives, onWeights, url: garmentSource.url, color: garmentColor, visible: garmentVisible, onReady: onGarmentReady, onError: onGarmentError } : null), [garmentEnabled, garmentSource.url, sidecarPending, sidecar, correctives, onWeights, garmentColor, garmentVisible, onGarmentReady, onGarmentError]);
   const personal = source.kind === "personal";
   const [stats, setStats] = useState<RenderStats>({ fps: null, low: null, frameMs: null, calls: 0, triangles: 0 });
   const [command, setCommand] = useState<{ view: CameraView; id: number }>({ view: "reset", id: 0 });

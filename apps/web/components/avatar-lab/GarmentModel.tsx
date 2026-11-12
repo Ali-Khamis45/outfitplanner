@@ -49,7 +49,10 @@ export function GarmentModel({ url, rig, color, visible, wireframe, inspection, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gltf, rig, layer]);
   const drive = useMemo(() => createCorrectiveDriver(garment.mesh, rig.rig.bones, rig.bind, sidecar), [garment, rig, sidecar]);
+  // Initialise influences before the mesh's first rendered frame.
+  drive(correctives);
   useFrame(() => { const weights = drive(correctives); onWeights(weights); });
+  useEffect(() => { onWeights(drive(correctives)); }, [drive, correctives, onWeights]);
   useEffect(() => { invalidate(); }, [drive, correctives, invalidate]);
   useEffect(() => { onReady(garment.info); }, [garment, onReady]);
   useEffect(() => { garment.material.color.set(color); invalidate(); }, [garment, color, invalidate]);
