@@ -1,4 +1,6 @@
-﻿# Sprint 1.4B — web corrective runtime
+# Sprint 1.4B — web corrective runtime
+
+- **PASS** - In the existing `sprint-1.4-web` worktree, `npm.cmd install` in `apps/web` and a production build completed before the report update. The worktree already contained the implementation; this was not a fresh pre-implementation baseline. Install reported one unapproved `unrs-resolver` install script.
 
 - **PASS** — Optional version 1 sidecar drives matching morph targets using the live avatar skeleton. A local picker accepts the GLB and sidecar together; absence leaves weights zero. Toggle and readout are in the garment panel. Unknown targets and unusable joints are warned and skipped.
 - **PASS** — Independent tiny skinned GLB fixture: 0/45/90/105/120 degrees, twist, toggle, missing sidecar and unknown target. TypeScript, ESLint and production build passed.
