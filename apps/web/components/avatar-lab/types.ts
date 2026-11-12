@@ -8,7 +8,7 @@ export type AvatarSource =
   | { kind: "personal"; url: string; label: string; fileName: string; bytes: number; sha256: string | null };
 export type PersonalSource = Extract<AvatarSource, { kind: "personal" }>;
 /** Neutral demo T-shirts are served by a fixed whitelisted route; any other garment is a local file read in the browser. */
-export type DemoGarmentVariant = "v1" | "v2" | "v2-lod";
+export type DemoGarmentVariant = "v1" | "v2" | "v2-lod" | "v3" | "v4";
 export type GarmentSource =
   | { kind: "demo"; variant: DemoGarmentVariant; url: string; label: string }
   | { kind: "local"; url: string; label: string; fileName: string; bytes: number; sha256: string | null };

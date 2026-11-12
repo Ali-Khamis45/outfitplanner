@@ -8,6 +8,7 @@ Generates a procedural, skinned T-shirt for MHR bodies and validates it against 
 | `tshirt.py` | Fitting rules, garment volume, surface extraction, manifold repair, clearance rule, weight transfer, UVs, thickness, retargeting. |
 | `garment_glb.py` | Skinned garment GLB writer (official rig math) and a NumPy GLB reader. |
 | `generate_tshirt.py` | CLI: `--rules v1` (default, reproduces Sprint 1.0 byte-for-byte) or `--rules v2`; `--lod` for the 10 mm variant; `--reconstruction <npz>` adds personal rest bodies (floor-aligned from v2) and retargeted garments; `--name/--override/--out-dir` for experiments. Never overwrites. |
+| `gusset.py` | Sprint 1.3 explicit underarm gusset panel (`--rules v4`, experimental; failed its quality gates). |
 | `validate_garment.py` | Structural, skeleton, topology and approximate rest-clearance validation against an avatar GLB. |
 | `render_views.py` | Offline front/side/back CPU renders (evidence only, not browser rendering). |
 | `tests/` | `python -m unittest discover -s services/garments/tests` |

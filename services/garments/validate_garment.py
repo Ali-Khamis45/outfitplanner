@@ -48,7 +48,7 @@ def node_globals(document: dict[str, Any]) -> dict[str, np.ndarray]:
     return {document["nodes"][j]["name"]: world(j) for j in document["skins"][0]["joints"]}
 
 
-def rest_clearance(garment: dict[str, np.ndarray], avatar: dict[str, np.ndarray], samples: int = 400_000) -> dict[str, Any]:
+def rest_clearance(garment: dict[str, np.ndarray], avatar: dict[str, np.ndarray], region_names: list[str], samples: int = 400_000) -> dict[str, Any]:
     body = trimesh.Trimesh(avatar["POSITION"].astype(np.float64), avatar["indices"], process=False)
     points, face = trimesh.sample.sample_surface(body, samples, seed=11)
     normals = np.asarray(body.face_normals)[face]
@@ -56,7 +56,7 @@ def rest_clearance(garment: dict[str, np.ndarray], avatar: dict[str, np.ndarray]
     signed = np.einsum("ij,ij->i", garment["POSITION"] - points[nearest], normals[nearest])
     region = garment["_REGION"].astype(int)
     per_region = {}
-    for value, name in enumerate(("torso", "left_sleeve", "right_sleeve")):
+    for value, name in enumerate(region_names):
         selected = signed[region == value]
         per_region[name] = {"vertices": int(len(selected)), "min_m": float(selected.min()), "median_m": float(np.median(selected)), "below_0": int((selected < 0).sum()), "below_minus_3mm": int((selected < -0.003).sum())}
     return {"approximate": True, "min_clearance_m": float(signed.min()), "penetrating_vertices": int((signed < 0).sum()), "penetrating_beyond_3mm": int((signed < -0.003).sum()), "regions": per_region}
@@ -118,7 +118,7 @@ def validate(garment_path: Path, avatar_path: Path) -> dict[str, Any]:
         "max_bind_pose_skinning_drift_m": bind_drift,
         "shell": {"watertight": True, "winding_consistent": True, "volume_m3": float(welded.volume), "euler_characteristic": int(euler), "genus": int((2 - euler) // 2)},
         "bounds_m": [positions.min(axis=0).tolist(), positions.max(axis=0).tolist()],
-        "rest_clearance": rest_clearance(garment, avatar),
+        "rest_clearance": rest_clearance(garment, avatar, list(metadata["regions"])),
         "metadata": {key: metadata[key] for key in ("garmentId", "bodyVariant", "retargetedFrom", "units", "upAxis") if key in metadata},
     }
 

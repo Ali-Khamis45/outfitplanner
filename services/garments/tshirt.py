@@ -14,7 +14,7 @@ Fitting strategy (Sprint 1.0, documented in docs/sprint-1/garment-rigging.md):
 """
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from typing import Any
 
 import numpy as np
@@ -68,11 +68,13 @@ class FitRules:
     discontinuity_radius_m: float = 0.04  # geodesic radius around those edges where weights are diffused
     discontinuity_iterations: int = 30
     discontinuity_spatial_radius_m: float = 0.0  # also average weights over 3D neighbours inside the band (folded creases; 0 = off)
+    underarm_panel_radius_m: float = 0.0  # Sprint 1.3 explicit gusset: geodesic radius of the replaced underarm disk (0 = off)
+    underarm_panel_target_stretch: float = 4.0  # design average stretch of the panel at a 90° raise (sets the cuff extension)
     gusset_close_voxels: int = 0  # extra closing near each axilla: turns the sharp armpit crease into a broader gusset (0 = off)
     gusset_radius_m: float = 0.07  # region around the axilla where the gusset closing applies
 
 
-SPRINT_1_1_FIELDS = ("underarm_separation_m", "underarm_length_m", "weight_mode", "weight_band_m", "clearance_smoothing_iterations", "retarget_smoothing_iterations", "discontinuity_ratio", "discontinuity_radius_m", "discontinuity_iterations", "gusset_close_voxels", "gusset_radius_m", "discontinuity_spatial_radius_m")
+SPRINT_1_1_FIELDS = ("underarm_separation_m", "underarm_length_m", "weight_mode", "weight_band_m", "clearance_smoothing_iterations", "retarget_smoothing_iterations", "discontinuity_ratio", "discontinuity_radius_m", "discontinuity_iterations", "gusset_close_voxels", "gusset_radius_m", "discontinuity_spatial_radius_m", "underarm_panel_radius_m", "underarm_panel_target_stretch")
 
 
 def rules_record(rules: FitRules) -> dict[str, Any]:
@@ -678,7 +680,13 @@ def design_tshirt(body: RestBody, rules: FitRules = FitRules()) -> tuple[OuterGa
     report["landmarks"] = {"hem_y": marks["hem_y"], "hang_y": marks["hang_y"], "shoulder_y": marks["shoulder_y"], "top_y": marks["top_y"]}
     report["rules"] = rules_record(rules)
     faces = np.asarray(mesh.faces)
-    return OuterGarment(np.array(mesh.vertices), faces, corner_uvs(np.array(mesh.vertices), faces, region, marks), joints, weights, region, loops, report), surface
+    garment = OuterGarment(np.array(mesh.vertices), faces, corner_uvs(np.array(mesh.vertices), faces, region, marks), joints, weights, region, loops, report)
+    if rules.underarm_panel_radius_m > 0:  # Sprint 1.3: replace each underarm disk with an explicit stitched gusset panel
+        from gusset import add_underarm_gussets
+
+        garment, gusset_report = add_underarm_gussets(garment, body, surface, marks, rules)
+        garment.report["gusset"] = gusset_report
+    return garment, surface
 
 
 def retarget(garment: OuterGarment, source: RestBody, target: RestBody, rules: FitRules = FitRules()) -> OuterGarment:
@@ -741,3 +749,7 @@ def assemble(garment: OuterGarment, thickness: float) -> dict[str, np.ndarray]:
     arrays["faces"] = np.concatenate([layer_faces, layer_faces[:, ::-1] + n] + rim_faces)
     arrays["openings"] = openings
     return arrays
+
+
+# Sprint 1.3: v2 plus one explicit underarm gusset panel per side (gusset.py).
+V4_RULES = replace(V2_RULES, underarm_panel_radius_m=0.04, underarm_panel_target_stretch=4.0)

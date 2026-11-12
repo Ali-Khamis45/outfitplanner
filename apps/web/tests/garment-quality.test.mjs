@@ -6,7 +6,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { SkinnedMesh, Vector3 } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { bindGarment, rigFromSkinnedMesh } from "../lib/garment/binding.ts";
-import { bodyPenetration, countWhere, maxOf, minOf, percentile, selfIntersections, triangleDeformation, weldIds } from "../lib/garment/diagnostics.ts";
+import { bodyPenetration, countWhere, maxOf, minOf, percentile, selfIntersections, sideCoverage, triangleDeformation, weldIds } from "../lib/garment/diagnostics.ts";
 import { TEST_POSES, applyPose, captureBindPose } from "../lib/garment/poses.ts";
 
 const outputs = new URL("../../../outputs/", import.meta.url);
@@ -21,6 +21,8 @@ const TARGET_POSES = ["rest", "left-30", "left-60", "left-90", "right-90", "both
 const PAIRS = [
   { label: "v1-neutral", avatar: "avatars/mhr-neutral.glb", garment: "garments/tshirt-mhr-neutral.glb", gate: false },
   { label: "v2-neutral", avatar: "avatars/mhr-neutral.glb", garment: "garments/tshirt-v2-mhr-neutral.glb", gate: true, baseline: "v1-neutral" },
+  { label: "v3-close1-neutral", avatar: "avatars/mhr-neutral.glb", garment: "garments/experiments/tshirt-v3-close1-mhr-neutral.glb", gate: true, baseline: "v1-neutral" },
+  { label: "v4-gusset-neutral", avatar: "avatars/mhr-neutral.glb", garment: "garments/experiments/tshirt-v4-mhr-neutral.glb", gate: true, baseline: "v1-neutral" },
   { label: "ablation-separation-only", avatar: "avatars/mhr-neutral.glb", garment: "garments/experiments/tshirt-v2-separation-only-mhr-neutral.glb", gate: false },
   { label: "ablation-weights-only", avatar: "avatars/mhr-neutral.glb", garment: "garments/experiments/tshirt-v2-weights-only-mhr-neutral.glb", gate: false },
   { label: "v2-lod-neutral", avatar: "avatars/mhr-neutral.glb", garment: "garments/tshirt-v2-lod-mhr-neutral.glb", gate: true, baseline: "v1-neutral" },
@@ -39,7 +41,7 @@ async function load(relative) {
   let mesh;
   gltf.scene.traverse((item) => { if (item instanceof SkinnedMesh) mesh = item; });
   assert.ok(mesh, `${relative} has no SkinnedMesh`);
-  return { scene: gltf.scene, mesh, parseMs, bytes: bytes.length };
+  return { scene: gltf.scene, mesh, parseMs, bytes: bytes.length, regions: gltf.parser.json.asset?.extras?.garment?.regions ?? REGIONS };
 }
 
 function skinned(mesh) {
@@ -83,6 +85,10 @@ async function runPair(pair) {
   const restGarment = Float64Array.from(garment.mesh.geometry.getAttribute("position").array);
   const restBody = Float64Array.from(avatar.mesh.geometry.getAttribute("position").array);
   const welded = weldIds(restGarment);
+  const regionNames = garment.regions;
+  // Armpit skin for the side-coverage metric: body vertices within 7 cm of either axilla at rest (same set for every garment).
+  const axillae = [[0.2, 1.303, -0.036], [-0.2, 1.303, -0.036]];
+  const armpit = []; for (let v = 0; v < restBody.length / 3; v++) if (axillae.some(([x, y, z]) => Math.hypot(restBody[v * 3] - x, restBody[v * 3 + 1] - y, restBody[v * 3 + 2] - z) < 0.07)) armpit.push(v);
   const sharedBones = garment.mesh.skeleton.bones.every((bone) => rig.bones.get(bone.name) === bone);
   const transition = transitionTriangles(garment.mesh);
   const restSelf = selfIntersections(restGarment, index, welded);
@@ -103,16 +109,18 @@ async function runPair(pair) {
     const worst = [...d.stretch.keys()].sort((a, b) => d.stretch[b] - d.stretch[a]).slice(0, 6).map((t) => {
       const verts = [index[t * 3], index[t * 3 + 1], index[t * 3 + 2]];
       const centre = [0, 1, 2].map((axis) => r(verts.reduce((s, v) => s + restGarment[v * 3 + axis], 0) / 3, 3));
-      return { face: t, region: REGIONS[Math.round(region[verts[0]])], stretch: r(d.stretch[t], 2), areaRatio: r(d.areaRatio[t], 2), restCentre: centre, vertices: verts, influences: influences(garment.mesh, verts) };
+      return { face: t, region: regionNames[Math.round(region[verts[0]])], stretch: r(d.stretch[t], 2), areaRatio: r(d.areaRatio[t], 2), restCentre: centre, vertices: verts, influences: influences(garment.mesh, verts) };
     });
-    const penetration = Object.fromEntries(REGIONS.map((name, k) => { const values = signed.filter((_, v) => Math.round(region[v]) === k); return [name, { beyond3mm: countWhere(values, (x) => x < -0.003), deepestM: r(Math.min(0, minOf(values)), 4) }]; }));
+    const penetration = Object.fromEntries(regionNames.map((name, k) => { const values = signed.filter((_, v) => Math.round(region[v]) === k); return [name, { beyond3mm: countWhere(values, (x) => x < -0.003), deepestM: r(Math.min(0, minOf(values)), 4) }]; }));
+    const coverage = sideCoverage(posedBody, armpit, posed, index);
     poses[pose.name] = {
       stretch: { p95: r(percentile(d.stretch, 0.95)), p99: r(percentile(d.stretch, 0.99)), max: r(maxOf(d.stretch)), minCompression: r(minOf(d.compression)) },
       transitionBand: { triangles: transitionStretch.length, p99: r(percentile(transitionStretch, 0.99)), max: r(maxOf(transitionStretch)) },
       area: { p01: r(percentile(d.areaRatio, 0.01)), p99: r(percentile(d.areaRatio, 0.99)), max: r(maxOf(d.areaRatio)) },
       flipped: countWhere(d.flipped, (x) => x > 0), degenerate: countWhere(d.degenerate, (x) => x > 0), normalDeviationOver60: countWhere(d.normalDeviationDeg, (x) => x > 60),
       selfIntersectingPairs: self.pairs, selfIntersectingPairsAboveRest: Math.max(0, self.pairs - restSelf.pairs),
-      penetration, penetratingBeyond3mm: Object.values(penetration).reduce((s, x) => s + x.beyond3mm, 0),
+      penetration, penetratingBeyond3mm: Object.values(penetration).reduce((s, x) => s + x.beyond3mm, 0), deepestPenetrationM: Math.min(...Object.values(penetration).map((x) => x.deepestM)),
+      armpitSideCoverage: r(coverage, 3),
       bodyReference: { p99: r(percentile(body.stretch, 0.99)), max: r(maxOf(body.stretch)), flipped: countWhere(body.flipped, (x) => x > 0) },
       worst,
     };
@@ -148,6 +156,15 @@ for (const pair of PAIRS) {
   if (!baseline) { report.failures.push(`${pair.label}: baseline ${pair.baseline} was not run, so its gate cannot be evaluated`); continue; }
   report.gates[pair.label] = {};
   if (result.restSelfIntersectingPairs > baseline.restSelfIntersectingPairs) report.failures.push(`${pair.label} rest self-intersections ${result.restSelfIntersectingPairs} > baseline ${baseline.restSelfIntersectingPairs}`);
+  // Sprint 1.2 requires the extreme pose to remain visible in the decision, not just in the report.
+  const extreme = result.poses["both-120"], baseExtreme = baseline.poses["both-120"];
+  report.gates[pair.label]["both-120"] = {
+    flipped: { value: extreme.flipped, limit: baseExtreme.flipped, pass: extreme.flipped <= baseExtreme.flipped },
+    selfIntersectingPairsAboveRest: { value: extreme.selfIntersectingPairsAboveRest, limit: baseExtreme.selfIntersectingPairsAboveRest, pass: extreme.selfIntersectingPairsAboveRest <= baseExtreme.selfIntersectingPairsAboveRest },
+    penetratingBeyond3mm: { value: extreme.penetratingBeyond3mm, limit: TARGETS.penetratingBeyond3mm, pass: extreme.penetratingBeyond3mm <= TARGETS.penetratingBeyond3mm },
+    degenerate: { value: extreme.degenerate, limit: TARGETS.degenerate, pass: extreme.degenerate <= TARGETS.degenerate },
+  };
+  for (const [check, outcome] of Object.entries(report.gates[pair.label]["both-120"])) if (!outcome.pass) report.failures.push(`${pair.label} both-120 ${check} ${outcome.value} > ${outcome.limit}`);
   for (const name of TARGET_POSES) {
     const p = result.poses[name], b = baseline.poses[name];
     const checks = {

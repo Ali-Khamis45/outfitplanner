@@ -134,6 +134,37 @@ export function selfIntersections(positions: ArrayLike<number>, index: ArrayLike
   return { pairs, triangles: hit };
 }
 
+/**
+ * Side coverage: for each selected body vertex, does a segment of `reach` metres toward the side camera (+X for the subject's
+ * left, -X for the right) intersect any garment triangle? Approximates "is the armpit skin hidden by cloth from the side".
+ */
+export function sideCoverage(body: ArrayLike<number>, selected: ArrayLike<number>, garment: ArrayLike<number>, index: ArrayLike<number>, reach = 0.35, cell = 0.02): number {
+  const grid = new Map<string, number[]>();
+  for (let t = 0; t < index.length / 3; t++) {
+    const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+    for (let k = 0; k < 3; k++) for (let d = 0; d < 3; d++) { const value = garment[index[t * 3 + k] * 3 + d]; lo[d] = Math.min(lo[d], value); hi[d] = Math.max(hi[d], value); }
+    for (let y = Math.floor(lo[1] / cell); y <= Math.floor(hi[1] / cell); y++) for (let z = Math.floor(lo[2] / cell); z <= Math.floor(hi[2] / cell); z++) {
+      const key = `${y},${z}`; const bucket = grid.get(key); if (bucket) bucket.push(t); else grid.set(key, [t]);
+    }
+  }
+  const segment = new Float64Array(6);
+  let covered = 0;
+  for (let i = 0; i < selected.length; i++) {
+    const v = selected[i] * 3, direction = body[v] >= 0 ? 1 : -1;
+    segment.set([body[v], body[v + 1], body[v + 2], body[v] + direction * reach, body[v + 1], body[v + 2]]);
+    const candidates = grid.get(`${Math.floor(body[v + 1] / cell)},${Math.floor(body[v + 2] / cell)}`) ?? [];
+    const points = new Float64Array(15);
+    let hit = false;
+    for (const t of candidates) {
+      for (let k = 0; k < 3; k++) for (let d = 0; d < 3; d++) points[6 + k * 3 + d] = garment[index[t * 3 + k] * 3 + d];
+      points.set(segment.subarray(0, 6), 0);
+      if (segmentHitsTriangle(points, 0, 3, 6, 9, 12)) { hit = true; break; }
+    }
+    if (hit) covered++;
+  }
+  return selected.length ? covered / selected.length : NaN;
+}
+
 /** Approximate garment-body penetration: signed distance to the nearest posed body vertex along its normal. */
 export function bodyPenetration(body: ArrayLike<number>, bodyIndex: ArrayLike<number>, garment: ArrayLike<number>, cell = 0.03): Float64Array {
   const normals = new Float64Array(body.length);

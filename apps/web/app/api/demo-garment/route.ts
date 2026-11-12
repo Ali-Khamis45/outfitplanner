@@ -3,11 +3,13 @@ import path from "node:path";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 // Fixed local research demos (procedural T-shirts fitted to the neutral MHR body), not a general file-serving API.
-// Only these three non-personal files can be returned; personal garment fits are read from a local file in the browser.
+// Only these non-personal files can be returned; personal garment fits are read from a local file in the browser.
 const VARIANTS: Record<string, string> = {
   v1: "tshirt-mhr-neutral.glb",
   v2: "tshirt-v2-mhr-neutral.glb",
   "v2-lod": "tshirt-v2-lod-mhr-neutral.glb",
+  v3: "experiments/tshirt-v3-close1-mhr-neutral.glb",
+  v4: "experiments/tshirt-v4-mhr-neutral.glb",
 };
 export async function GET(request: Request) {
   const variant = new URL(request.url).searchParams.get("variant") ?? "v1";

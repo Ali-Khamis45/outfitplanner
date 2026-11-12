@@ -20,7 +20,7 @@ import trimesh
 
 from body import PROJECT, VIEWER, RestBody, evaluate_rest_body, load_model
 from garment_glb import read_glb, skinned_primitive, write_garment_glb
-from tshirt import BOUNDARY_KINDS, REGION_NAMES, V2_RULES, BodySurface, FitRules, OuterGarment, assemble, design_tshirt, enforce_clearance, retarget, rules_record
+from tshirt import BOUNDARY_KINDS, REGION_NAMES, V2_RULES, V4_RULES, BodySurface, FitRules, OuterGarment, assemble, design_tshirt, enforce_clearance, retarget, rules_record
 
 MATERIAL = {"name": "TShirt_Cotton_PBR", "baseColor": [0.85, 0.85, 0.88, 1.0], "metalness": 0.0, "roughness": 0.85}
 NEUTRAL_AVATAR = PROJECT / "outputs" / "avatars" / "mhr-neutral.glb"
@@ -29,6 +29,7 @@ LOD_VOXEL_M = 0.010
 RULESETS = {
     "v1": FitRules(),
     "v2": V2_RULES,
+    "v4": V4_RULES,  # Sprint 1.3 experiment: explicit underarm gusset panels
     # Ablations for the Sprint 1.1 deformation analysis: each change on its own.
     "v2-separation-only": FitRules(underarm_separation_m=0.007),
     "v2-weights-only": FitRules(weight_mode="region", weight_smoothing_iterations=4),
@@ -60,7 +61,10 @@ def metadata(body: RestBody, rules: FitRules, garment_id: str, revision: str, pe
     inverse = np.linalg.inv(exporters._skeleton_state_to_matrices(body.skeleton_state)).astype("<f4")
     strategy = "landmark-driven eased volume with hang fill, surface nets extraction, clearance pass"
     if revision != "v1":
-        strategy += "; underarm separation below the axilla, region-aware armhole weight blend, smoothed clearance and retarget fields"
+        if rules.underarm_panel_radius_m > 0:  # Sprint 1.3+: accurate description
+            strategy += "; projection skin weights with discontinuity-aware smoothing, smoothed clearance and retarget fields; explicit stitched underarm gusset panel per side (cuff-based kite, harmonic weights)"
+        else:  # kept verbatim so Sprint 1.1 v2 assets regenerate byte-identically (wording predates the final v2 rules)
+            strategy += "; underarm separation below the axilla, region-aware armhole weight blend, smoothed clearance and retarget fields"
     info: dict[str, Any] = {
         "schemaVersion": 1,
         "garmentId": garment_id,
@@ -72,7 +76,7 @@ def metadata(body: RestBody, rules: FitRules, garment_id: str, revision: str, pe
         "bodyVariant": body.variant,
         "retargetedFrom": source_variant,
         "skeleton": {"standard": "MHR", "jointCount": len(body.joint_names), "rootJoint": body.joint_names[0], "inverseBindSha256": hashlib.sha256(inverse.tobytes()).hexdigest()},
-        "regions": list(REGION_NAMES),
+        "regions": list(REGION_NAMES) + (["left_gusset", "right_gusset"] if rules.underarm_panel_radius_m > 0 else []),
         "openings": list(BOUNDARY_KINDS),
         "thicknessM": rules.thickness_m,
         "material": {"model": "pbr-metallic-roughness", "baseColor": "#d9d9e0", "metalness": MATERIAL["metalness"], "roughness": MATERIAL["roughness"], "colorAdjustable": True},

@@ -1,6 +1,7 @@
 """Unit tests for the Sprint 1.0 garment engine (synthetic geometry) plus checks on generated neutral assets."""
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -180,3 +181,55 @@ class GeneratedV2GarmentTests(unittest.TestCase):
         self.assertEqual(report["shell"]["genus"], 3)
         self.assertEqual(report["rest_clearance"]["penetrating_vertices"], 0)
         self.assertLess(report["max_inverse_bind_delta_vs_avatar"], 1e-5)
+
+
+V4_GARMENT = PROJECT / "outputs" / "garments" / "experiments" / "tshirt-v4-mhr-neutral.glb"
+
+
+@unittest.skipUnless(V4_GARMENT.is_file() and V2_GARMENT.is_file(), "generate the v4 gusset experiment first")
+class GussetTopologyTests(unittest.TestCase):
+    """Sprint 1.3 Gate A: the v4 garment must contain a real, stitched underarm panel on each side."""
+
+    @staticmethod
+    def welded(path: Path) -> tuple[trimesh.Trimesh, np.ndarray, list[str]]:
+        document, blob = read_glb(path)
+        data = skinned_primitive(document, blob)
+        mesh = trimesh.Trimesh(data["POSITION"].astype(np.float64), data["indices"], process=False)
+        region = data["_REGION"].astype(int)
+        mesh.merge_vertices(merge_tex=True, merge_norm=True)
+        # merge_vertices keeps one representative per position; carry each face's majority region across
+        face_region = np.array([np.bincount(row, minlength=5).argmax() for row in region[data["indices"]]])
+        return mesh, face_region, list(document["asset"]["extras"]["garment"]["regions"])
+
+    def test_gusset_panels_exist_and_are_stitched_to_sleeve_and_torso(self) -> None:
+        mesh, face_region, names = self.welded(V4_GARMENT)
+        self.assertEqual(names[3:], ["left_gusset", "right_gusset"])
+        adjacency = mesh.face_adjacency
+        for gusset, sleeve in ((3, 1), (4, 2)):
+            panel = np.flatnonzero(face_region == gusset)
+            self.assertGreater(len(panel), 200, "gusset panel must be a real patch of triangles")
+            # one connected patch per layer (outer and inner); the panel is not scattered fragments
+            sub = trimesh.Trimesh(mesh.vertices, mesh.faces[panel], process=False)
+            self.assertLessEqual(len(sub.split(only_watertight=False)), 3)  # outer + inner layer (+ rim strip)
+            pairs = adjacency[np.isin(adjacency, panel).any(axis=1)]
+            neighbour_regions = set(face_region[pairs[~np.isin(pairs, panel)]].tolist())
+            self.assertIn(0, neighbour_regions, "panel must share edges with the torso")
+            self.assertIn(sleeve, neighbour_regions, "panel must share edges with its sleeve")
+
+    def test_shell_stays_closed_with_four_openings_and_changed_connectivity(self) -> None:
+        v4, _, _ = self.welded(V4_GARMENT)
+        v2, _, _ = self.welded(V2_GARMENT)
+        euler = len(v4.vertices) - len(v4.edges_unique) + len(v4.faces)
+        self.assertTrue(v4.is_watertight and v4.is_winding_consistent)
+        self.assertEqual(euler, -4)  # genus 3: a thickened surface with exactly four openings
+        self.assertNotEqual(len(v4.faces), len(v2.faces))
+        document, _ = read_glb(V4_GARMENT)
+        self.assertEqual(sorted(document["meshes"][0]["extras"]["openingVertices"]), ["hem", "left_sleeve", "neck", "right_sleeve"])
+
+    def test_left_and_right_panels_are_consistent(self) -> None:
+        report = json.loads(V4_GARMENT.with_suffix(".json").read_text(encoding="utf-8"))["fit_report"]["gusset"]["sides"]
+        left, right = report["left_sleeve"], report["right_sleeve"]
+        self.assertLess(abs(left["panel_triangles"] - right["panel_triangles"]) / left["panel_triangles"], 0.1)
+        self.assertLess(abs(left["cuff_extension_m"] - right["cuff_extension_m"]), 0.002)
+        for side in (left, right):
+            self.assertGreater(side["panel_area_m2"], side["removed_area_m2"])  # the panel adds fabric
