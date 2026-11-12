@@ -49,6 +49,8 @@ For joint `J` with bone child `C`:
 
 Both directions are in the parent's space. Twist about the bone axis does not change `swing_deg`. The rest pose gives exactly 0; the value is always in [0, 180].
 
+**Epsilon at rest (added in Sprint 1.4A).** If `swing_deg < 0.01`, use 0. Round-off makes `acos` of two identical unit vectors return about 1e-6° instead of 0, and a pose reset rarely restores the rest quaternion bit-for-bit. This rule makes the rest weights exactly 0 regardless. The reference implementation is `services/garments/posing.py` `swing_deg` (`SWING_EPSILON_DEG`).
+
 ## 4. Weights
 
 `weight = clamp((swing_deg − ramp[0]) / (ramp[1] − ramp[0]), 0, 1)`
@@ -59,7 +61,7 @@ Both directions are in the parent's space. Twist about the bone axis does not ch
 
 ## 5. Consumer checklist (Three.js)
 
-1. After applying the pose, read each `joint` bone's `quaternion` and compute `swing_deg` with the rest local rotation captured at load.
+1. After applying the pose, read each `joint` bone's `quaternion` and compute `swing_deg` with the rest local rotation captured at load. Treat `swing_deg < 0.01` as 0 (§3).
 2. Set `mesh.morphTargetInfluences[mesh.morphTargetDictionary[target]] = weight`, then render. The default skinned-mesh shader already applies morphs before skinning.
 3. If the sidecar is missing, or names don't match, leave all influences at 0 (base garment behaviour) and report it.
 
