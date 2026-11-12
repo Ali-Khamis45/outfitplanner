@@ -26,4 +26,16 @@ assert.equal(mesh.morphTargetInfluences[0], 0);
 const warnings = [];
 createCorrectiveDriver(mesh, bones, rest, {version:1, correctives:[{...sidecar.correctives[0], target:"missing"}]}, message => warnings.push(message))(true);
 assert.equal(warnings.length, 1); assert.match(warnings[0], /missing/);
+const arm = bones.get("arm");
+arm.quaternion.setFromAxisAngle(new Vector3(1, 0, 0), MathUtils.degToRad(120));
+const second = createCorrectiveDriver(mesh, bones, rest, { version: 1, correctives: [{ ...sidecar.correctives[0], child: "tip2" }] });
+assert.ok(second(true).corr_L_abd90 < 1e-6);
+const fallbackWarnings = [];
+const legacy = createCorrectiveDriver(mesh, bones, rest, { version: 1, correctives: [{ target: "corr_L_abd90", joint: "arm", measure: "swing_deg", ramp: [90, 120] }] }, message => fallbackWarnings.push(message));
+assert.ok(Math.abs(legacy(true).corr_L_abd90 - 1) < 1e-6);
+assert.match(fallbackWarnings[0], /no child/);
+const badWarnings = [];
+const invalid = createCorrectiveDriver(mesh, bones, rest, {version:1, correctives:[{...sidecar.correctives[0], child:"not-a-child"}]}, message => badWarnings.push(message));
+assert.deepEqual(invalid(true), {}); assert.equal(mesh.morphTargetInfluences[0], 0); assert.equal(badWarnings.length, 1);
+
 console.log("Corrective driver fixture tests passed");
