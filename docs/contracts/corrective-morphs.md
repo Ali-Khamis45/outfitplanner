@@ -1,0 +1,69 @@
+# Contract: pose-driven corrective morph targets (garment GLB)
+
+**Status:** v1, Sprint 1.4A. **Producer:** `services/garments` (Python). **Consumer:** the web lab (Three.js). Both sides must implement exactly this; any change bumps `version`.
+
+## 1. GLB
+
+- The garment GLB is unchanged in every other respect: one skinned mesh, the full 127-joint MHR skeleton, the same inverse bind matrices and skin weights.
+- The shirt mesh's single primitive gains four **POSITION-only** glTF morph targets, in this order:
+
+  | Index | Name |
+  | --- | --- |
+  | 0 | `corr_L_abd90` |
+  | 1 | `corr_L_abd120` |
+  | 2 | `corr_R_abd90` |
+  | 3 | `corr_R_abd120` |
+
+- Names are stored in `meshes[0].extras.targetNames`, which Three.js's GLTFLoader reads into `morphTargetDictionary`. `meshes[0].weights` is `[0, 0, 0, 0]`.
+- No NORMAL or TANGENT deltas. Normals are the rest normals, skinned as usual.
+- **Deltas are in bind (rest) space.** Three.js applies morphs **before** skinning:
+
+  `posed = SkinMatrix(v) · (rest + Σ weight_k · delta_k)`, where `SkinMatrix(v) = Σ_j w_vj · (boneWorld_j · inverseBind_j)`.
+
+  The producer therefore computes `delta = SkinMatrix(v)⁻¹ · desired_posed − rest`, evaluated at the target pose.
+
+## 2. Sidecar: `<garment basename>.correctives.json`, next to the GLB
+
+```json
+{
+  "version": 1,
+  "correctives": [
+    { "target": "corr_L_abd90",  "joint": "l_uparm", "child": "l_lowarm", "measure": "swing_deg", "ramp": [0, 90] },
+    { "target": "corr_L_abd120", "joint": "l_uparm", "child": "l_lowarm", "measure": "swing_deg", "ramp": [90, 120] },
+    { "target": "corr_R_abd90",  "joint": "r_uparm", "child": "r_lowarm", "measure": "swing_deg", "ramp": [0, 90] },
+    { "target": "corr_R_abd120", "joint": "r_uparm", "child": "r_lowarm", "measure": "swing_deg", "ramp": [90, 120] }
+  ]
+}
+```
+
+Names are exact MHR joint names (glTF node names). `child` identifies the bone's end joint and is required to define the bone direction (§3).
+
+## 3. `swing_deg`
+
+For joint `J` with bone child `C`:
+
+- `d` = `C`'s **rest** local translation, in `J`'s space. For `l_uparm` → `l_lowarm` this is `(0.2568, −0.0005, 0)`, essentially local +X.
+- `R_rest` = `J`'s local rotation relative to its parent in the bind pose: the rotation part of the node's rest local transform, normalized for scale.
+- `R_now` = `J`'s current local rotation relative to its parent: `bone.quaternion` in Three.js.
+- `swing_deg = degrees(acos(clamp(dot(normalize(R_rest·d), normalize(R_now·d)), −1, 1)))`.
+
+Both directions are in the parent's space. Twist about the bone axis does not change `swing_deg`. The rest pose gives exactly 0; the value is always in [0, 180].
+
+## 4. Weights
+
+`weight = clamp((swing_deg − ramp[0]) / (ramp[1] − ramp[0]), 0, 1)`
+
+- **Additive:** at 120° both targets of a side are fully on (1 + 1); `abd120` holds only the correction beyond `abd90`. At 90°: `abd90` = 1, `abd120` = 0. At 45°: `abd90` = 0.5.
+- **Independence:** each side reads only its own joint. Both arms raised is the sum of the left and right targets, whose vertex supports do not overlap.
+- **Rest:** all weights are 0, so the rest geometry equals the base garment's exactly.
+
+## 5. Consumer checklist (Three.js)
+
+1. After applying the pose, read each `joint` bone's `quaternion` and compute `swing_deg` with the rest local rotation captured at load.
+2. Set `mesh.morphTargetInfluences[mesh.morphTargetDictionary[target]] = weight`, then render. The default skinned-mesh shader already applies morphs before skinning.
+3. If the sidecar is missing, or names don't match, leave all influences at 0 (base garment behaviour) and report it.
+
+## 6. Producer guarantees
+
+- Deltas are non-zero only in the shoulder/underarm region of their own side, and fade smoothly to 0 at the region boundary.
+- Rest POSITION, NORMAL, indices, skin weights and inverse binds are byte-equal to the base garment's (v2 for v5).
