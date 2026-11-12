@@ -4,8 +4,9 @@
 
 - **PASS** — Optional version 1 sidecar drives matching morph targets using the live avatar skeleton. A local picker accepts the GLB and sidecar together; absence leaves weights zero. Toggle and readout are in the garment panel. Unknown targets and unusable joints are warned and skipped.
 - **PASS** — Independent tiny skinned GLB fixture: 0/45/90/105/120 degrees, twist, toggle, missing sidecar and unknown target. TypeScript, ESLint and production build passed.
-- **FAIL** — `npm test` stops at the existing MHR loader because `outputs/avatars/mhr-neutral.glb` is absent in this worktree. The binding test also fails for missing generated neutral assets. Inspection test passed separately. Garment-quality command exits zero but **NOT TESTED**: all asset cases were skipped. No generation or assets were touched.
-- **NOT TESTED** — Real v5 sidecar/GLB compatibility, browser rendering, the capture matrix, FPS values, and neutral or personal visual QA: demo and personal assets are absent here. No visual acceptance is claimed. The matrix uses load-state polling and short settle delays, which require browser validation.
+- **PASS** - `npm.cmd test`: corrective fixture, MHR loader, neutral and personal garment binding, refusal checks, and inspection passed against isolated copies of the supplied GLBs.
+- **FAIL** - `npm.cmd run test:garment-quality`: existing stretch, flipped-triangle, and self-intersection gates failed across v2, v3, v4, low-detail, and personal variants. For example, v2 neutral at both +90 had max stretch 10.9372 vs 8.7853 allowed; v4 at both +120 had 504 flips vs 123 allowed and 1,895 extra self-intersections vs 186 allowed. Both suites ran in an isolated temporary copy because they write diagnostics; the supplied `outputs/` was not modified.
+- **NOT TESTED** — Real v5 sidecar/GLB compatibility, browser rendering, the capture matrix, FPS values, and neutral or personal visual QA. No visual acceptance is claimed. The matrix uses load-state polling and short settle delays, which require browser validation.
 
 ## How to verify
 
