@@ -1,6 +1,6 @@
 """Experimental cut and pattern generation; never modifies source GLBs."""
 from __future__ import annotations
-import json, struct
+import argparse, json, struct
 from pathlib import Path
 import numpy as np
 import trimesh
@@ -20,14 +20,14 @@ def load():
   return np.frombuffer(raw,dtype=dtype,count=item['count']*width,offset=offset+view.get('byteOffset',0)+item.get('byteOffset',0)).reshape(-1,width).copy()
  return document,{k:access(i) for k,i in primitive['attributes'].items()},access(primitive['indices']).reshape(-1,3),raw[offset:]
 
-def trim():
+def trim(armhole_x: float = 0.205, armhole_floor: float = 1.285):
  doc,attr,faces,blob=load(); pos=attr['POSITION']
  _,first,inv=np.unique(np.round(pos,6),axis=0,return_index=True,return_inverse=True)
  values={k:arr[first].astype(float).tolist() for k,arr in attr.items()}; vertices=np.array(values['POSITION']); faces=inv[faces]
  print('initial:',len(vertices),len(faces),flush=True)
  for side in [-1,1]:
   # Trim the arm above the torso side seam. Curving the shoulder cut creates the cap.
-  pos=np.array(values['POSITION']); cut=np.minimum(side*pos[:,0]-(0.205+0.10*(pos[:,1]-1.37)), pos[:,1]-1.285)
+  pos=np.array(values['POSITION']); cut=np.minimum(side*pos[:,0]-(armhole_x+0.10*(pos[:,1]-1.37)), pos[:,1]-armhole_floor)
   cache={}; new_faces=[]
   def intersection(a,b):
    key=tuple(sorted((a,b)))
@@ -53,9 +53,11 @@ def trim():
   print('boundary groups:',[(len(x),np.mean(verts[x],axis=0).round(4).tolist()) for x in sorted(groups.values(),key=len,reverse=True)[:8]],flush=True)
  return doc,values,faces,blob
 
-def build():
- if TARGET.exists(): raise FileExistsError(f"Refusing to overwrite {TARGET}")
- doc,values,faces,blob=trim()
+def build(target: Path = TARGET, length_m: float = 0.11, underarm_drop_m: float = 0.0, blend_power: float = 1.0, armhole_x: float = 0.205, armhole_floor: float = 1.285):
+ target=target.resolve(); allowed=(ROOT/'outputs/garments/experiments').resolve()
+ if target.parent != allowed or target.suffix.lower() != '.glb': raise ValueError('Output must be a GLB directly under outputs/garments/experiments')
+ if target.exists(): raise FileExistsError(f"Refusing to overwrite {target}")
+ doc,values,faces,blob=trim(armhole_x,armhole_floor)
  v=np.asarray(values['POSITION']); directed=np.concatenate((faces[:,[0,1]],faces[:,[1,2]],faces[:,[2,0]]))
  _,inverse,counts=np.unique(np.sort(directed,axis=1),axis=0,return_inverse=True,return_counts=True)
  boundary=directed[counts[inverse]==1]
@@ -73,7 +75,7 @@ def build():
    loop.append(nxt)
   if len(loop)!=len(selected):raise ValueError('Multiple armhole loops')
   seam=v[loop]; axis=np.array([side*0.75,-0.6614378278,0.]); axis/=np.linalg.norm(axis)
-  cap=seam@axis; cap_height=float(cap.max()-cap.min()); length=(cap.max()-cap)+0.11
+  cap=seam@axis; cap_height=float(cap.max()-cap.min()); length=(cap.max()-cap)+length_m
   distance=np.r_[0,np.cumsum(np.linalg.norm(np.diff(seam,axis=0),axis=1))]; width=distance[-1]+np.linalg.norm(seam[0]-seam[-1])
   # Pattern coordinates: circumference u and cap-to-cuff axial v; the seam is the cap curve.
   pattern=np.column_stack((distance,cap-cap.min()))
@@ -83,14 +85,17 @@ def build():
   for row in range(1,13):
    t=row/12; ids=np.arange(len(values['POSITION']),len(values['POSITION'])+count)
    for k,index in enumerate(loop):
-    point=seam[k]+t*length[k]*axis
-    dense=np.zeros(len(names)); np.add.at(dense,original_j[k],original_w[k]*(1-t));dense[joint]+=t
+    # Add underarm ease mostly on the lower half; zero at the stitched seam.
+    lower=np.clip((seam[:,1].max()-seam[k,1])/max(np.ptp(seam[:,1]),1e-9),0,1)
+    point=seam[k]+t*length[k]*axis+np.array([0.,-t*underarm_drop_m*lower,0.])
+    blend=t**blend_power
+    dense=np.zeros(len(names)); np.add.at(dense,original_j[k],original_w[k]*(1-blend));dense[joint]+=blend
     top=np.argsort(dense)[-4:][::-1]; w=dense[top];w/=w.sum()
     values['POSITION'].append(point.tolist());values['NORMAL'].append([0.,0.,1.]);values['TEXCOORD_0'].append([float(pattern[k,0]/width),float(t)]);values['JOINTS_0'].append(top.tolist());values['WEIGHTS_0'].append(w.tolist());values['_REGION'].append([float(1 if side>0 else 2)])
    for k in range(count):
     n=(k+1)%count;a=int(old[k]);b=int(old[n]);c=int(ids[k]);d=int(ids[n]);faces.extend(([b,a,c],[b,c,d]))
    old=ids
-  print('side',side,'pattern width',round(width,4),'cap height',round(cap_height,4),'minimum underarm length',round(length.min(),4),'cuff remains open',flush=True)
+  print('side',side,'pattern width',round(width,4),'cap height',round(cap_height,4),'minimum axial length',round(length.min(),4),'underarm ease',underarm_drop_m,'cuff remains open',flush=True)
  faces=np.asarray(faces,dtype=np.uint32); used=np.unique(faces);remap=np.full(len(values['POSITION']),-1,dtype=int);remap[used]=np.arange(len(used));faces=remap[faces].astype('<u4')
  attrs={k:np.asarray(arr)[used] for k,arr in values.items()}; pos=attrs['POSITION'].astype('<f4')
  normal=np.zeros_like(pos,dtype=np.float64); tri=pos[faces]; n=np.cross(tri[:,1]-tri[:,0],tri[:,2]-tri[:,0]);
@@ -107,13 +112,23 @@ def build():
  primitive=doc['meshes'][0]['primitives'][0]
  for name,(dtype,ctype,kind) in formats.items():primitive['attributes'][name]=append(attrs[name].astype(dtype),ctype,kind,34962)
  primitive['indices']=append(faces.reshape(-1).astype('<u4'),5125,'SCALAR',34963)
- info=doc['asset'].setdefault('extras',{}).setdefault('garment',{});info['garmentId']='tshirt-v6-pattern-experiment';info['revision']='v6-experiment';info['fit']['strategy']='experimental ruled 2D sleeve cap and extended cuff, sewn to trimmed v2 torso; open shell boundaries'
+ info=doc['asset'].setdefault('extras',{}).setdefault('garment',{});info['garmentId']='tshirt-v6-pattern-experiment';info['revision']='v6-experiment';info['fit']['strategy']=f'experimental ruled sleeve cap; open shell boundaries; length={length_m}, drop={underarm_drop_m}, blend_power={blend_power}, armhole_x={armhole_x}, armhole_floor={armhole_floor}'
  doc['buffers'][0]['byteLength']=len(data); encoded=json.dumps(doc,separators=(',',':')).encode();encoded+=b' '*((-len(encoded))%4)
  while len(data)%4:data.append(0)
  glb=struct.pack('<III',0x46546c67,2,12+8+len(encoded)+8+len(data))+struct.pack('<I4s',len(encoded),b'JSON')+encoded+struct.pack('<I4s',len(data),b'BIN\0')+data
- TARGET.parent.mkdir(parents=True,exist_ok=True)
- with TARGET.open('xb') as out:out.write(glb)
+ target.parent.mkdir(parents=True,exist_ok=True)
+ with target.open('xb') as out:out.write(glb)
  mesh=trimesh.Trimesh(pos,faces,process=False)
- print('output',TARGET,'vertices',len(pos),'faces',len(faces),'watertight',mesh.is_watertight,flush=True)
+ print('output',target,'vertices',len(pos),'faces',len(faces),'watertight',mesh.is_watertight,flush=True)
 
-if __name__=='__main__':build()
+if __name__=='__main__':
+ parser=argparse.ArgumentParser()
+ parser.add_argument('--output',type=Path,default=TARGET)
+ parser.add_argument('--length-m',type=float,default=0.11)
+ parser.add_argument('--underarm-drop-m',type=float,default=0.0)
+ parser.add_argument('--blend-power',type=float,default=1.0)
+ parser.add_argument('--armhole-x',type=float,default=0.205)
+ parser.add_argument('--armhole-floor',type=float,default=1.285)
+ args=parser.parse_args()
+ if not 1.26 <= args.armhole_floor <= 1.32 or not 0.17 <= args.armhole_x <= 0.24 or not 0.5 <= args.blend_power <= 4 or not 0.05 <= args.length_m <= 0.3 or not 0 <= args.underarm_drop_m <= 0.15: parser.error('Study parameter outside allowed range; see --help')
+ build(args.output,args.length_m,args.underarm_drop_m,args.blend_power,args.armhole_x,args.armhole_floor)
