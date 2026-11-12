@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { SkinnedMesh, Vector3 } from "three";
+import { MathUtils, Quaternion, SkinnedMesh, Vector3 } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { LEG_JOINTS, LEG_POSE_NAMES, TEST_POSES, applyPose, captureBindPose, findPose } from "../lib/garment/poses.ts";
 const bytes = await readFile(new URL("../../../outputs/avatars/mhr-neutral.glb", import.meta.url));
@@ -51,5 +51,27 @@ for (const [name, vectors] of Object.entries(expectedDirections)) {
   const shank = position("l_foot").sub(position("l_lowleg")).normalize();
   assert.ok(thigh.distanceTo(new Vector3(...vectors[0])) < 0.002, `${name} thigh differs from contract`);
   assert.ok(shank.distanceTo(new Vector3(...vectors[1])) < 0.002, `${name} shank differs from contract`);
+}
+// Independently derive both knees and feet from rest-space positions and the
+// contract's world axes. This catches applying a knee axis in its parent's local space.
+applyPose(bones, bind, findPose("rest"));
+const restPositions = Object.fromEntries(["l_upleg", "l_lowleg", "l_foot", "r_upleg", "r_lowleg", "r_foot"].map(name => [name, position(name)]));
+const rotationsByPose = {
+  rest: [[0, 0, "x"], [0, 0, "x"]], walk: [[-30, 20, "x"], [15, 20, "x"]],
+  "l-hip-60": [[-60, 0, "x"], [0, 0, "x"]], step: [[-90, 90, "x"], [0, 0, "x"]],
+  squat: [[-45, 60, "x"], [-45, 60, "x"]], wide: [[20, 0, "z"], [-20, 0, "z"]],
+};
+for (const [name, sides] of Object.entries(rotationsByPose)) {
+  applyPose(bones, bind, findPose(name));
+  for (const [i, side] of ["l", "r"].entries()) {
+    const [hipDegrees, kneeDegrees, axis] = sides[i];
+    const hip = restPositions[`${side}_upleg`], knee = restPositions[`${side}_lowleg`], foot = restPositions[`${side}_foot`];
+    const hipRotation = new Quaternion().setFromAxisAngle(new Vector3(axis === "x" ? 1 : 0, 0, axis === "z" ? 1 : 0), MathUtils.degToRad(hipDegrees));
+    const kneeRotation = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), MathUtils.degToRad(kneeDegrees));
+    const expectedKnee = knee.clone().sub(hip).applyQuaternion(hipRotation).add(hip);
+    const expectedFoot = foot.clone().sub(knee).applyQuaternion(hipRotation).applyQuaternion(kneeRotation).add(expectedKnee);
+    assert.ok(position(`${side}_lowleg`).distanceTo(expectedKnee) < 1e-5, `${name}: ${side} knee position`);
+    assert.ok(position(`${side}_foot`).distanceTo(expectedFoot) < 1e-5, `${name}: ${side} foot position`);
+  }
 }
 console.log("Leg pose table, directions, motion and reset checks passed");

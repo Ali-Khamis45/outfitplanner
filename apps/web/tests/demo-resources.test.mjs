@@ -46,6 +46,38 @@ assert.equal(await load(sidecarUrlForSelection(select("v2"))), null);
 await verifyV5(select("v5"));
 assert.equal(calls.filter(url => url.includes("variant=v5&sidecar=1")).length, 2);
 assert.equal(calls.filter(url => url.includes("variant=v2")).length, 0);
+// A standalone pants fixture exercises separate loading and influence buffers even
+// when the optional generated garment assets are absent.
+const legBones = new Map();
+for (const side of ["l", "r"]) {
+  const hip = new Bone(), knee = new Bone(), foot = new Bone();
+  hip.name = `${side}_upleg`; knee.name = `${side}_lowleg`; foot.name = `${side}_foot`;
+  knee.position.y = -1; foot.position.y = -1; root.add(hip); hip.add(knee); knee.add(foot);
+  for (const bone of [hip, knee, foot]) legBones.set(bone.name, bone);
+}
+const legBind = captureBindPose(legBones);
+const pantsMesh = new SkinnedMesh();
+pantsMesh.morphTargetDictionary = { corr_L_hip90: 0, corr_L_knee90: 1, corr_R_hip90: 2, corr_R_knee90: 3 };
+pantsMesh.morphTargetInfluences = [0, 0, 0, 0];
+const pantsFixture = { version: 1, correctives: ["L", "R"].flatMap(side => [
+  { target: `corr_${side}_hip90`, joint: `${side.toLowerCase()}_upleg`, child: `${side.toLowerCase()}_lowleg`, measure: "swing_deg", ramp: [20, 90] },
+  { target: `corr_${side}_knee90`, joint: `${side.toLowerCase()}_lowleg`, child: `${side.toLowerCase()}_foot`, measure: "swing_deg", ramp: [0, 90] },
+]) };
+let pantsRequests = 0;
+const loadPantsSidecar = createSidecarLoader(async url => { assert.equal(url, "/api/demo-garment?variant=pants&sidecar=1"); pantsRequests++; return new Response(JSON.stringify(pantsFixture)); });
+const pantsRequest = loadPantsSidecar("/api/demo-garment?variant=pants");
+assert.equal(loadPantsSidecar("/api/demo-garment?variant=pants"), pantsRequest);
+const drivePants = createCorrectiveDriver(pantsMesh, legBones, legBind, await pantsRequest);
+applyPose(legBones, legBind, findPose("step"));
+const legWeights = drivePants(true);
+assert.ok(legWeights.corr_L_hip90 > 0.999 && legWeights.corr_L_knee90 > 0.999);
+assert.equal(legWeights.corr_R_hip90, 0);
+assert.equal(pantsRequests, 1);
+const shirtBefore = [...mesh.morphTargetInfluences];
+assert.ok(Object.values(drivePants(false)).every(weight => weight === 0));
+assert.deepEqual(mesh.morphTargetInfluences, shirtBefore);
+createCorrectiveDriver(pantsMesh, legBones, legBind, null)(true);
+assert.ok(pantsMesh.morphTargetInfluences.every(weight => weight === 0));
 // When the optional generated v5 is present, also exercise its real targets and the MHR rig.
 const outputs = new URL("../../../outputs/", import.meta.url);
 const avatarPath = new URL("avatars/mhr-neutral.glb", outputs);

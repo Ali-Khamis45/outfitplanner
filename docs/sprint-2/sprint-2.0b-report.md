@@ -1,5 +1,6 @@
 # Sprint 2.0B - web
 
+- **PASS** - Pants load their own corrective sidecar and use independent controls and weights. Tests exercise both generated garments together and check knee and foot positions for each leg pose against the committed contract's world-space rotations. Missing sidecars remain optional.
 - **PASS** - Merged `sprint-1.4-correctives` into `sprint-2.0-web` without conflicts. v5 is the default shirt with correctives enabled; the 120-degree arm pose remains selectable only as an unsupported diagnostic.
 - **PASS** - Leg joint names, axes, signs, rotation order and world-space convention match `sprint-2.0-pants:docs/contracts/leg-poses.md` (unchanged from commit `a3d541e` to `9e455f2`). Tests cover every pose, the contract's reference directions, walk directions, knee motion and rest reset. The five leg poses are in the selector and capture matrix.
 - **PASS** - `npm.cmd install`, `npm.cmd run typecheck`, `npm.cmd run lint`, `npm.cmd run build`, and `npm.cmd test`. Asset-dependent tests ran against isolated neutral-only GLB copies; personal-avatar cases were skipped to avoid touching personal files.

@@ -35,11 +35,20 @@ export function AvatarLab() {
   const [garmentStatus, setGarmentStatus] = useState<GarmentStatus>({ state: "loading" });
   const [pantsEnabled, setPantsEnabled] = useState(false), [pantsVisible, setPantsVisible] = useState(true), [pantsColor, setPantsColor] = useState("#4c5360"), [pantsWireframe, setPantsWireframe] = useState(false);
   const [pantsStatus, setPantsStatus] = useState<GarmentStatus>({ state: "off" });
+  const [pantsCorrectives, setPantsCorrectives] = useState(true);
+  const [pantsWeights, setPantsWeights] = useState<Record<string, number>>({});
+  const [pantsSidecar, setPantsSidecar] = useState<Sidecar | null>(null);
+  const pantsSidecarLoader = useMemo(() => createSidecarLoader(), []);
+  useEffect(() => {
+    let active = true;
+    pantsSidecarLoader(pantsEnabled ? PANTS_URL : null).then(data => { if (active) setPantsSidecar(data); });
+    return () => { active = false; };
+  }, [pantsEnabled, pantsSidecarLoader]);
   const onPantsReady = useCallback((info: GarmentInfo) => setPantsStatus({ state: "ready", info }), []);
   const onPantsError = useCallback((message: string) => setPantsStatus({ state: "error", message }), []);
-  const ignorePantsWeights = useCallback(() => {}, []);
-  const pantsLayer = useMemo(() => pantsEnabled ? { url: PANTS_URL, color: pantsColor, visible: pantsVisible, sidecar: null, correctives: false, onWeights: ignorePantsWeights, onReady: onPantsReady, onError: onPantsError } : null, [pantsEnabled, pantsColor, pantsVisible, ignorePantsWeights, onPantsReady, onPantsError]);
-  const enablePants = useCallback((value: boolean) => { setPantsEnabled(value); setPantsStatus({ state: value ? "loading" : "off" }); }, []);
+  const onPantsWeights = useCallback((next: Record<string, number>) => setPantsWeights(previous => JSON.stringify(previous) === JSON.stringify(next) ? previous : next), []);
+  const pantsLayer = useMemo(() => pantsEnabled ? { url: PANTS_URL, color: pantsColor, visible: pantsVisible, sidecar: pantsSidecar, correctives: pantsCorrectives, onWeights: onPantsWeights, onReady: onPantsReady, onError: onPantsError } : null, [pantsEnabled, pantsColor, pantsVisible, pantsSidecar, pantsCorrectives, onPantsWeights, onPantsReady, onPantsError]);
+  const enablePants = useCallback((value: boolean) => { setPantsEnabled(value); setPantsStatus({ state: value ? "loading" : "off" }); if (!value) { setPantsSidecar(null); setPantsWeights({}); } }, []);
   const [correctives, setCorrectives] = useState(true);
   const [weights, setWeights] = useState<Record<string, number>>({});
   const [demoSidecar, setDemoSidecar] = useState<{ url: string; data: Sidecar | null } | null>(null);
@@ -149,7 +158,7 @@ export function AvatarLab() {
     </header>
     <div className="lab-body"><LeftInspector source={source} onSelectSource={selectSource} skeleton={skeleton} wireframe={wireframe} garmentWireframe={garmentWireframe} grid={grid} turntable={turntable} setSkeleton={setSkeleton} setWireframe={setWireframe} setGarmentWireframe={setGarmentWireframe} setGrid={setGrid} setTurntable={setTurntable} status={status}>
       <GarmentPanel enabled={garmentEnabled} setEnabled={enableGarment} source={garmentSource} onSource={chooseGarment} visible={garmentVisible} setVisible={setGarmentVisible} color={garmentColor} setColor={setGarmentColor} pose={pose} setPose={setPose} status={garmentStatus} correctives={correctives} setCorrectives={setCorrectives} weights={weights} avatarReady={status === "ready"} />
-      <PantsPanel enabled={pantsEnabled} setEnabled={enablePants} visible={pantsVisible} setVisible={setPantsVisible} color={pantsColor} setColor={setPantsColor} wireframe={pantsWireframe} setWireframe={setPantsWireframe} status={pantsStatus} avatarReady={status === "ready"} />
+      <PantsPanel enabled={pantsEnabled} setEnabled={enablePants} visible={pantsVisible} setVisible={setPantsVisible} color={pantsColor} setColor={setPantsColor} wireframe={pantsWireframe} setWireframe={setPantsWireframe} correctives={pantsCorrectives} setCorrectives={setPantsCorrectives} weights={pantsWeights} status={pantsStatus} avatarReady={status === "ready"} />
     </LeftInspector>
       <section className="workspace" aria-label="3D avatar studio"><div className="workspace-heading"><div><div className="overline">AVATAR RECONSTRUCTION <span>/</span> VIEWER</div><h1>Avatar studio<span>.</span></h1><p>Inspect the geometry behind the silhouette.</p></div><div className="workspace-id"><span>ACTIVE AVATAR</span><strong>{personal ? "PERSONAL / LOCAL" : "NEUTRAL / MHR"}</strong>{personal && <small title={source.fileName}>{source.fileName}</small>}</div></div>
         <div className="stage" ref={stage}><div className="stage-caption"><span className="status-dot" /> <span>3D VIEWPORT</span><span className="stage-caption-secondary"> / {personal ? "PERSONAL RECONSTRUCTION" : "MHR NEUTRAL"}</span></div><span className="stage-top-right">PERSPECTIVE <span>·</span> METERS</span>
