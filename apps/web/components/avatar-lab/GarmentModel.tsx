@@ -1,9 +1,10 @@
 "use client";
 import { useGLTF } from "@react-three/drei";
-import { useThree } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { Component, useEffect, useMemo, type ReactNode } from "react";
 import { MeshStandardMaterial, SkinnedMesh } from "three";
 import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
+import { createCorrectiveDriver, type Sidecar } from "../../lib/garment/correctives";
 import { bindGarment } from "../../lib/garment/binding";
 import { applyMeshInspection } from "../../lib/garment/inspection";
 import type { LoadedRig } from "./AvatarModel";
@@ -17,7 +18,7 @@ export class GarmentErrorBoundary extends Component<{ children: ReactNode; onErr
   render() { return this.state.failed ? null : this.props.children; }
 }
 
-export function GarmentModel({ url, rig, color, visible, wireframe, inspection, onReady }: { url: string; rig: LoadedRig; color: string; visible: boolean; wireframe: boolean; inspection: boolean; onReady: (info: GarmentInfo) => void }) {
+export function GarmentModel({ url, rig, color, visible, wireframe, inspection, onReady, sidecar, correctives, onWeights }: { url: string; rig: LoadedRig; color: string; visible: boolean; wireframe: boolean; inspection: boolean; onReady: (info: GarmentInfo) => void; sidecar: Sidecar | null; correctives: boolean; onWeights: (weights: Record<string, number>) => void }) {
   const gltf = useGLTF(url);
   const invalidate = useThree((state) => state.invalidate);
   const garment = useMemo(() => {
@@ -42,6 +43,9 @@ export function GarmentModel({ url, rig, color, visible, wireframe, inspection, 
     // Colour is applied in an effect so changing it never rebuilds or rebinds the garment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gltf, rig]);
+  const drive = useMemo(() => createCorrectiveDriver(garment.mesh, rig.rig.bones, rig.bind, sidecar), [garment, rig, sidecar]);
+  useFrame(() => { const weights = drive(correctives); onWeights(weights); });
+  useEffect(() => { invalidate(); }, [drive, correctives, invalidate]);
   useEffect(() => { onReady(garment.info); }, [garment, onReady]);
   useEffect(() => { garment.material.color.set(color); invalidate(); }, [garment, color, invalidate]);
   useEffect(() => { applyMeshInspection(garment.mesh, wireframe, inspection); invalidate(); }, [garment, wireframe, inspection, invalidate]);
