@@ -1,0 +1,13 @@
+﻿import assert from "node:assert/strict";
+import { evaluateSupportedPoses } from "./garment-quality-gates.mjs";
+const good = { "both-90": { stretch: { max: 8.5 }, penetratingBeyond3mm: 0, degenerate: 0 }, "both-120": { stretch: { max: 999 }, penetratingBeyond3mm: 999, degenerate: 999 } };
+const names = ["both-90", "both-120"];
+let result = evaluateSupportedPoses(good, names);
+assert.deepEqual(result.failures, []);
+assert.equal(result.gates["both-120"], undefined);
+result = evaluateSupportedPoses({ ...good, "both-90": { ...good["both-90"], stretch: { max: 8.786 } } }, names);
+assert.match(result.failures[0], /maxStretch/);
+result = evaluateSupportedPoses({ ...good, "both-90": { ...good["both-90"], penetratingBeyond3mm: 1 } }, names);
+assert.match(result.failures[0], /penetratingBeyond3mm/);
+assert.ok(evaluateSupportedPoses({}, names).failures.length);
+console.log("Supported-pose garment gate tests passed; +120 is diagnostic");

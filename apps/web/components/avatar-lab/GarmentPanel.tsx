@@ -85,7 +85,7 @@ export function GarmentPanel({ enabled, setEnabled, source, onSource, visible, s
       <button className="icon-button" aria-label="Reset avatar pose" title="Reset avatar pose" onClick={() => setPose("rest")} disabled={!avatarReady || pose === "rest"}><ArrowCounterClockwise size={16} /></button></div>
     <button className="photo-picker" type="button" disabled={!avatarReady} onClick={() => setPose(pose === "both-90" ? "rest" : "both-90")}>{pose === "both-90" ? "Compare: return to rest" : "Compare: raise both arms"}</button>
     <p className="side-note">Switch between the original and improved shirts at the same pose to compare them.</p>
-    <p className="side-note">Above 90&#176; arm raise needs cloth simulation. Leg axes are provisional pending the joint contract.</p>
+    <p className="side-note">Above 90&#176; arm raise needs cloth simulation.</p>
     <p className="side-note">Rigid joint rotations for skinning tests only; not animation or cloth simulation.</p>
   </section>;
 }

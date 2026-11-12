@@ -10,12 +10,17 @@ assert.ok(mesh);
 const bones = new Map(mesh.skeleton.bones.map(b => [b.name, b]));
 for (const config of Object.values(LEG_JOINTS)) assert.ok(bones.has(config.joint), `Missing ${config.joint}`);
 const expected = {
-  walk: [["l_upleg", 30], ["r_upleg", -15], ["l_lowleg", 20], ["r_lowleg", 20]],
-  "l-hip-60": [["l_upleg", 60]], step: [["l_upleg", 90], ["l_lowleg", 90]],
-  squat: [["l_upleg", 45], ["r_upleg", 45], ["l_lowleg", 60], ["r_lowleg", 60]],
-  wide: [["l_upleg", 20], ["r_upleg", 20]],
+  walk: [["l_upleg", -30], ["r_upleg", 15], ["l_lowleg", 20], ["r_lowleg", 20]],
+  "l-hip-60": [["l_upleg", -60]], step: [["l_upleg", -90], ["l_lowleg", 90]],
+  squat: [["l_upleg", -45], ["r_upleg", -45], ["l_lowleg", 60], ["r_lowleg", 60]],
+  wide: [["l_upleg", 20], ["r_upleg", -20]],
 };
 for (const [name, rotations] of Object.entries(expected)) assert.deepEqual(findPose(name).rotations.map(({ joint, degrees }) => [joint, degrees]), rotations);
+const expectedAxes = {
+  rest: [], walk: [[1,0,0],[1,0,0],[1,0,0],[1,0,0]], "l-hip-60": [[1,0,0]],
+  step: [[1,0,0],[1,0,0]], squat: [[1,0,0],[1,0,0],[1,0,0],[1,0,0]], wide: [[0,0,1],[0,0,1]],
+};
+for (const [name, axes] of Object.entries(expectedAxes)) assert.deepEqual(findPose(name).rotations.map(rotation => rotation.axis), axes);
 const bind = captureBindPose(bones);
 const position = name => { gltf.scene.updateMatrixWorld(true); return bones.get(name).getWorldPosition(new Vector3()); };
 const kneeRest = position(LEG_JOINTS.leftKnee.joint);
@@ -32,4 +37,19 @@ assert.ok(position(LEG_JOINTS.rightKnee.joint).x < rightRest.x, "right leg moves
 applyPose(bones, bind, findPose("rest"));
 assert.ok(position(LEG_JOINTS.leftKnee.joint).distanceTo(kneeRest) < 1e-6, "rest restores the bind pose");
 assert.equal(TEST_POSES.filter(p => p.name === "both-120").length, 1);
-console.log("Leg pose joint, motion and reset checks passed (axes provisional)");
+const expectedDirections = {
+  rest: [[0.119,-0.991,-0.058], [0.114,-0.988,-0.102]],
+  walk: [[0.119,-0.887,0.445], [0.114,-0.991,0.071]],
+  "l-hip-60": [[0.119,-0.546,0.830], [0.114,-0.583,0.805]],
+  step: [[0.119,-0.058,0.991], [0.114,-0.988,-0.102]],
+  squat: [[0.119,-0.742,0.660], [0.114,-0.928,-0.355]],
+  wide: [[0.451,-0.891,-0.058], [0.445,-0.890,-0.102]],
+};
+for (const [name, vectors] of Object.entries(expectedDirections)) {
+  applyPose(bones, bind, findPose(name));
+  const thigh = position("l_lowleg").sub(position("l_upleg")).normalize();
+  const shank = position("l_foot").sub(position("l_lowleg")).normalize();
+  assert.ok(thigh.distanceTo(new Vector3(...vectors[0])) < 0.002, `${name} thigh differs from contract`);
+  assert.ok(shank.distanceTo(new Vector3(...vectors[1])) < 0.002, `${name} shank differs from contract`);
+}
+console.log("Leg pose table, directions, motion and reset checks passed");

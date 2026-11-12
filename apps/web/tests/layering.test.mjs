@@ -1,5 +1,6 @@
 ﻿import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { SkinnedMesh } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
@@ -22,3 +23,11 @@ applyMeshInspection(upper, true, true); applyMeshInspection(lower, false, true);
 assert.equal(upper.material.wireframe, true); assert.equal(lower.material.wireframe, false);
 upper.visible = false; assert.equal(lower.visible, true);
 console.log("Two garment instances bind to the same avatar with independent inspection state (shirt fixture used for both slots)");
+const pantsFile = new URL("../../../outputs/garments/pants-basic-v1-mhr-neutral.glb", import.meta.url);
+if (existsSync(pantsFile)) {
+  const pants = meshOf((await load("../../../outputs/garments/pants-basic-v1-mhr-neutral.glb")).scene);
+  const result = bindGarment(pants, rig);
+  assert.equal(result.joints, rig.bones.size);
+  assert.ok(pants.skeleton.bones.every(bone => rig.bones.get(bone.name) === bone));
+  console.log("Neutral pants binds to the same avatar skeleton as the shirt");
+} else console.log("Neutral pants binding skipped: asset not generated");
