@@ -5,7 +5,7 @@
 ## 1. GLB
 
 - The garment GLB is unchanged in every other respect: one skinned mesh, the full 127-joint MHR skeleton, the same inverse bind matrices and skin weights.
-- The shirt mesh's single primitive gains four **POSITION-only** glTF morph targets, in this order:
+- The garment mesh's single primitive gains **POSITION-only** glTF morph targets. For the T-shirt these are four targets, in this order (other garments: see §2, "Target sets per garment"):
 
   | Index | Name |
   | --- | --- |
@@ -14,7 +14,7 @@
   | 2 | `corr_R_abd90` |
   | 3 | `corr_R_abd120` |
 
-- Names are stored in `meshes[0].extras.targetNames`, which Three.js's GLTFLoader reads into `morphTargetDictionary`. `meshes[0].weights` is `[0, 0, 0, 0]`.
+- Names are stored in `meshes[0].extras.targetNames`, which Three.js's GLTFLoader reads into `morphTargetDictionary`. `meshes[0].weights` is all zeros, one entry per target.
 - No NORMAL or TANGENT deltas. Normals are the rest normals, skinned as usual.
 - **Deltas are in bind (rest) space.** Three.js applies morphs **before** skinning:
 
@@ -37,6 +37,19 @@
 ```
 
 Names are exact MHR joint names (glTF node names). `child` identifies the bone's end joint and is required to define the bone direction (§3).
+
+### Target sets per garment (added in Sprint 2.0A; the format is unchanged)
+
+The sidecar is the source of truth: a consumer drives whatever targets it lists, matching them by name through `morphTargetDictionary`. The GLB's morph target order equals the sidecar order. The T-shirt set is the one above. The basic pants (`pants-basic-v1-mhr-neutral.glb`) carry four flexion correctives:
+
+| Index | Target | `joint` → `child` | `ramp` | Solved at (docs/contracts/leg-poses.md convention) |
+| --- | --- | --- | --- | --- |
+| 0 | `corr_L_hip90` | `l_upleg` → `l_lowleg` | [20, 90] | `l_upleg` [1,0,0] −90 |
+| 1 | `corr_L_knee90` | `l_lowleg` → `l_foot` | [0, 90] | `l_lowleg` [1,0,0] +90 |
+| 2 | `corr_R_hip90` | `r_upleg` → `r_lowleg` | [20, 90] | `r_upleg` [1,0,0] −90 |
+| 3 | `corr_R_knee90` | `r_lowleg` → `r_foot` | [0, 90] | `r_lowleg` [1,0,0] +90 |
+
+`swing_deg` has no direction. The hip ramps therefore start at 20°, so hip extension (15°) and abduction (20°), which swing the thigh as much as a small flexion, leave the hip targets at 0. Each target is solved alone. In combined poses (for example `step` = hip 90 + knee 90) the weights simply add, as §4 says.
 
 ## 3. `swing_deg`
 

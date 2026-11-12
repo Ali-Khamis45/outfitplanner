@@ -126,39 +126,86 @@ def _arap(rest: np.ndarray, start: np.ndarray, faces: np.ndarray, free: np.ndarr
     return current
 
 
-def solve_targets(arrays: dict[str, Any], outer_vertices: np.ndarray, outer_faces: np.ndarray, skeleton: Skeleton, body: SkinnedAsset, rules: CorrectiveRules = CorrectiveRules()) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
-    """Bind-space POSITION deltas for the four contract targets, for every GLB vertex in `arrays`."""
+def _skinning_inputs(arrays: dict[str, Any], outer_vertices: np.ndarray) -> dict[str, np.ndarray]:
     source, inner = np.asarray(arrays["_source"]), np.asarray(arrays["_inner"], dtype=bool)
-    rest_all = np.asarray(arrays["position"], dtype=np.float64)
     joints_all, weights_all = np.asarray(arrays["joints"]), np.asarray(arrays["weights"], dtype=np.float64)
     # Welded outer surface skinning data (outer copies of each welded vertex share its weights).
     outer_joints = np.zeros((len(outer_vertices), 4), dtype=np.int64)
     outer_weights = np.zeros((len(outer_vertices), 4))
     outer_joints[source[~inner]], outer_weights[source[~inner]] = joints_all[~inner], weights_all[~inner]
+    return {"source": source, "rest_all": np.asarray(arrays["position"], dtype=np.float64), "joints_all": joints_all, "weights_all": weights_all, "outer_joints": outer_joints, "outer_weights": outer_weights}
+
+
+def _solve_pose(data: dict[str, np.ndarray], outer_vertices: np.ndarray, outer_faces: np.ndarray, mask: np.ndarray, rotations: list[Any], skeleton: Skeleton, body: SkinnedAsset, rules: CorrectiveRules, anchor: float) -> np.ndarray:
+    """Bind-space delta for every GLB vertex that moves the garment to its solved shape at one key pose."""
+    source, rest_all, joints_all, weights_all = data["source"], data["rest_all"], data["joints_all"], data["weights_all"]
+    matrices = skin_matrices(skeleton, pose_local(skeleton, rotations))
+    posed_body = skin(body.positions, body.joints, body.weights, skin_matrices(body.skeleton, pose_local(body.skeleton, rotations)))
+    start = dual_quaternion_skin(outer_vertices, data["outer_joints"], data["outer_weights"], matrices)
+    solved = _arap(outer_vertices, start, outer_faces, mask > 0, posed_body, vertex_normals(posed_body, body.indices), rules, anchor)
+    # inner layer and rims: the rest offset from the welded outer vertex, carried by the same DQS rotation
+    target = solved[source] + dual_quaternion_skin(rest_all, joints_all, weights_all, matrices) - start[source]
+    skinned_all = skin(rest_all, joints_all, weights_all, matrices)
+    desired = skinned_all + mask[source][:, None] * (target - skinned_all)
+    blended = blend_matrices(joints_all, weights_all, matrices)
+    delta = np.einsum("vij,vj->vi", np.linalg.inv(blended[:, :3, :3]), desired - blended[:, :3, 3]) - rest_all
+    delta[mask[source] == 0] = 0.0  # exactly zero outside the region (removes round-off)
+    return delta
+
+
+def solve_targets(arrays: dict[str, Any], outer_vertices: np.ndarray, outer_faces: np.ndarray, skeleton: Skeleton, body: SkinnedAsset, rules: CorrectiveRules = CorrectiveRules()) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+    """Bind-space POSITION deltas for the four T-shirt contract targets, for every GLB vertex in `arrays`."""
+    data = _skinning_inputs(arrays, outer_vertices)
     rest_world = world_from_local(skeleton, skeleton.local)
     morphs: dict[str, np.ndarray] = {}
     report: dict[str, Any] = {"rules": dict(rules.__dict__), "targets": {}}
     for side, low, high in TARGETS:
         pivot = rest_world[skeleton.index(f"{side}_uparm")][:3, 3]
         mask = region_weight(outer_vertices, pivot, side, rules)
-        free = mask > 0
         total: dict[float, np.ndarray] = {}
         for angle in (90.0, 120.0):
-            local = pose_local(skeleton, [raise_arm(side, angle)])
-            matrices = skin_matrices(skeleton, local)
-            body_local = pose_local(body.skeleton, [raise_arm(side, angle)])
-            posed_body = skin(body.positions, body.joints, body.weights, skin_matrices(body.skeleton, body_local))
-            start = dual_quaternion_skin(outer_vertices, outer_joints, outer_weights, matrices)
-            solved = _arap(outer_vertices, start, outer_faces, free, posed_body, vertex_normals(posed_body, body.indices), rules, dict(rules.anchor_weights)[angle])
-            # inner layer and rims: the rest offset from the welded outer vertex, carried by the same DQS rotation
-            target = solved[source] + dual_quaternion_skin(rest_all, joints_all, weights_all, matrices) - start[source]
-            skinned_all = skin(rest_all, joints_all, weights_all, matrices)
-            desired = skinned_all + mask[source][:, None] * (target - skinned_all)
-            blended = blend_matrices(joints_all, weights_all, matrices)
-            delta = np.einsum("vij,vj->vi", np.linalg.inv(blended[:, :3, :3]), desired - blended[:, :3, 3]) - rest_all
-            delta[mask[source] == 0] = 0.0  # exactly zero outside the region (removes round-off)
-            total[angle] = delta
-            report["targets"][f"{side}_{int(angle)}"] = {"region_vertices": int(free.sum()), "max_delta_m": float(np.linalg.norm(delta, axis=1).max())}
+            total[angle] = _solve_pose(data, outer_vertices, outer_faces, mask, [raise_arm(side, angle)], skeleton, body, rules, dict(rules.anchor_weights)[angle])
+            report["targets"][f"{side}_{int(angle)}"] = {"region_vertices": int((mask > 0).sum()), "max_delta_m": float(np.linalg.norm(total[angle], axis=1).max())}
         morphs[low] = total[90.0]
         morphs[high] = total[120.0] - total[90.0]  # contract: abd120 holds only the correction beyond abd90
+    return morphs, report
+
+
+@dataclass(frozen=True)
+class CorrectiveSpec:
+    """One morph target: solved alone at `rotations`, driven by swing of joint->child over `ramp` (contract §3-4)."""
+    target: str
+    joint: str
+    child: str
+    ramp: tuple[float, float]
+    rotations: tuple[tuple[str, tuple[float, float, float], float], ...]
+    pivot_joint: str
+    inner_radius_m: float
+    outer_radius_m: float
+    side: str | None = None  # gate to this side of the midline ("l": x > 0)
+    anchor: float = 1.0
+
+
+def spec_region(rest: np.ndarray, pivot: np.ndarray, spec: CorrectiveSpec, midline_fade_m: float) -> np.ndarray:
+    radial = _smoothstep((spec.outer_radius_m - np.linalg.norm(rest - pivot, axis=1)) / (spec.outer_radius_m - spec.inner_radius_m))
+    if spec.side is None:
+        return radial
+    lateral = rest[:, 0] if spec.side == "l" else -rest[:, 0]
+    return radial * _smoothstep(lateral / midline_fade_m)
+
+
+def spec_sidecar(specs: tuple[CorrectiveSpec, ...]) -> dict[str, Any]:
+    return {"version": 1, "correctives": [{"target": s.target, "joint": s.joint, "child": s.child, "measure": "swing_deg", "ramp": list(s.ramp)} for s in specs]}
+
+
+def solve_specs(arrays: dict[str, Any], outer_vertices: np.ndarray, outer_faces: np.ndarray, skeleton: Skeleton, body: SkinnedAsset, specs: tuple[CorrectiveSpec, ...], rules: CorrectiveRules = CorrectiveRules()) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+    """Bind-space POSITION deltas for independent corrective specs (each solved alone at its key pose)."""
+    data = _skinning_inputs(arrays, outer_vertices)
+    rest_world = world_from_local(skeleton, skeleton.local)
+    morphs: dict[str, np.ndarray] = {}
+    report: dict[str, Any] = {"rules": dict(rules.__dict__), "targets": {}}
+    for spec in specs:
+        mask = spec_region(outer_vertices, rest_world[skeleton.index(spec.pivot_joint)][:3, 3], spec, rules.midline_fade_m)
+        morphs[spec.target] = _solve_pose(data, outer_vertices, outer_faces, mask, list(spec.rotations), skeleton, body, rules, spec.anchor)
+        report["targets"][spec.target] = {"region_vertices": int((mask > 0).sum()), "max_delta_m": float(np.linalg.norm(morphs[spec.target], axis=1).max())}
     return morphs, report

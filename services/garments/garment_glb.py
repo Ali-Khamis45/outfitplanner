@@ -10,11 +10,12 @@ import json
 import struct
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from body import VIEWER, RestBody
+if TYPE_CHECKING:  # body imports torch; readers (posing, evaluators) must work without it
+    from body import RestBody
 
 FLOAT, UNSIGNED_SHORT, UNSIGNED_INT = 5126, 5123, 5125
 ARRAY_BUFFER, ELEMENT_ARRAY_BUFFER = 34962, 34963
@@ -23,13 +24,15 @@ TYPE_WIDTHS = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}
 
 
 def _official_exporter() -> Any:
+    from body import VIEWER
+
     sys.path.insert(0, str(VIEWER))
     import exporters
 
     return exporters
 
 
-def write_garment_glb(path: Path, arrays: dict[str, np.ndarray], body: RestBody, metadata: dict[str, Any], material: dict[str, Any], morphs: dict[str, np.ndarray] | None = None) -> None:
+def write_garment_glb(path: Path, arrays: dict[str, np.ndarray], body: "RestBody", metadata: dict[str, Any], material: dict[str, Any], morphs: dict[str, np.ndarray] | None = None) -> None:
     """`morphs` (name -> per-vertex POSITION deltas, in order) adds glTF morph targets; without it the bytes are unchanged."""
     exporters = _official_exporter()
     rig = exporters._validated_rig(
