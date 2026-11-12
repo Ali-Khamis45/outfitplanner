@@ -9,7 +9,7 @@ import { applyMeshInspection } from "../../lib/garment/inspection";
 import { applyPose, captureBindPose, findPose, type PoseName } from "../../lib/garment/poses";
 import type { ModelInfo } from "./types";
 
-export interface LoadedRig { id: string; rig: AvatarRig }
+export interface LoadedRig { id: string; rig: AvatarRig; bind: ReturnType<typeof captureBindPose> }
 
 export function AvatarModel({ url, wireframe, inspection, skeleton, pose, onReady, onRig }: { url: string; wireframe: boolean; inspection: boolean; skeleton: boolean; pose: PoseName; onReady: (info: ModelInfo) => void; onRig: (rig: LoadedRig | null) => void }) {
   const gltf = useGLTF(url);
@@ -51,7 +51,7 @@ export function AvatarModel({ url, wireframe, inspection, skeleton, pose, onRead
     return { object, meshes, materials, helper, rig, bind: captureBindPose(rig.bones), info: { vertices, triangles, joints: bones.size, skinnedMeshes, hasSkinning, size: size.toArray(), center: center.toArray() } as ModelInfo };
   }, [gltf.scene]);
   useEffect(() => { onReady(model.info); }, [model, onReady]);
-  useEffect(() => { onRig({ id: model.object.uuid, rig: model.rig }); return () => onRig(null); }, [model, onRig]);
+  useEffect(() => { onRig({ id: model.object.uuid, rig: model.rig, bind: model.bind }); return () => onRig(null); }, [model, onRig]);
   useEffect(() => {
     try { applyPose(model.rig.bones, model.bind, findPose(pose)); }
     catch (error) { console.error("Test pose could not be applied to this avatar:", error); applyPose(model.rig.bones, model.bind, findPose("rest")); }

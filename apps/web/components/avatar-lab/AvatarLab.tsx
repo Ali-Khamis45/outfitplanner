@@ -1,12 +1,13 @@
 "use client";
 import { ArrowsClockwise, Camera, Cube, SlidersHorizontal } from "@phosphor-icons/react";
-import { Component, useCallback, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from "react";
+import { Component, useCallback, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from "react";
 import Link from "next/link";
 import { AvatarScene } from "./AvatarScene";
 import { AvatarInspector, LeftInspector } from "./AvatarInspector";
 import { SceneControls } from "./SceneControls";
 import { NEUTRAL_SOURCE } from "./AvatarSourcePanel";
-import { DEMO_GARMENT, GarmentPanel } from "./GarmentPanel";
+import { DEMO_GARMENT, demoGarment, GarmentPanel } from "./GarmentPanel";
+import { parseSidecar, type Sidecar } from "../../lib/garment/correctives";
 import type { PoseName } from "../../lib/garment/poses";
 import type { AssetStatus, AvatarSource, CameraView, GarmentInfo, GarmentSource, GarmentStatus, ModelInfo, RenderStats } from "./types";
 
@@ -29,6 +30,19 @@ export function AvatarLab() {
   const [garmentEnabled, setGarmentEnabled] = useState(false), [garmentVisible, setGarmentVisible] = useState(true), [garmentColor, setGarmentColor] = useState("#3f78c8");
   const [garmentSource, setGarmentSource] = useState<GarmentSource>(DEMO_GARMENT);
   const [garmentStatus, setGarmentStatus] = useState<GarmentStatus>({ state: "off" });
+  const [correctives, setCorrectives] = useState(true);
+  const [weights, setWeights] = useState<Record<string, number>>({});
+  const [demoSidecar, setDemoSidecar] = useState<{ url: string; data: Sidecar | null } | null>(null);
+  useEffect(() => {
+    if (garmentSource.kind !== "demo") return;
+    let active = true;
+    fetch(`${garmentSource.url}&sidecar=1`).then(response => response.ok ? response.json() : null).then(value => { if (active) setDemoSidecar({ url: garmentSource.url, data: value ? parseSidecar(value) : null }); }).catch(error => console.warn("Corrective sidecar unavailable:", error));
+    return () => { active = false; };
+  }, [garmentSource]);
+  const sidecar = garmentSource.kind === "local" ? garmentSource.sidecar ?? null : demoSidecar?.url === garmentSource.url ? demoSidecar.data : null;
+  const onWeights = useCallback((next: Record<string, number>) => setWeights(previous => JSON.stringify(previous) === JSON.stringify(next) ? previous : next), []);
+  const garmentStatusRef = useRef(garmentStatus);
+  useEffect(() => { garmentStatusRef.current = garmentStatus; }, [garmentStatus]);
   const [pose, setPose] = useState<PoseName>("rest");
   // Status is set in handlers, not effects: child effects run first and would overwrite a "ready" garment.
   const pendingGarment = useCallback((enabled: boolean, url: string): GarmentStatus => (enabled && url ? { state: "loading" } : { state: "off" }), []);
@@ -37,9 +51,9 @@ export function AvatarLab() {
   const chooseGarment = useCallback((next: GarmentSource) => { setGarmentSource(next); setGarmentStatus(pendingGarment(garmentEnabled, next.url)); }, [garmentEnabled, pendingGarment]);
   const onGarmentReady = useCallback((info: GarmentInfo) => setGarmentStatus({ state: "ready", info }), []);
   const onGarmentError = useCallback((message: string) => setGarmentStatus({ state: "error", message }), []);
-  const garmentLayer = useMemo(() => (garmentEnabled && garmentSource.url ? { url: garmentSource.url, color: garmentColor, visible: garmentVisible, onReady: onGarmentReady, onError: onGarmentError } : null), [garmentEnabled, garmentSource.url, garmentColor, garmentVisible, onGarmentReady, onGarmentError]);
+  const garmentLayer = useMemo(() => (garmentEnabled && garmentSource.url ? { sidecar, correctives, onWeights, url: garmentSource.url, color: garmentColor, visible: garmentVisible, onReady: onGarmentReady, onError: onGarmentError } : null), [garmentEnabled, garmentSource.url, sidecar, correctives, onWeights, garmentColor, garmentVisible, onGarmentReady, onGarmentError]);
   const personal = source.kind === "personal";
-  const [stats, setStats] = useState<RenderStats>({ fps: null, calls: 0, triangles: 0 });
+  const [stats, setStats] = useState<RenderStats>({ fps: null, low: null, frameMs: null, calls: 0, triangles: 0 });
   const [command, setCommand] = useState<{ view: CameraView; id: number }>({ view: "reset", id: 0 });
   const [notice, setNotice] = useState("");
   const stage = useRef<HTMLDivElement>(null);
@@ -47,6 +61,50 @@ export function AvatarLab() {
   const onError = useCallback(() => setStatus("error"), []);
   const onStats = useCallback((value: RenderStats) => setStats(value), []);
   const setView = useCallback((view: CameraView) => setCommand((prev) => ({ view, id: prev.id + 1 })), []);
+  async function captureMatrix() {
+    type Writable = { write: (data: Blob | string) => Promise<void>; close: () => Promise<void> };
+    type Directory = { getDirectoryHandle: (name: string, options: { create: boolean }) => Promise<Directory>; getFileHandle: (name: string, options: { create: boolean }) => Promise<{ createWritable: () => Promise<Writable> }> };
+    const picker = (window as unknown as { showDirectoryPicker?: () => Promise<Directory> }).showDirectoryPicker;
+    if (!picker) { setNotice("Directory capture requires a browser with File System Access support."); return; }
+    if (personal) { setNotice("Switch to the neutral avatar for the demo capture matrix."); return; }
+    try {
+      const root = await picker();
+      const now = new Date();
+      const date = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, "0"), String(now.getDate()).padStart(2, "0")].join("-");
+      const dir = await root.getDirectoryHandle(date, { create: true });
+      const rows: string[] = [], skipped: string[] = [];
+      setTurntable(false); enableGarment(true); setGarmentVisible(true);
+      for (const variant of ["v1", "v2", "v4", "v5"] as const) {
+        const response = await fetch(`/api/demo-garment?variant=${variant}`, { method: "GET" });
+        if (!response.ok) { skipped.push(variant); continue; }
+        chooseGarment(demoGarment(variant));
+        // Let React, the loader and the GPU settle before each capture.
+        await new Promise(resolve => setTimeout(resolve, 100));
+        const deadline = performance.now() + 30000;
+        while (garmentStatusRef.current.state === "loading" && performance.now() < deadline) await new Promise(resolve => setTimeout(resolve, 100));
+        if (garmentStatusRef.current.state !== "ready") { skipped.push(`${variant} (load failed)`); continue; }
+        await new Promise(resolve => setTimeout(resolve, 300));
+        for (const item of ["rest", "left-90", "both-90", "both-120", "torso-twist"] as const) {
+          setPose(item);
+          for (const view of ["front", "left", "back"] as const) {
+            setView(view);
+            await new Promise(resolve => setTimeout(resolve, 350));
+            const canvas = stage.current?.querySelector("canvas");
+            if (!canvas) throw new Error("Canvas unavailable");
+            const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/png"));
+            if (!blob) throw new Error("Capture failed");
+            const name = `${variant}--${item}--${view}.png`;
+            const writer = await (await dir.getFileHandle(name, { create: true })).createWritable();
+            await writer.write(blob); await writer.close();
+            rows.push(`<figure><img loading="lazy" src="${name}"><figcaption>${name}</figcaption></figure>`);
+          }
+        }
+      }
+      const writer = await (await dir.getFileHandle("index.html", { create: true })).createWritable();
+      await writer.write(`<!doctype html><meta charset="utf-8"><title>Garment captures ${date}</title><style>body{font:14px sans-serif;background:#eee}main{display:grid;grid-template-columns:repeat(3,1fr)}figure{margin:8px}img{width:100%}</style><h1>Garment captures ${date}</h1><p>Missing versions: ${skipped.join(", ") || "none"}</p><main>${rows.join("")}</main>`); await writer.close();
+      setNotice(`Captured ${rows.length} images. Missing: ${skipped.join(", ") || "none"}.`);
+    } catch (error) { setNotice(`Capture stopped: ${error instanceof Error ? error.message : "directory access denied"}`); }
+  }
   async function fullscreen() {
     try { if (document.fullscreenElement) await document.exitFullscreen(); else await stage.current?.requestFullscreen(); }
     catch { setNotice("Fullscreen is not available in this browser."); }
@@ -69,7 +127,7 @@ export function AvatarLab() {
       <div className="header-center"><span className="header-divider" /><span>Avatar Reconstruction Lab</span><span className="header-badge">SPRINT 1</span></div><div className="header-right"><span className="status-dot" /> LOCAL ENVIRONMENT <span className="header-index">/ 01</span></div>
     </header>
     <div className="lab-body"><LeftInspector source={source} onSelectSource={selectSource} skeleton={skeleton} wireframe={wireframe} garmentWireframe={garmentWireframe} grid={grid} turntable={turntable} setSkeleton={setSkeleton} setWireframe={setWireframe} setGarmentWireframe={setGarmentWireframe} setGrid={setGrid} setTurntable={setTurntable} status={status}>
-      <GarmentPanel enabled={garmentEnabled} setEnabled={enableGarment} source={garmentSource} onSource={chooseGarment} visible={garmentVisible} setVisible={setGarmentVisible} color={garmentColor} setColor={setGarmentColor} pose={pose} setPose={setPose} status={garmentStatus} avatarReady={status === "ready"} />
+      <GarmentPanel enabled={garmentEnabled} setEnabled={enableGarment} source={garmentSource} onSource={chooseGarment} visible={garmentVisible} setVisible={setGarmentVisible} color={garmentColor} setColor={setGarmentColor} pose={pose} setPose={setPose} status={garmentStatus} correctives={correctives} setCorrectives={setCorrectives} weights={weights} avatarReady={status === "ready"} />
     </LeftInspector>
       <section className="workspace" aria-label="3D avatar studio"><div className="workspace-heading"><div><div className="overline">AVATAR RECONSTRUCTION <span>/</span> VIEWER</div><h1>Avatar studio<span>.</span></h1><p>Inspect the geometry behind the silhouette.</p></div><div className="workspace-id"><span>ACTIVE AVATAR</span><strong>{personal ? "PERSONAL / LOCAL" : "NEUTRAL / MHR"}</strong>{personal && <small title={source.fileName}>{source.fileName}</small>}</div></div>
         <div className="stage" ref={stage}><div className="stage-caption"><span className="status-dot" /> <span>3D VIEWPORT</span><span className="stage-caption-secondary"> / {personal ? "PERSONAL RECONSTRUCTION" : "MHR NEUTRAL"}</span></div><span className="stage-top-right">PERSPECTIVE <span>·</span> METERS</span>
@@ -80,7 +138,7 @@ export function AvatarLab() {
         </div>
         <div className="workspace-under"><span><span className="status-dot" /> {status === "ready" ? "ASSET READY" : status === "error" ? "ASSET ERROR" : "LOADING ASSET"}</span><span>{personal ? <>SKINNED GLB <b>·</b> LOCAL FILE ONLY</> : <>REST POSE <b>·</b> LOD 1 <b>·</b> SKINNED GLB</>}{pose !== "rest" && <> <b>·</b> TEST POSE</>}{garmentStatus.state === "ready" && garmentVisible && <> <b>·</b> GARMENT BOUND</>}</span></div>
       </section><AvatarInspector source={source} model={model} stats={stats} garment={garmentEnabled ? garmentStatus : null} /></div>
-    <footer className="lab-toolbar"><div className="toolbar-group"><span className="toolbar-label">PERFORMANCE</span><strong>{stats.fps === null ? "—" : stats.fps}</strong><span>FPS</span><small>ON INTERACTION</small></div><span className="toolbar-rule" /><div className="toolbar-group"><SlidersHorizontal size={16} /><span>RENDER MODE</span><strong>{wireframe || garmentWireframe ? `Body ${wireframe ? "wire" : "solid"} / shirt ${garmentWireframe ? "wire" : "solid"}` : "Solid"}</strong></div><span className="toolbar-rule" /><div className="toolbar-group toolbar-asset"><span className={status === "ready" ? "status-dot" : "status-dot muted"} /><span>{status === "ready" ? `${source.label} loaded` : status === "error" ? "Asset unavailable" : `Loading ${source.label}`}</span></div><div className="toolbar-spacer" /><button className="toolbar-reset" onClick={() => setView("reset")} disabled={status !== "ready"}><ArrowsClockwise size={16} /> Reset view</button><button className="capture-button" onClick={screenshot} disabled={status !== "ready"}><Camera size={17} /> Capture</button></footer>
+    <footer className="lab-toolbar"><div className="toolbar-group"><span className="toolbar-label">PERFORMANCE</span><strong>{stats.fps === null ? "—" : stats.fps}</strong><span>FPS</span><small>10 S AVG ? {stats.frameMs === null ? "?" : stats.frameMs.toFixed(1)} MS ? 1% LOW {stats.low ?? "?"} FPS</small></div><span className="toolbar-rule" /><div className="toolbar-group"><SlidersHorizontal size={16} /><span>RENDER MODE</span><strong>{wireframe || garmentWireframe ? `Body ${wireframe ? "wire" : "solid"} / shirt ${garmentWireframe ? "wire" : "solid"}` : "Solid"}</strong></div><span className="toolbar-rule" /><div className="toolbar-group toolbar-asset"><span className={status === "ready" ? "status-dot" : "status-dot muted"} /><span>{status === "ready" ? `${source.label} loaded` : status === "error" ? "Asset unavailable" : `Loading ${source.label}`}</span></div><div className="toolbar-spacer" /><button className="toolbar-reset" onClick={() => setView("reset")} disabled={status !== "ready"}><ArrowsClockwise size={16} /> Reset view</button><button className="capture-button" onClick={captureMatrix} disabled={status !== "ready"}>Capture matrix</button><button className="capture-button" onClick={screenshot} disabled={status !== "ready"}><Camera size={17} /> Capture</button></footer>
     <div className="sr-only" role="status" aria-live="polite">{notice}</div>{notice && <button className="toast" onClick={() => setNotice("")}>{notice} <span>×</span></button>}
   </main>;
 }
