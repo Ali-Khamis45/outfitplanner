@@ -1,28 +1,25 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPantsChecker, type PantsAvailability } from "../../lib/garment/demoResources";
 import type { GarmentStatus } from "./types";
 
 export const PANTS_URL = "/api/demo-garment?variant=pants";
-type Availability = "checking" | "available" | "missing" | "error";
+type Availability = "checking" | PantsAvailability;
 export function PantsPanel({ enabled, setEnabled, visible, setVisible, color, setColor, wireframe, setWireframe, status, avatarReady }: {
   enabled: boolean; setEnabled: (value: boolean) => void; visible: boolean; setVisible: (value: boolean) => void;
   color: string; setColor: (value: string) => void; wireframe: boolean; setWireframe: (value: boolean) => void;
   status: GarmentStatus; avatarReady: boolean;
 }) {
   const [availability, setAvailability] = useState<Availability>("checking");
+  const checkPants = useMemo(() => createPantsChecker(PANTS_URL), []);
   const check = useCallback(async () => {
-    try {
-      const response = await fetch(PANTS_URL, { cache: "no-store" });
-      setAvailability(response.ok ? "available" : response.status === 404 ? "missing" : "error");
-    } catch { setAvailability("error"); }
-  }, []);
+    setAvailability(await checkPants(true));
+  }, [checkPants]);
   useEffect(() => {
-    const controller = new AbortController();
-    fetch(PANTS_URL, { cache: "no-store", signal: controller.signal })
-      .then(response => setAvailability(response.ok ? "available" : response.status === 404 ? "missing" : "error"))
-      .catch(() => { if (!controller.signal.aborted) setAvailability("error"); });
-    return () => controller.abort();
-  }, []);
+    let active = true;
+    checkPants().then(result => { if (active) setAvailability(result); });
+    return () => { active = false; };
+  }, [checkPants]);
   return <section className="side-section" aria-labelledby="pants-heading">
     <div className="section-title"><h2 id="pants-heading">Pants</h2></div>
     <p className="side-note" role="status">{availability === "checking" ? "Checking pants asset…" : availability === "missing" ? "Pants not generated yet." : availability === "error" ? "Could not check the pants asset." : "Neutral-fit pants available."}</p>

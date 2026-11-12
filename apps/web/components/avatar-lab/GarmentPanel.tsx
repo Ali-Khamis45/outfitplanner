@@ -3,12 +3,13 @@ import { ArrowCounterClockwise, TShirt } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { TEST_POSES, type PoseName } from "../../lib/garment/poses";
 import { parseSidecar } from "../../lib/garment/correctives";
+import { DEFAULT_DEMO_VARIANT } from "../../lib/garment/demoResources";
 import { LocalGlbError, readLocalGlb } from "../../lib/localGlb";
 import type { DemoGarmentVariant, GarmentSource, GarmentStatus } from "./types";
 
 const DEMO_LABELS: Record<DemoGarmentVariant, string> = { v5: "T-shirt v5 \u00b7 corrective morphs", v1: "Original T-shirt (Sprint 1.0)", v2: "Improved T-shirt (Sprint 1.1)", "v2-lod": "Improved T-shirt · low detail", v3: "Experimental v3 · geometry test", v4: "Experimental v4 · underarm gusset" };
 export const demoGarment = (variant: DemoGarmentVariant): GarmentSource => ({ kind: "demo", variant, url: `/api/demo-garment?variant=${variant}`, label: DEMO_LABELS[variant] });
-export const DEMO_GARMENT = demoGarment("v5");
+export const DEMO_GARMENT = demoGarment(DEFAULT_DEMO_VARIANT);
 
 interface Props {
   enabled: boolean; setEnabled: (value: boolean) => void;

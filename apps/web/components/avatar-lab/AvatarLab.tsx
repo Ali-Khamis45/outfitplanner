@@ -1,6 +1,6 @@
 "use client";
 import { ArrowsClockwise, Camera, Cube, SlidersHorizontal } from "@phosphor-icons/react";
-import { Component, useCallback, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from "react";
+import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from "react";
 import Link from "next/link";
 import { AvatarScene } from "./AvatarScene";
 import { AvatarInspector, LeftInspector } from "./AvatarInspector";
@@ -8,7 +8,8 @@ import { SceneControls } from "./SceneControls";
 import { NEUTRAL_SOURCE } from "./AvatarSourcePanel";
 import { DEMO_GARMENT, demoGarment, GarmentPanel } from "./GarmentPanel";
 import { PantsPanel, PANTS_URL } from "./PantsPanel";
-import { parseSidecar, type Sidecar } from "../../lib/garment/correctives";
+import type { Sidecar } from "../../lib/garment/correctives";
+import { createSidecarLoader, sidecarUrlForSelection } from "../../lib/garment/demoResources";
 import type { PoseName } from "../../lib/garment/poses";
 import type { AssetStatus, AvatarSource, CameraView, GarmentInfo, GarmentSource, GarmentStatus, ModelInfo, RenderStats } from "./types";
 
@@ -42,12 +43,13 @@ export function AvatarLab() {
   const [correctives, setCorrectives] = useState(true);
   const [weights, setWeights] = useState<Record<string, number>>({});
   const [demoSidecar, setDemoSidecar] = useState<{ url: string; data: Sidecar | null } | null>(null);
+  const sidecarLoader = useMemo(() => createSidecarLoader(), []);
+  const demoSidecarUrl = sidecarUrlForSelection(garmentSource);
   useEffect(() => {
-    if (garmentSource.kind !== "demo") return;
     let active = true;
-    fetch(`${garmentSource.url}&sidecar=1`).then(response => response.ok ? response.json() : null).then(value => { if (active) setDemoSidecar({ url: garmentSource.url, data: value ? parseSidecar(value) : null }); }).catch(error => console.warn("Corrective sidecar unavailable:", error));
+    sidecarLoader(demoSidecarUrl).then(data => { if (active && demoSidecarUrl) setDemoSidecar({ url: demoSidecarUrl, data }); });
     return () => { active = false; };
-  }, [garmentSource]);
+  }, [demoSidecarUrl, sidecarLoader]);
   const sidecar = garmentSource.kind === "local" ? garmentSource.sidecar ?? null : demoSidecar?.url === garmentSource.url ? demoSidecar.data : null;
   const onWeights = useCallback((next: Record<string, number>) => setWeights(previous => JSON.stringify(previous) === JSON.stringify(next) ? previous : next), []);
   const garmentStatusRef = useRef(garmentStatus), pantsStatusRef = useRef(pantsStatus);
@@ -151,7 +153,7 @@ export function AvatarLab() {
     </LeftInspector>
       <section className="workspace" aria-label="3D avatar studio"><div className="workspace-heading"><div><div className="overline">AVATAR RECONSTRUCTION <span>/</span> VIEWER</div><h1>Avatar studio<span>.</span></h1><p>Inspect the geometry behind the silhouette.</p></div><div className="workspace-id"><span>ACTIVE AVATAR</span><strong>{personal ? "PERSONAL / LOCAL" : "NEUTRAL / MHR"}</strong>{personal && <small title={source.fileName}>{source.fileName}</small>}</div></div>
         <div className="stage" ref={stage}><div className="stage-caption"><span className="status-dot" /> <span>3D VIEWPORT</span><span className="stage-caption-secondary"> / {personal ? "PERSONAL RECONSTRUCTION" : "MHR NEUTRAL"}</span></div><span className="stage-top-right">PERSPECTIVE <span>·</span> METERS</span>
-          <SceneErrorBoundary key={source.url} source={source} onError={onError}><AvatarScene url={source.url} pose={pose} garment={garmentLayer} pants={pantsLayer} pantsWireframe={pantsWireframe} turntable={turntable} wireframe={wireframe} garmentWireframe={garmentWireframe} skeleton={skeleton} grid={grid} model={model} command={command} onReady={onReady} onStats={onStats} onError={onError} /></SceneErrorBoundary>
+          <SceneErrorBoundary key={source.url} source={source} onError={onError}><Suspense fallback={null}><AvatarScene url={source.url} pose={pose} garment={garmentLayer} pants={pantsLayer} pantsWireframe={pantsWireframe} turntable={turntable} wireframe={wireframe} garmentWireframe={garmentWireframe} skeleton={skeleton} grid={grid} model={model} command={command} onReady={onReady} onStats={onStats} onError={onError} /></Suspense></SceneErrorBoundary>
           {status === "loading" && <div className="scene-message" role="status"><span className="loader" />Loading {personal ? "personal avatar" : "MHR geometry"}…</div>}
           <div className="stage-bottom-left"><span className="axis-x">X</span><span className="axis-y">Y</span><span className="axis-z">Z</span><span>DRAG TO ORBIT <i>·</i> SCROLL TO ZOOM</span></div>
           <SceneControls view={command.view} setView={setView} grid={grid} setGrid={setGrid} fullscreen={fullscreen} screenshot={screenshot} ready={status === "ready"} />
