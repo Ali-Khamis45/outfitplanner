@@ -6,9 +6,9 @@ import { parseSidecar } from "../../lib/garment/correctives";
 import { LocalGlbError, readLocalGlb } from "../../lib/localGlb";
 import type { DemoGarmentVariant, GarmentSource, GarmentStatus } from "./types";
 
-const DEMO_LABELS: Record<DemoGarmentVariant, string> = { v5: "Experimental v5 corrective morphs", v1: "Original T-shirt (Sprint 1.0)", v2: "Improved T-shirt (Sprint 1.1)", "v2-lod": "Improved T-shirt · low detail", v3: "Experimental v3 · geometry test", v4: "Experimental v4 · underarm gusset" };
+const DEMO_LABELS: Record<DemoGarmentVariant, string> = { v5: "T-shirt v5 \u00b7 corrective morphs", v1: "Original T-shirt (Sprint 1.0)", v2: "Improved T-shirt (Sprint 1.1)", "v2-lod": "Improved T-shirt · low detail", v3: "Experimental v3 · geometry test", v4: "Experimental v4 · underarm gusset" };
 export const demoGarment = (variant: DemoGarmentVariant): GarmentSource => ({ kind: "demo", variant, url: `/api/demo-garment?variant=${variant}`, label: DEMO_LABELS[variant] });
-export const DEMO_GARMENT = demoGarment("v2");
+export const DEMO_GARMENT = demoGarment("v5");
 
 interface Props {
   enabled: boolean; setEnabled: (value: boolean) => void;
@@ -58,7 +58,7 @@ export function GarmentPanel({ enabled, setEnabled, source, onSource, visible, s
     <label className="toggle-row"><span><strong>Show garment layer</strong><small>Skinned T-shirt bound to the avatar skeleton</small></span><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} disabled={!avatarReady} /><span className="toggle-track" aria-hidden="true"><span /></span></label>
     {enabled && <>
       <label className="field-label" htmlFor="garment-select">GARMENT</label>
-      <select id="garment-select" value={source.kind === "demo" ? source.variant : "local"} onChange={(event) => chooseKind(event.target.value as DemoGarmentVariant | "local")}><option value="v2">Improved T-shirt (v2) · neutral fit</option><option value="v1">Original T-shirt (v1) · neutral fit</option><option value="v2-lod">Improved T-shirt (v2, low detail) · neutral fit</option><option value="v3">Experimental v3 · unverified geometry test</option><option value="v4">Experimental v4 · underarm gusset (failed gates)</option><option value="v5">Experimental v5 &#183; corrective morphs</option><option value="local">Local garment GLB…</option></select>
+      <select id="garment-select" value={source.kind === "demo" ? source.variant : "local"} onChange={(event) => chooseKind(event.target.value as DemoGarmentVariant | "local")}><option value="v2">Improved T-shirt (v2) · neutral fit</option><option value="v1">Original T-shirt (v1) · neutral fit</option><option value="v2-lod">Improved T-shirt (v2, low detail) · neutral fit</option><option value="v3">Experimental v3 · unverified geometry test</option><option value="v4">Experimental v4 · underarm gusset (failed gates)</option><option value="v5">T-shirt v5 &#183; corrective morphs</option><option value="local">Local garment GLB…</option></select>
       {source.kind === "demo" && source.variant === "v3" && <p className="side-note">Experimental geometry test, not an approved fix. Neutral body only.</p>}
       {source.kind === "demo" && source.variant === "v4" && <p className="side-note">Explicit stitched underarm gusset panel. Experimental: it fails the stretch and +120° gates and is not the default. Neutral body only.</p>}
       {source.kind === "demo" && (source.variant === "v2" || source.variant === "v2-lod") && <p className="side-note">Underarm fins reduced and weights rebuilt; residual underarm stretch remains at large arm raises (its numeric gate is not passed). Neutral body only.</p>}
@@ -81,10 +81,11 @@ export function GarmentPanel({ enabled, setEnabled, source, onSource, visible, s
     </>}
     {error && <p className="reconstruction-error" role="alert">{error}</p>}
     <label className="field-label" htmlFor="pose-select">TEST POSE</label>
-    <div className="pose-row"><select id="pose-select" value={pose} onChange={(event) => setPose(event.target.value as PoseName)} disabled={!avatarReady}>{TEST_POSES.map((item) => <option key={item.name} value={item.name}>{item.label}</option>)}</select>
+    <div className="pose-row"><select id="pose-select" value={pose} onChange={(event) => setPose(event.target.value as PoseName)} disabled={!avatarReady}><optgroup label="Supported">{TEST_POSES.filter(item => item.name !== "both-120").map((item) => <option key={item.name} value={item.name}>{item.label}</option>)}</optgroup><optgroup label="Unsupported (diagnostic)">{TEST_POSES.filter(item => item.name === "both-120").map((item) => <option key={item.name} value={item.name}>{item.label}</option>)}</optgroup></select>
       <button className="icon-button" aria-label="Reset avatar pose" title="Reset avatar pose" onClick={() => setPose("rest")} disabled={!avatarReady || pose === "rest"}><ArrowCounterClockwise size={16} /></button></div>
     <button className="photo-picker" type="button" disabled={!avatarReady} onClick={() => setPose(pose === "both-90" ? "rest" : "both-90")}>{pose === "both-90" ? "Compare: return to rest" : "Compare: raise both arms"}</button>
     <p className="side-note">Switch between the original and improved shirts at the same pose to compare them.</p>
+    <p className="side-note">Above 90&#176; arm raise needs cloth simulation. Leg axes are provisional pending the joint contract.</p>
     <p className="side-note">Rigid joint rotations for skinning tests only; not animation or cloth simulation.</p>
   </section>;
 }

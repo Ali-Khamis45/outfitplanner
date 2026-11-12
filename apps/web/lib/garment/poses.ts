@@ -1,7 +1,7 @@
 import { MathUtils, Quaternion, Vector3 } from "three";
 import type { Bone, Object3D } from "three";
 
-export type PoseName = "rest" | "left-30" | "left-60" | "left-90" | "right-90" | "both-90" | "both-120" | "torso-twist" | "combined";
+export type PoseName = "rest" | "left-30" | "left-60" | "left-90" | "right-90" | "both-90" | "both-120" | "torso-twist" | "combined" | "walk" | "l-hip-60" | "step" | "squat" | "wide";
 
 /** A rotation about a joint's own pivot, expressed in the MHR rest frame: +X subject's left, +Y up, +Z forward. */
 export interface JointRotation { joint: string; axis: readonly [number, number, number]; degrees: number }
@@ -12,6 +12,17 @@ export const REST_ARM_BELOW_HORIZONTAL_DEG = 48;
 const raise = (side: "l" | "r", degrees: number): JointRotation => ({ joint: `${side}_uparm`, axis: [0, 0, 1], degrees: side === "l" ? degrees : -degrees });
 const twist = (degrees: number): JointRotation[] => ["c_spine1", "c_spine2", "c_spine3"].map((joint) => ({ joint, axis: [0, 1, 0] as const, degrees: degrees / 3 }));
 
+/** Provisional MHR names and world-space axes. Replace as a unit when the leg-pose contract lands. */
+export const LEG_JOINTS = {
+  leftHip: { joint: "l_upleg", flexAxis: [-1, 0, 0], abductAxis: [0, 0, 1] },
+  rightHip: { joint: "r_upleg", flexAxis: [-1, 0, 0], abductAxis: [0, 0, -1] },
+  leftKnee: { joint: "l_lowleg", flexAxis: [1, 0, 0] },
+  rightKnee: { joint: "r_lowleg", flexAxis: [1, 0, 0] },
+} as const;
+const leg = (entry: { joint: string; flexAxis: readonly [number, number, number] }, degrees: number): JointRotation => ({ joint: entry.joint, axis: entry.flexAxis, degrees });
+const abduct = (entry: { joint: string; abductAxis: readonly [number, number, number] }, degrees: number): JointRotation => ({ joint: entry.joint, axis: entry.abductAxis, degrees });
+export const LEG_POSE_NAMES = ["walk", "l-hip-60", "step", "squat", "wide"] as const;
+
 export const TEST_POSES: readonly TestPose[] = [
   { name: "rest", label: "Rest (A-pose)", rotations: [] },
   { name: "left-30", label: "Left arm raised 30°", rotations: [raise("l", 30)] },
@@ -21,6 +32,11 @@ export const TEST_POSES: readonly TestPose[] = [
   { name: "both-90", label: "Both arms raised 90°", rotations: [raise("l", 90), raise("r", 90)] },
   { name: "both-120", label: "Both arms raised 120°", rotations: [raise("l", 120), raise("r", 120)] },
   { name: "torso-twist", label: "Torso rotation 21°", rotations: twist(21) },
+  { name: "walk", label: "Walk", rotations: [leg(LEG_JOINTS.leftHip, 30), leg(LEG_JOINTS.rightHip, -15), leg(LEG_JOINTS.leftKnee, 20), leg(LEG_JOINTS.rightKnee, 20)] },
+  { name: "l-hip-60", label: "Left hip flex 60\u00b0", rotations: [leg(LEG_JOINTS.leftHip, 60)] },
+  { name: "step", label: "Step (hip and knee 90\u00b0)", rotations: [leg(LEG_JOINTS.leftHip, 90), leg(LEG_JOINTS.leftKnee, 90)] },
+  { name: "squat", label: "Squat", rotations: [leg(LEG_JOINTS.leftHip, 45), leg(LEG_JOINTS.rightHip, 45), leg(LEG_JOINTS.leftKnee, 60), leg(LEG_JOINTS.rightKnee, 60)] },
+  { name: "wide", label: "Wide stance", rotations: [abduct(LEG_JOINTS.leftHip, 20), abduct(LEG_JOINTS.rightHip, 20)] },
   { name: "combined", label: "Arms 45°/30° + torso 15°", rotations: [raise("l", 45), raise("r", 30), ...twist(15)] },
 ];
 
