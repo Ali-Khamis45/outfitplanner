@@ -29,7 +29,8 @@ def _official_exporter() -> Any:
     return exporters
 
 
-def write_garment_glb(path: Path, arrays: dict[str, np.ndarray], body: RestBody, metadata: dict[str, Any], material: dict[str, Any]) -> None:
+def write_garment_glb(path: Path, arrays: dict[str, np.ndarray], body: RestBody, metadata: dict[str, Any], material: dict[str, Any], morphs: dict[str, np.ndarray] | None = None) -> None:
+    """`morphs` (name -> per-vertex POSITION deltas, in order) adds glTF morph targets; without it the bytes are unchanged."""
     exporters = _official_exporter()
     rig = exporters._validated_rig(
         exporters.RigData(joint_names=body.joint_names, joint_parents=body.joint_parents, skeleton_state=body.skeleton_state, joint_indices=arrays["joints"], joint_weights=arrays["weights"]),
@@ -46,6 +47,7 @@ def write_garment_glb(path: Path, arrays: dict[str, np.ndarray], body: RestBody,
     }
     indices = builder.add_accessor(arrays["faces"].reshape(-1).astype("<u4"), component_type=UNSIGNED_INT, accessor_type="SCALAR", target=ELEMENT_ARRAY_BUFFER)
     inverse_binds = builder.add_accessor(rig.inverse_bind_matrices.astype("<f4"), component_type=FLOAT, accessor_type="MAT4", matrix_column_major=True)
+    targets = [{"POSITION": builder.add_accessor(delta.astype("<f4"), component_type=FLOAT, accessor_type="VEC3", target=ARRAY_BUFFER, include_bounds=True)} for delta in (morphs or {}).values()]
     nodes: list[dict[str, Any]] = []
     for index, (name, matrix) in enumerate(zip(rig.joint_names, rig.local_transforms, strict=True)):
         node: dict[str, Any] = {"name": name, "matrix": matrix.reshape(-1, order="F").astype(float).tolist()}
@@ -65,6 +67,10 @@ def write_garment_glb(path: Path, arrays: dict[str, np.ndarray], body: RestBody,
         "meshes": [{"name": metadata["garmentId"], "primitives": [{"attributes": attributes, "indices": indices, "material": 0, "mode": 4}], "extras": {"regions": metadata["regions"], "openingVertices": arrays.get("openings", {})}}],
         "skins": [{"name": "MHR_Armature", "inverseBindMatrices": inverse_binds, "joints": list(range(len(rig.joint_names))), "skeleton": roots[0]}],
     }
+    if morphs:  # Sprint 1.4A, docs/contracts/corrective-morphs.md
+        document["meshes"][0]["primitives"][0]["targets"] = targets
+        document["meshes"][0]["weights"] = [0.0] * len(targets)
+        document["meshes"][0]["extras"]["targetNames"] = list(morphs)
     path.write_bytes(builder.build(document))
 
 

@@ -72,9 +72,10 @@ class FitRules:
     underarm_panel_target_stretch: float = 4.0  # design average stretch of the panel at a 90° raise (sets the cuff extension)
     gusset_close_voxels: int = 0  # extra closing near each axilla: turns the sharp armpit crease into a broader gusset (0 = off)
     gusset_radius_m: float = 0.07  # region around the axilla where the gusset closing applies
+    shoulder_correctives: bool = False  # Sprint 1.4A: pose-driven shoulder corrective morph targets (correctives.py)
 
 
-SPRINT_1_1_FIELDS = ("underarm_separation_m", "underarm_length_m", "weight_mode", "weight_band_m", "clearance_smoothing_iterations", "retarget_smoothing_iterations", "discontinuity_ratio", "discontinuity_radius_m", "discontinuity_iterations", "gusset_close_voxels", "gusset_radius_m", "discontinuity_spatial_radius_m", "underarm_panel_radius_m", "underarm_panel_target_stretch")
+SPRINT_1_1_FIELDS = ("underarm_separation_m", "underarm_length_m", "weight_mode", "weight_band_m", "clearance_smoothing_iterations", "retarget_smoothing_iterations", "discontinuity_ratio", "discontinuity_radius_m", "discontinuity_iterations", "gusset_close_voxels", "gusset_radius_m", "discontinuity_spatial_radius_m", "underarm_panel_radius_m", "underarm_panel_target_stretch", "shoulder_correctives")
 
 
 def rules_record(rules: FitRules) -> dict[str, Any]:
@@ -719,13 +720,14 @@ def assemble(garment: OuterGarment, thickness: float) -> dict[str, np.ndarray]:
     layer_faces = inverse.reshape(-1, 3)
     n = len(source)
 
-    def attributes(ids: np.ndarray) -> dict[str, np.ndarray]:
-        return {"joints": garment.joints[ids], "weights": garment.weights[ids], "region": garment.region[ids]}
+    def attributes(ids: np.ndarray, inner_layer: bool = False) -> dict[str, np.ndarray]:
+        # _source/_inner are internal provenance (welded vertex, layer) used by Sprint 1.4A correctives; never written to the GLB
+        return {"joints": garment.joints[ids], "weights": garment.weights[ids], "region": garment.region[ids], "_source": ids, "_inner": np.full(len(ids), inner_layer)}
 
     vertex_uv = np.zeros((len(garment.vertices), 2))
     vertex_uv[corners] = uv  # one representative UV per welded vertex, used only on the narrow rims
     outer = {"position": garment.vertices[source], "normal": normals[source], "uv": uv[first], **attributes(source)}
-    inner = {"position": garment.vertices[source] - normals[source] * thickness, "normal": -normals[source], "uv": uv[first], **attributes(source)}
+    inner = {"position": garment.vertices[source] - normals[source] * thickness, "normal": -normals[source], "uv": uv[first], **attributes(source, True)}
     rim_parts: list[dict[str, np.ndarray]] = []
     rim_faces: list[np.ndarray] = []
     offset = 2 * n
@@ -737,8 +739,8 @@ def assemble(garment: OuterGarment, thickness: float) -> dict[str, np.ndarray]:
         corners_ab = [garment.vertices[a], garment.vertices[b], garment.vertices[a] - normals[a] * thickness, garment.vertices[b] - normals[b] * thickness]
         rim_normal = np.cross(corners_ab[0] - corners_ab[1], corners_ab[2] - corners_ab[1])
         rim_normal /= np.clip(np.linalg.norm(rim_normal, axis=1, keepdims=True), 1e-12, None)
-        for ids, position in zip((a, b, a, b), corners_ab):
-            rim_parts.append({"position": position, "normal": rim_normal, "uv": vertex_uv[ids], **attributes(ids)})
+        for (ids, inner_layer), position in zip(((a, False), (b, False), (a, True), (b, True)), corners_ab):
+            rim_parts.append({"position": position, "normal": rim_normal, "uv": vertex_uv[ids], **attributes(ids, inner_layer)})
         m = len(a)
         ao, bo, ai, bi = (offset + i * m + np.arange(m) for i in range(4))
         rim_faces.append(np.concatenate([np.stack([bo, ao, ai], 1), np.stack([bo, ai, bi], 1)]))
@@ -753,3 +755,6 @@ def assemble(garment: OuterGarment, thickness: float) -> dict[str, np.ndarray]:
 
 # Sprint 1.3: v2 plus one explicit underarm gusset panel per side (gusset.py).
 V4_RULES = replace(V2_RULES, underarm_panel_radius_m=0.04, underarm_panel_target_stretch=4.0)
+
+# Sprint 1.4A: v2 geometry and weights unchanged, plus shoulder corrective morph targets and their sidecar.
+V5_RULES = replace(V2_RULES, shoulder_correctives=True)

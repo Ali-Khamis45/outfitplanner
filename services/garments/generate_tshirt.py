@@ -20,7 +20,7 @@ import trimesh
 
 from body import PROJECT, VIEWER, RestBody, evaluate_rest_body, load_model
 from garment_glb import read_glb, skinned_primitive, write_garment_glb
-from tshirt import BOUNDARY_KINDS, REGION_NAMES, V2_RULES, V4_RULES, BodySurface, FitRules, OuterGarment, assemble, design_tshirt, enforce_clearance, retarget, rules_record
+from tshirt import BOUNDARY_KINDS, REGION_NAMES, V2_RULES, V4_RULES, V5_RULES, BodySurface, FitRules, OuterGarment, assemble, design_tshirt, enforce_clearance, retarget, rules_record
 
 MATERIAL = {"name": "TShirt_Cotton_PBR", "baseColor": [0.85, 0.85, 0.88, 1.0], "metalness": 0.0, "roughness": 0.85}
 NEUTRAL_AVATAR = PROJECT / "outputs" / "avatars" / "mhr-neutral.glb"
@@ -30,6 +30,7 @@ RULESETS = {
     "v1": FitRules(),
     "v2": V2_RULES,
     "v4": V4_RULES,  # Sprint 1.3 experiment: explicit underarm gusset panels
+    "v5": V5_RULES,  # Sprint 1.4A: v2 + shoulder corrective morph targets (promotion candidate, not the default)
     # Ablations for the Sprint 1.1 deformation analysis: each change on its own.
     "v2-separation-only": FitRules(underarm_separation_m=0.007),
     "v2-weights-only": FitRules(weight_mode="region", weight_smoothing_iterations=4),
@@ -65,6 +66,8 @@ def metadata(body: RestBody, rules: FitRules, garment_id: str, revision: str, pe
             strategy += "; projection skin weights with discontinuity-aware smoothing, smoothed clearance and retarget fields; explicit stitched underarm gusset panel per side (cuff-based kite, harmonic weights)"
         else:  # kept verbatim so Sprint 1.1 v2 assets regenerate byte-identically (wording predates the final v2 rules)
             strategy += "; underarm separation below the axilla, region-aware armhole weight blend, smoothed clearance and retarget fields"
+        if rules.shoulder_correctives:  # Sprint 1.4A only, so earlier revisions keep their bytes
+            strategy += "; pose-driven shoulder corrective morph targets (DQS start, regional ARAP relaxation, body collision), see docs/contracts/corrective-morphs.md"
     info: dict[str, Any] = {
         "schemaVersion": 1,
         "garmentId": garment_id,
@@ -101,7 +104,15 @@ def write(directory: Path, body: RestBody, outer: OuterGarment, rules: FitRules,
     arrays = assemble(outer, rules.thickness_m)
     glb = new_file(directory / f"{name}.glb")
     info = metadata(body, rules, garment_id, revision, personal, source_variant)
-    write_garment_glb(glb, arrays, body, info, MATERIAL)
+    morphs = None
+    if rules.shoulder_correctives:  # Sprint 1.4A: solved against the neutral avatar GLB's skeleton and body
+        import correctives
+        from posing import load_asset
+
+        avatar = load_asset(NEUTRAL_AVATAR)
+        morphs, extra["correctives"] = correctives.solve_targets(arrays, outer.vertices, outer.faces, avatar.skeleton, avatar)
+        new_file(glb.with_name(glb.stem + ".correctives.json")).write_text(json.dumps(correctives.sidecar(), indent=2) + "\n", encoding="utf-8")
+    write_garment_glb(glb, arrays, body, info, MATERIAL, morphs)
     report = {"garment": info, "topology": topology_report(arrays), "fit_report": {k: v for k, v in outer.report.items() if k != "rules"}, **extra}
     new_file(glb.with_suffix(".json")).write_text(json.dumps(report, indent=2, default=float), encoding="utf-8")
     print(f"Wrote {glb}")
@@ -141,6 +152,8 @@ def main() -> int:
             default = getattr(rules, key)
             values[key] = raw if isinstance(default, str) else type(default)(float(raw)) if isinstance(default, int) else float(raw)
         rules = replace(rules, **values)
+    if rules.shoulder_correctives and args.reconstruction:
+        parser.error("shoulder correctives are solved for the neutral body only (Sprint 1.4A)")
     revision = args.name or args.rules + ("-lod" if args.lod else "")
     prefix = "tshirt" if revision == "v1" else f"tshirt-{revision}"
     garment_id = "tshirt-basic-v1" if revision == "v1" else f"tshirt-basic-{revision}"
