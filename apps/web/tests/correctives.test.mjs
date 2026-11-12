@@ -16,6 +16,15 @@ for (const [angle, expected] of [[0,0],[45,0],[90,0],[105,0.5],[120,1]]) {
   assert.ok(Math.abs(drive(true).corr_L_abd90 - expected) < 1e-6);
   assert.ok(Math.abs(mesh.morphTargetInfluences[0] - expected) < 1e-6);
 }
+// The [0, 90] ramp exposes tiny residual swing after a pose reset.
+const restRamp = createCorrectiveDriver(mesh, bones, rest, { version: 1, correctives: [{ ...sidecar.correctives[0], ramp: [0, 90] }] });
+bones.get("arm").quaternion.setFromAxisAngle(new Vector3(0, 0, 1), MathUtils.degToRad(90));
+assert.ok(Math.abs(restRamp(true).corr_L_abd90 - 1) < 1e-6);
+bones.get("arm").quaternion.setFromAxisAngle(new Vector3(0, 0, 1), MathUtils.degToRad(0.005));
+assert.equal(restRamp(true).corr_L_abd90, 0);
+assert.equal(mesh.morphTargetInfluences[0], 0);
+bones.get("arm").quaternion.setFromAxisAngle(new Vector3(0, 0, 1), MathUtils.degToRad(0.011));
+assert.ok(Math.abs(restRamp(true).corr_L_abd90 - 0.011 / 90) < 1e-8);
 // Rotation around the rest bone direction is twist and must not trigger the morph.
 bones.get("arm").quaternion.setFromAxisAngle(new Vector3(0,1,0), MathUtils.degToRad(120));
 assert.ok(drive(true).corr_L_abd90 < 1e-6);

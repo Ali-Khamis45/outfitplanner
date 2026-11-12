@@ -27,7 +27,8 @@ export function createCorrectiveDriver(mesh: SkinnedMesh, bones: ReadonlyMap<str
     const weights: Record<string, number> = {};
     for (const e of entries) {
       current.copy(e.direction).applyQuaternion(e.bone.quaternion);
-      const angle = MathUtils.radToDeg(e.restDirection.angleTo(current));
+      const measuredAngle = MathUtils.radToDeg(e.restDirection.angleTo(current));
+      const angle = measuredAngle < 0.01 ? 0 : measuredAngle;
       const weight = enabled ? MathUtils.clamp((angle - e.ramp[0]) / (e.ramp[1] - e.ramp[0]), 0, 1) : 0;
       influences![e.index] = weight; weights[e.target] = weight;
     }
