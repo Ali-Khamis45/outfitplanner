@@ -65,6 +65,13 @@ try {
   }
   assert.ok(loaded, "Try-on did not finish loading");
   assert.deepEqual(await evaluate("(() => { const r = document.querySelector('.try-stage').getBoundingClientRect(); return [r.width, r.height]; })()"), initialStage, "loading must not change stage dimensions");
+  if (process.env.TEST_REAL_CLAMPED === "1") {
+    await waitFor("!!document.querySelector('[aria-label=\"Top fit\"] button[aria-label=\"S\"]:not(:disabled)')", "real shirt sizes");
+    await evaluate("document.querySelector('[aria-label=\"Top fit\"] button[aria-label=\"S\"]').click()");
+    await waitFor("document.querySelector('[aria-label=\"Top fit\"] .fit-clamped-warning')?.textContent === 'Too small for this body. Shown at the closest wearable fit.' && document.querySelectorAll('[aria-label=\"Top fit\"] .fit-estimate-note').length === 4", "real S clamped messages");
+    assert.ok(await evaluate("[...document.querySelectorAll('[aria-label=\"Top fit\"] .fit-estimate-note')].every(e => e.textContent.trim() === 'estimated from size chart')"));
+    console.log("Real S fit displays the full warning and four region notes");
+  }
   if (process.env.TEST_FIT_SIZES === "1") {
     await waitFor("document.querySelector('[aria-label=\"Top fit\"] button[aria-pressed=\"true\"]')?.textContent === 'M' && document.querySelector('[aria-label=\"Bottom fit\"] button[aria-pressed=\"true\"]')?.textContent === 'M'", "recommended sizes");
     assert.ok(await evaluate("document.querySelector('[aria-label=\"Top fit\"] button[aria-label=\"M, Recommended\"]') && document.body.innerText.includes('Chest: good, 10.0 cm ease')"));
@@ -92,6 +99,7 @@ try {
     console.log("Manifest body, shirt, pants and sidecars loaded together");
   }
   for (const variant of ["v5.2", "pants-v2"]) assert.ok(requests.some(url => url.includes(`variant=${variant}&sidecar=1`)), `${variant} sidecar not requested`);
+  if (process.env.TEST_REAL_CLAMPED !== "1") {
   await evaluate("window.__tryOnTestCanvas = document.querySelector('canvas'); true");
   const sizes = [[390, 844], [1024, 844], [1440, 900], [390, 844], [844, 390]];
   for (const [index, [width, height]] of sizes.entries()) {
@@ -113,7 +121,7 @@ try {
   }
   await send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
   await send("Page.navigate", { url: new URL("/lab", process.env.TRY_ON_URL ?? "http://localhost:3000/try-on").href });
-  if (process.env.TEST_FIT_SIZES === "1") {
+  if (process.env.TEST_FIT_SIZES === "1" || process.env.TEST_REAL_CLAMPED === "1") {
     await waitFor("!!document.querySelector('.lab-fit-controls input')", "lab fit controls");
     await evaluate("document.querySelector('.lab-fit-controls input').click()");
   }
@@ -128,6 +136,7 @@ try {
     assert.equal(version, 2, `${variant} must serve the re-issued signed sidecar`);
   }
   console.log("Lab v5.2 default, v5.1 selection and signed pants sidecar passed");
+  }
   socket.close();
 } finally {
   chrome.kill();

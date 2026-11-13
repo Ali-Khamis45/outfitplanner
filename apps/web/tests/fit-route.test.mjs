@@ -15,12 +15,13 @@ try {
     const stem = `tshirt-v5.2-${size}-neutral`;
     await writeFile(path.join(directory, `${stem}.glb`), bytes);
     await writeFile(path.join(directory, `${stem}.correctives.json`), "{}");
-    await writeFile(path.join(directory, `${stem}.fit.json`), JSON.stringify({ version: 1, garment: "tshirt-v5.2", size, body: "neutral", regions: { chest: { ease_mm: 62, status: "tight" } }, recommended: size === "M" }));
+    await writeFile(path.join(directory, `${stem}.fit.json`), JSON.stringify({ version: 1, garment: "tshirt-v5.2", size, body: "neutral", regions: { chest: { ease_mm: 62, status: "tight", clamped: size === "S" }, waist: { ease_mm: 84, status: "good", clamped: size === "S" }, hips: { ease_mm: -84, status: "tight", clamped: size === "S" } }, recommended: size === "M" }));
   }
   process.chdir(web);
   const request = query => GET(new Request(`http://localhost:3000/api/size-garment?${new URLSearchParams(query)}`));
   const options = await request({ body: "neutral", slot: "top" });
   assert.equal(options.status, 200); const items = await options.json(); assert.deepEqual(items.map(item => item.size), ["S", "M"]); assert.equal(items[1].fit.recommended, true);
+  assert.deepEqual([items[0].fit.regions.chest.clamped, items[0].fit.regions.waist.clamped, items[0].fit.regions.hips.clamped], [true, true, true]);
   const glb = await request({ body: "neutral", slot: "top", size: "M", asset: "glb" });
   assert.equal(glb.status, 200); assert.equal(glb.headers.get("Content-Type"), "model/gltf-binary");
   assert.equal(await (await request({ body: "neutral", slot: "top", size: "M", asset: "sidecar" })).text(), "{}");

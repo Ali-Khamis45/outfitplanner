@@ -33,6 +33,9 @@ try {
   await waitFor("!!document.querySelector('[role=dialog]')", "item editor");
   await send("DOM.enable"); const documentNode = await send("DOM.getDocument");
   const fileInput = await send("DOM.querySelector", { nodeId: documentNode.root.nodeId, selector: '.wardrobe-form input[type="file"]' });
+  const invalidPhoto = path.join(profile, "not-a-photo.txt"); await writeFile(invalidPhoto, "not an image");
+  await send("DOM.setFileInputFiles", { nodeId: fileInput.nodeId, files: [invalidPhoto] });
+  await waitFor("document.querySelector('[role=dialog] [role=alert]')?.textContent.includes('JPEG, PNG or WebP')", "invalid photo message");
   await send("DOM.setFileInputFiles", { nodeId: fileInput.nodeId, files: [samplePhoto] });
   await waitFor("document.querySelectorAll('.wardrobe-suggestions button').length > 0", "photo colour suggestions");
   await evaluate(`(() => { for (const [label,value] of [['Name','Edited navy tee'],['Size','L']]) { const input = [...document.querySelectorAll('.wardrobe-form label')].find(x=>x.textContent.trim()===label).querySelector('input'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input, value); input.dispatchEvent(new Event('input',{bubbles:true})); } document.querySelector('.wardrobe-form').requestSubmit(); })()`);
