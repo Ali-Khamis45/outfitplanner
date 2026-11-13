@@ -1,5 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import { compressedGlbResponse } from "../../../lib/garment/assetResponse.ts";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 // Fixed local research demos (procedural T-shirts fitted to the neutral MHR body), not a general file-serving API.
@@ -32,10 +33,13 @@ export async function GET(request: Request) {
   if (!file) return Response.json({ error: "Unknown demo garment variant." }, { status: 400 });
   const sidecar = new URL(request.url).searchParams.get("sidecar") === "1";
   try {
-    const bytes = await readFile(path.resolve(process.cwd(), "../../outputs/garments", sidecar ? file.replace(/\.glb$/, ".correctives.json") : file));
-    return new Response(new Uint8Array(bytes), { headers: { "Content-Type": sidecar ? "application/json" : "model/gltf-binary", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
+    const source = path.resolve(process.cwd(), "../../outputs/garments", sidecar ? file.replace(/\.glb$/, ".correctives.json") : file);
+    if (!sidecar) return await compressedGlbResponse(source, request);
+    const bytes = await readFile(source);
+    return new Response(new Uint8Array(bytes), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
   } catch (error) {
-    if (!sidecar && variant !== "pants" && variant !== "pants-v2") console.error("Unable to read the local demo garment:", error);
-    return Response.json({ error: variant === "pants" || variant === "pants-v2" ? "Pants not generated yet." : "Demo garment not found." }, { status: 404 });
+    const missing = (error as NodeJS.ErrnoException).code === "ENOENT";
+    if (!missing || (!sidecar && variant !== "pants" && variant !== "pants-v2")) console.error("Unable to read the local demo garment:", error);
+    return Response.json({ error: missing ? (variant === "pants" || variant === "pants-v2" ? "Pants not generated yet." : "Demo garment not found.") : "Unable to prepare the demo garment." }, { status: missing ? 404 : 500 });
   }
 }

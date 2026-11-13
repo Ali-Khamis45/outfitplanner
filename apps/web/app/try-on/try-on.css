@@ -5,7 +5,8 @@
 .try-page button { cursor: pointer; }
 .try-page button:focus-visible, .try-page a:focus-visible, .try-upload:focus-within { outline: 2px solid #647c4c; outline-offset: 4px; }
 .try-stage { position: sticky; top: 0; height: 100vh; min-height: 610px; overflow: hidden; background: #202321; color: #f3f2e9; }
-.try-viewport { position: absolute; inset: 0; }
+.try-viewport { position: absolute; inset: 0; opacity: 0; transition: opacity .35s ease; }
+.try-viewport.ready { opacity: 1; }
 .try-viewport > div { width: 100%; height: 100%; }
 .try-stage-top, .try-stage-bottom { position: absolute; z-index: 2; left: 6.5%; right: 6.5%; display: flex; justify-content: space-between; align-items: center; pointer-events: none; }
 .try-stage-top { top: 35px; }
@@ -26,6 +27,10 @@
 .try-camera-rule { width: 1px; height: 20px; background: #ffffff24; margin: 0 3px; }
 .try-stage-loading, .try-stage-message { position: absolute; z-index: 3; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #e4e9df; font-size: 13px; text-align: center; pointer-events: none; }
 .try-stage-loading span { color: #b7ca93; }
+.try-loading-bar { display: block; width: 140px; height: 2px; margin: 15px auto 0; overflow: hidden; background: #ffffff26; }
+.try-loading-bar i { display: block; width: 40%; height: 100%; background: #b7ca93; animation: try-loading 1.2s ease-in-out infinite alternate; }
+@keyframes try-loading { from { transform: translateX(0); } to { transform: translateX(150%); } }
+@media (prefers-reduced-motion: reduce) { .try-viewport { transition: none; } .try-loading-bar i { animation: none; } }
 .try-panel { min-width: 0; background: #f4f3ed; }
 .try-panel-inner { width: min(100% - 96px, 500px); margin: 0 auto; }
 .try-panel-top { display: flex; justify-content: space-between; align-items: center; padding-top: 38px; color: #a4a69a; }
