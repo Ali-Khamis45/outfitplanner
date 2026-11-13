@@ -4,7 +4,7 @@ import { useGLTF } from "@react-three/drei";
 import Link from "next/link";
 import { Component, Suspense, useCallback, useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { createPantsChecker, createSidecarLoader } from "../../lib/garment/demoResources";
-import type { Sidecar } from "../../lib/garment/correctives";
+import { parseSidecar, type Sidecar } from "../../lib/garment/correctives";
 import { LocalGlbError, readLocalGlb, type LocalGlb } from "../../lib/localGlb";
 import type { CameraView } from "../avatar-lab/types";
 import { TryOnScene, type OutfitItem } from "./TryOnScene";
@@ -21,6 +21,25 @@ const colors = [
 ];
 const poses = [{ label: "Stand", value: "rest" }, { label: "Walk", value: "walk" }, { label: "Arms out", value: "both-90" }] as const;
 type Pose = (typeof poses)[number]["value"];
+type PersonalFit = { body: string; shirt: string; pants: string; shirtSidecar: Sidecar | null; pantsSidecar: Sidecar | null };
+
+async function loadPersonalFit(): Promise<PersonalFit | null> {
+  const response = await fetch("/api/personal-fit", { cache: "no-store" });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error("Could not load your personal fit.");
+  const data = await response.json();
+  const allowed = (value: unknown) => typeof value === "string" && /^\/api\/personal-fit\?asset=(body|shirt|pants|shirtSidecar|pantsSidecar)$/.test(value);
+  if (![data.body, data.shirt, data.pants].every(allowed)) throw new Error("Could not load your personal fit.");
+  async function sidecar(url: unknown): Promise<Sidecar | null> {
+    if (url === null) return null;
+    if (!allowed(url)) throw new Error("Could not load your personal fit.");
+    const result = await fetch(url as string, { cache: "no-store" });
+    if (!result.ok) throw new Error("Could not load your personal fit.");
+    return parseSidecar(await result.json());
+  }
+  const [shirtSidecar, pantsSidecar] = await Promise.all([sidecar(data.shirtSidecar), sidecar(data.pantsSidecar)]);
+  return { body: data.body, shirt: data.shirt, pants: data.pants, shirtSidecar, pantsSidecar };
+}
 
 class SceneBoundary extends Component<{ children: ReactNode; onError: () => void }, { failed: boolean }> {
   state = { failed: false };
@@ -53,11 +72,14 @@ export function TryOn() {
   const [pose, setPose] = useState<Pose>("rest"), [turntable, setTurntable] = useState(false);
   const [view, setView] = useState<{ view: CameraView; id: number }>({ view: "front", id: 0 });
   const [personal, setPersonal] = useState<LocalGlb | null>(null), [avatar, setAvatar] = useState<"neutral" | "personal">("neutral");
+  const [personalFit, setPersonalFit] = useState<PersonalFit | null>(null), [personalSource, setPersonalSource] = useState<"manifest" | "file">("manifest");
   const [avatarReady, setAvatarReady] = useState(false), [avatarFailed, setAvatarFailed] = useState(false), [message, setMessage] = useState("");
   const [topReady, setTopReady] = useState(false), [bottomReady, setBottomReady] = useState(false);
   const personalUrl = useRef<string | null>(null);
+  const selection = useRef(0);
   const stageRef = useRef<HTMLElement>(null);
-  const avatarUrl = avatar === "personal" && personal ? personal.url : NEUTRAL_URL;
+  const activeFit = avatar === "personal" && personalSource === "manifest" ? personalFit : null;
+  const avatarUrl = activeFit?.body ?? (avatar === "personal" && personalSource === "file" && personal ? personal.url : NEUTRAL_URL);
   useEffect(() => {
     let active = true;
     useGLTF.preload(NEUTRAL_URL);
@@ -76,20 +98,29 @@ export function TryOn() {
   const onBottomReady = useCallback(() => setBottomReady(true), []);
   const onTopError = useCallback(() => { setTopReady(true); setMessage("This top could not be fitted to the selected avatar."); }, []);
   const onBottomError = useCallback(() => { setBottomReady(true); setMessage("These pants could not be fitted to the selected avatar."); }, []);
-  const top: OutfitItem | null = topEnabled && topSidecar !== undefined ? { url: TOP_URL, color: topColor, sidecar: topSidecar } : null;
-  const bottom: OutfitItem | null = bottomEnabled && bottomAvailability === "available" && bottomSidecar !== undefined ? { url: BOTTOM_URL, color: bottomColor, sidecar: bottomSidecar } : null;
-  const outfitReady = avatarReady && (!topEnabled || topReady) && (!bottomEnabled || bottomAvailability === "missing" || bottomAvailability === "error" || bottomReady);
+  const top: OutfitItem | null = topEnabled && (activeFit || topSidecar !== undefined) ? { url: activeFit?.shirt ?? TOP_URL, color: topColor, sidecar: activeFit ? activeFit.shirtSidecar : topSidecar! } : null;
+  const bottom: OutfitItem | null = bottomEnabled && (activeFit || (bottomAvailability === "available" && bottomSidecar !== undefined)) ? { url: activeFit?.pants ?? BOTTOM_URL, color: bottomColor, sidecar: activeFit ? activeFit.pantsSidecar : bottomSidecar! } : null;
+  const outfitReady = avatarReady && (!topEnabled || topReady) && (!bottomEnabled || (!activeFit && (bottomAvailability === "missing" || bottomAvailability === "error")) || bottomReady);
   const showTop = (enabled: boolean) => { if (enabled) setTopReady(false); setTopEnabled(enabled); };
   const showBottom = (enabled: boolean) => { if (enabled) setBottomReady(false); setBottomEnabled(enabled); };
   const changeView = (next: CameraView) => { setTurntable(false); setView(previous => ({ view: next, id: previous.id + 1 })); };
   const switchAvatar = (next: "neutral" | "personal") => { setAvatar(next); setAvatarReady(false); setTopReady(false); setBottomReady(false); setAvatarFailed(false); setMessage(""); };
+  async function selectPersonalFit() {
+    const request = ++selection.current;
+    try {
+      const fit = await loadPersonalFit();
+      if (request !== selection.current) return;
+      if (!fit) { setMessage("No personal fit found. Choose your avatar file below."); return; }
+      setPersonalFit(fit); setPersonalSource("manifest"); switchAvatar("personal");
+    } catch { if (request === selection.current) setMessage("Could not load your personal fit. Choose your avatar file below."); }
+  }
   async function chooseAvatar(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]; event.target.value = "";
     if (!file) return;
     try {
       const loaded = await readLocalGlb(file);
       const previous = personalUrl.current;
-      personalUrl.current = loaded.url; setPersonal(loaded); setAvatar("personal"); setAvatarReady(false); setTopReady(false); setBottomReady(false); setAvatarFailed(false); setMessage("");
+      selection.current++; personalUrl.current = loaded.url; setPersonal(loaded); setPersonalSource("file"); setAvatar("personal"); setAvatarReady(false); setTopReady(false); setBottomReady(false); setAvatarFailed(false); setMessage("");
       if (previous) URL.revokeObjectURL(previous);
     } catch (error) { setMessage(error instanceof LocalGlbError ? error.message : "Could not open that file. Please try another GLB."); }
   }
@@ -106,13 +137,13 @@ export function TryOn() {
         <header className="try-heading"><span className="try-eyebrow">THE VIRTUAL FITTING ROOM</span><h1>Make yourself<br /><em>at home.</em></h1><p>Good style starts with a little exploration. Find a look that feels like you.</p></header>
         <div className="try-section-heading"><div><span className="try-eyebrow">THE EDIT</span><h2>Your outfit<span>.</span></h2></div><span className="try-section-label">01 / 03</span></div>
         <OutfitSlot number="01" name="Top" description="The everyday T-shirt" enabled={topEnabled} onEnabled={showTop} color={topColor} onColor={setTopColor} available />
-        <OutfitSlot number="02" name="Bottom" description="The essential pants" enabled={bottomEnabled} onEnabled={showBottom} color={bottomColor} onColor={setBottomColor} available={bottomAvailability === "available" || bottomAvailability === "checking"} />
+        <OutfitSlot number="02" name="Bottom" description="The essential pants" enabled={bottomEnabled} onEnabled={showBottom} color={bottomColor} onColor={setBottomColor} available={!!activeFit || bottomAvailability === "available" || bottomAvailability === "checking"} />
         <div className="try-divider" />
         <div className="try-section-heading compact"><div><span className="try-eyebrow">SEE THE FIT</span><h2>Strike a pose<span>.</span></h2></div><span className="try-section-label">02 / 03</span></div>
         <div className="try-pose-group" role="group" aria-label="Pose">{poses.map(item => <button key={item.value} type="button" aria-pressed={pose === item.value} className={pose === item.value ? "selected" : ""} onClick={() => setPose(item.value)}>{item.label}</button>)}</div>
         <div className="try-divider" />
         <div className="try-section-heading compact"><div><span className="try-eyebrow">MADE PERSONAL</span><h2>Your avatar<span>.</span></h2></div><span className="try-section-label">03 / 03</span></div>
-        <div className="try-avatar-options"><button type="button" className={avatar === "neutral" ? "selected" : ""} onClick={() => { if (avatar !== "neutral") switchAvatar("neutral"); }}><span>Neutral avatar</span>{avatar === "neutral" && <Check size={16} />}</button><button type="button" className={avatar === "personal" ? "selected" : ""} onClick={() => { if (personal && avatar !== "personal") switchAvatar("personal"); else if (!personal) document.getElementById("try-avatar-file")?.click(); }}><span>My avatar</span>{avatar === "personal" && <Check size={16} />}</button></div>
+        <div className="try-avatar-options"><button type="button" className={avatar === "neutral" ? "selected" : ""} onClick={() => { selection.current++; if (avatar !== "neutral") switchAvatar("neutral"); }}><span>Neutral avatar</span>{avatar === "neutral" && <Check size={16} />}</button><button type="button" className={avatar === "personal" ? "selected" : ""} onClick={() => { if (avatar !== "personal" || personalSource !== "manifest") void selectPersonalFit(); }}><span>My avatar</span>{avatar === "personal" && <Check size={16} />}</button></div>
         <label htmlFor="try-avatar-file" className="try-upload"><UploadSimple size={17} /> {personal ? "Choose a different avatar" : "Choose your avatar file"}</label><input className="try-sr-only" id="try-avatar-file" type="file" accept=".glb,model/gltf-binary" onChange={chooseAvatar} />
         <p className="try-hint">Your GLB stays on this device. Garments need a matching avatar fit.</p>
         {message && <p className="try-message" role="status">{message}</p>}

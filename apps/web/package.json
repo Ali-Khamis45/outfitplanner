@@ -8,7 +8,8 @@
     "postinstall": "npm install --prefix ./asset-compression --workspaces=false --no-audit --no-fund",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit --incremental false",
-    "test": "node --no-warnings tests/correctives.test.mjs && node --no-warnings tests/signed-correctives.test.mjs && node --no-warnings tests/compression.test.mjs && node --no-warnings tests/demo-resources.test.mjs && node --no-warnings tests/demo-route.test.mjs && node tests/garment-quality-gates.test.mjs && node --no-warnings tests/leg-poses.test.mjs && node --no-warnings tests/pose-transition.test.mjs && node --no-warnings tests/try-on-frame.test.mjs && node --no-warnings tests/layering.test.mjs && node tests/mhr-loader.test.mjs && node --no-warnings tests/garment-binding.test.mjs && node --no-warnings tests/inspection.test.mjs",
+    "test": "node --no-warnings tests/personal-fit.test.mjs && node --no-warnings tests/correctives.test.mjs && node --no-warnings tests/signed-correctives.test.mjs && node --no-warnings tests/compression.test.mjs && node --no-warnings tests/demo-resources.test.mjs && node --no-warnings tests/demo-route.test.mjs && node tests/garment-quality-gates.test.mjs && node --no-warnings tests/leg-poses.test.mjs && node --no-warnings tests/pose-transition.test.mjs && node --no-warnings tests/try-on-frame.test.mjs && node --no-warnings tests/layering.test.mjs && node tests/mhr-loader.test.mjs && node --no-warnings tests/garment-binding.test.mjs && node --no-warnings tests/inspection.test.mjs",
+    "test:personal-production": "node tests/personal-production.test.mjs",
     "test:garment-quality": "node --no-warnings tests/garment-quality.test.mjs",
     "test:try-on-browser": "node tests/try-on-browser.test.mjs"
   },
