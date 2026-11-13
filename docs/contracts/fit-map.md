@@ -22,8 +22,15 @@ Every GLB is bound to its body's MHR skeleton, as all garments are. Personal siz
 
 Every size GLB (shirt and pants) carries, on its mesh primitive, a per-vertex `FLOAT SCALAR` attribute `_EASE_MM` (glTF custom attributes start with `_`). It is the signed gap between the garment and the body at rest, in millimetres, as the size's pattern makes it:
 
-- **Measured gap** (`> 0`): where the garment hangs free. This is the signed distance from the garment's **inner** surface to the body surface. Outer-layer and rim vertices take the value of their inner-layer point.
-- **Pattern deficit** (`< 0` = compressed against the body): where the size's pattern circumference at the vertex's height is smaller than the body's. The value is `(C_garment − C_body) / (2π)` at that height. The fabric is then drawn onto the body: the mesh sits at the minimum clearance and never penetrates. This applies to torso vertices of the shirt (chest to hem) and to the seat and waistband of the pants. Sleeves and leg tubes always use the measured gap.
+The value is **spec-based**: the measured gap minus whatever the mesh holds beyond the size spec.
+
+- **Measured gap:** the signed distance from the garment's **inner** surface to the body surface. Outer-layer and rim vertices take the value of their inner-layer point.
+- **Held amount (girths):** in the graded girth band, `max(0, C_drawn(y) − C_spec(y)) / (2π)` at the vertex's height `y`. The band is shirt torso vertices from the hem to the chest level, and pants vertices from the crotch seam to the waistband. Where the spec is smaller than the body, this makes the value the negative pattern deficit, `≈ (C_spec − C_body) / (2π)` (`< 0` = compressed against the body). The mesh itself sits at the minimum clearance and never penetrates.
+- **Held amount (shoulders and sleeves):** where a size's shoulders and sleeves are clamped at the base shirt's size (§7, geometric limits), the hold is subtracted too:
+  - on the torso above the chest level, the difference between the drawn and the spec ease profile;
+  - on the sleeves, the sleeve hold.
+
+  A heatmap therefore shows the size as specified (for example S shoulders tight), even where the mesh was kept wider for clearance.
 
 ## 3. `<…>.fit.json`
 
@@ -43,6 +50,11 @@ Every size GLB (shirt and pants) carries, on its mesh primitive, a per-vertex `F
   - for `shoulders`, garment shoulder width minus body shoulder width.
 - **`length.delta_mm`** (integer) is `hem_target_y − hem_y`. Positive means the garment is longer than the body's target, negative means shorter.
 - **`status`** is `tight`, `good` or `loose`, per §5. For `length`, `tight` means too short and `loose` means too long.
+- **`clamped`** (optional, only ever `true`) marks a region whose **drawn geometry was held wider than the size spec**:
+  - a girth region whose drawn girth exceeds the spec by more than 5 mm (the fitting tolerance), i.e. held at the minimum-ease floor;
+  - `shoulders`, when the size's shoulder or sleeve ease was held at the base shirt's size (the sleeves have no region of their own, so their clamp is reported here).
+
+  The region's `ease_mm` and `status` are **always computed from the size spec**, never from the clamped mesh. `shoulders` subtracts the held width (2 × the shoulder hold). An absent field means the mesh follows the spec.
 - **`recommended`** is true for exactly one size per garment and body (§6).
 
 ## 4. Measurements
@@ -118,6 +130,8 @@ For each garment and body, take the sizes in order S, M, L, XL. Recommend the **
 
 - **Girth floor:** the procedural surface cannot be closer to the body than its minimum ease (6 mm clearance + 2 mm cloth), plus the bulk of the field smoothing and underarm. A spec below that floor is drawn at the floor. `ease_mm`, `status` and the recommendation always use the spec against the body, never the drawn geometry.
 - **Pants hem:** the geometric hem never goes below the ankle joint + 10 mm (into the foot). If the spec is longer, `length.delta_mm` reports the excess.
+- **Shirt shoulders and sleeves:** the drawn shoulder and sleeve eases never go below the base shirt's (v5.2). Below them, at 20° arm-down, the armhole wedges between the arm and the torso, whose skins are about 4 mm apart, and the cloth penetrates. Smaller sizes therefore keep the base armhole; `shoulders` is `clamped` and reported from the spec.
+- **Pants seat:** the drawn hip ease never goes below the base pants' (v2). A tighter seat ends up inside the belly/thigh skin fold at 90° hip flexion. `hips` is `clamped` and reported from the spec.
 
 On each body the garment is shaped to the body's surface, with these girths and lengths. Where a spec is smaller than the body, the garment is drawn onto the body at the minimum clearance (the pattern deficit is in `_EASE_MM` and `ease_mm`).
 
