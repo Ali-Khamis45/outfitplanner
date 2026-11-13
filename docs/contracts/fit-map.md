@@ -20,7 +20,7 @@ Every GLB is bound to its body's MHR skeleton, as all garments are. Personal siz
 
 ## 2. GLB attribute `_EASE_MM`
 
-The shirt mesh's primitive carries a per-vertex `FLOAT SCALAR` attribute `_EASE_MM` (glTF custom attributes start with `_`). It is the signed gap between the garment and the body at rest, in millimetres, as the size's pattern makes it:
+Every size GLB (shirt and pants) carries, on its mesh primitive, a per-vertex `FLOAT SCALAR` attribute `_EASE_MM` (glTF custom attributes start with `_`). It is the signed gap between the garment and the body at rest, in millimetres, as the size's pattern makes it:
 
 - **Measured gap** (`> 0`): where the garment hangs free. This is the signed distance from the garment's **inner** surface to the body surface. Outer-layer and rim vertices take the value of their inner-layer point.
 - **Pattern deficit** (`< 0` = compressed against the body): where the size's pattern circumference at the vertex's height is smaller than the body's. The value is `(C_garment − C_body) / (2π)` at that height. The fabric is then drawn onto the body: the mesh sits at the minimum clearance and never penetrates. This applies to torso vertices of the shirt (chest to hem) and to the seat and waistband of the pants. Sleeves and leg tubes always use the measured gap.
@@ -56,7 +56,7 @@ All measurements are taken at rest. A **girth** is the perimeter of the 2-D conv
 | hips | The level of maximum girth between 20 mm above the crotch and 60 mm above the hip joints (seat) | torso and both legs |
 | waist (pants) | The pants waistband level, where the pants actually sit | torso and both legs |
 | shoulders | Width at the upper-arm joint height (x extent) | torso skin group (body); shirt torso panel (garment) |
-| length (shirt) | Hem height; target = hip-joint height − 30 mm (a regular T-shirt hem just below the belt line) | — |
+| length (shirt) | Hem height; target = hip-joint height − 30 mm (a regular T-shirt hem just below the belt line). Garment length is measured from the upper-arm joint height (the high shoulder point's level on the rig) to the hem | — |
 | length (pants) | Hem height; target = ankle-joint height + 40 mm (cropped straight leg) | — |
 
 ## 5. Status thresholds
@@ -114,7 +114,30 @@ For each garment and body, take the sizes in order S, M, L, XL. Recommend the **
   - waistband girth = chart waist × (base body's girth at the waistband ÷ its natural-waist girth) + **20 mm** (project rule). This transfers the chart's natural waist to the pants' lower waistband line;
   - inseam (crotch seam to hem) is the same for all letter sizes, as for regular-length trousers: the base design's inseam on the neutral body.
 
+**Geometric limits:**
+
+- **Girth floor:** the procedural surface cannot be closer to the body than its minimum ease (6 mm clearance + 2 mm cloth), plus the bulk of the field smoothing and underarm. A spec below that floor is drawn at the floor. `ease_mm`, `status` and the recommendation always use the spec against the body, never the drawn geometry.
+- **Pants hem:** the geometric hem never goes below the ankle joint + 10 mm (into the foot). If the spec is longer, `length.delta_mm` reports the excess.
+
 On each body the garment is shaped to the body's surface, with these girths and lengths. Where a spec is smaller than the body, the garment is drawn onto the body at the minimum clearance (the pattern deficit is in `_EASE_MM` and `ease_mm`).
+
+## Body measurements (`outputs/avatars/measurements.json`)
+
+The web form writes exactly this schema. The producer reads it to calibrate the personal body before sizing it:
+
+```json
+{"version": 1, "units": "cm", "height_cm": 178.0, "chest_cm": 102.0, "waist_cm": 88.0, "hips_cm": 100.0, "inseam_cm": 81.0, "measured_at": "2026-11-13"}
+```
+
+- `version` must be 1 and `units` must be `"cm"`. `height_cm` is required.
+- Any other measurement may be `null`. Only the measurements present are calibrated, and the calibration report lists which were used and which were not provided.
+- Definitions, identical on the form and on the body mesh (`services/garments/measure.py`):
+  - **chest:** horizontal, at the fullest part under the armpits;
+  - **waist:** the narrowest point (or the navel);
+  - **hips:** the fullest part of the buttocks;
+  - **inseam:** crotch to floor;
+  - **height:** floor to the top of the head.
+- **Calibration** (`services/garments/calibrate.py`): least squares on the body's identity (shape) coefficients. Pose and scale parameters are kept. Circumferences must end within 1 cm of the targets; the report gives each measurement's error before and after. If the file is missing, calibration is skipped and the report says so.
 
 ## Sources
 
