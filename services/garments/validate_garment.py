@@ -62,6 +62,42 @@ def rest_clearance(garment: dict[str, np.ndarray], avatar: dict[str, np.ndarray]
     return {"approximate": True, "min_clearance_m": float(signed.min()), "penetrating_vertices": int((signed < 0).sum()), "penetrating_beyond_3mm": int((signed < -0.003).sum()), "regions": per_region}
 
 
+def validate_morphs(document: dict[str, Any], blob: bytes, garment_path: Path, vertex_count: int, joint_names: list[str]) -> dict[str, Any] | None:
+    """Sprint 1.4A corrective morph targets and their sidecar (docs/contracts/corrective-morphs.md); None if absent."""
+    from garment_glb import accessor_array
+
+    mesh = document["meshes"][0]
+    targets = mesh["primitives"][0].get("targets", [])
+    sidecar_path = garment_path.with_name(garment_path.stem + ".correctives.json")
+    if not targets:
+        require(not sidecar_path.exists(), f"{sidecar_path.name} exists but the GLB has no morph targets")
+        return None
+    names = mesh.get("extras", {}).get("targetNames", [])
+    require(len(names) == len(targets) == len(set(names)), "extras.targetNames must name every morph target once")
+    require(mesh.get("weights") == [0.0] * len(targets), "Default morph weights must all be 0")
+    largest: dict[str, float] = {}
+    for name, target in zip(names, targets, strict=True):
+        require(set(target) == {"POSITION"}, f"Morph target {name} must be POSITION-only")
+        delta = accessor_array(document, blob, target["POSITION"])
+        require(delta.shape == (vertex_count, 3) and np.isfinite(delta).all(), f"Morph target {name} has the wrong shape or non-finite values")
+        largest[name] = float(np.linalg.norm(delta, axis=1).max())
+    require(sidecar_path.is_file(), f"Missing corrective sidecar {sidecar_path.name}")
+    sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
+    version = sidecar.get("version")
+    require(version in (1, 2), "Unsupported corrective sidecar version")
+    entries = sidecar.get("correctives", [])
+    require(sorted(e.get("target") for e in entries) == sorted(names), "Sidecar targets differ from the GLB morph targets")
+    for entry in entries:
+        measures = ("swing_deg", "signed_swing_deg") if version == 2 else ("swing_deg",)
+        require(entry.get("measure") in measures and entry.get("joint") in joint_names and entry.get("child") in joint_names, f"Invalid sidecar entry {entry}")
+        if entry["measure"] == "signed_swing_deg":
+            axis = np.asarray(entry.get("axis", []), dtype=np.float64)
+            require(axis.shape == (3,) and np.isfinite(axis).all() and np.linalg.norm(axis) > 1e-6, f"Signed entry needs a finite non-zero axis: {entry}")
+        ramp = entry.get("ramp", [])
+        require(len(ramp) == 2 and (ramp[0] != ramp[1] if version == 2 else ramp[1] > ramp[0]), f"Invalid ramp in {entry}")
+    return {"targets": names, "max_delta_m": largest, "sidecar": sidecar_path.name}
+
+
 def validate(garment_path: Path, avatar_path: Path) -> dict[str, Any]:
     document, blob = read_glb(garment_path)
     require(len(document.get("meshes", [])) == 1 and len(document.get("skins", [])) == 1, "Garment must contain exactly one mesh and one skin")
@@ -104,6 +140,7 @@ def validate(garment_path: Path, avatar_path: Path) -> dict[str, Any]:
     lo, hi = avatar["POSITION"].min(axis=0), avatar["POSITION"].max(axis=0)
     require((positions.min(axis=0) > lo - 0.1).all() and (positions.max(axis=0) < hi + 0.1).all(), "Garment lies outside the avatar's bounds (scale or axis mismatch)")
     used = np.unique(joints[weights > 1e-4])
+    morph_report = validate_morphs(document, blob, garment_path, len(positions), list(garment["joint_names"]))
     return {
         "garment": str(garment_path.name),
         "avatar": str(avatar_path.name),
@@ -120,6 +157,7 @@ def validate(garment_path: Path, avatar_path: Path) -> dict[str, Any]:
         "bounds_m": [positions.min(axis=0).tolist(), positions.max(axis=0).tolist()],
         "rest_clearance": rest_clearance(garment, avatar, list(metadata["regions"])),
         "metadata": {key: metadata[key] for key in ("garmentId", "bodyVariant", "retargetedFrom", "units", "upAxis") if key in metadata},
+        **({"morph_targets": morph_report} if morph_report else {}),
     }
 
 

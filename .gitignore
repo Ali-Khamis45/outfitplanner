@@ -1,4 +1,6 @@
 node_modules/
+.codex-garment-check/
+.codex-resize-check/
 .next/
 *.tsbuildinfo
 __pycache__/

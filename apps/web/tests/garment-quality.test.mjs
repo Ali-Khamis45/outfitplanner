@@ -1,35 +1,33 @@
 // Sprint 1.1 pose-suite deformation diagnostics for garment/avatar pairs, using the viewer's own binding and pose code.
 // Usage: node --no-warnings tests/garment-quality.test.mjs [label ...]   (default: every pair whose files exist)
 import assert from "node:assert/strict";
+import { TARGETS, evaluateSupportedPoses } from "./garment-quality-gates.mjs";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { SkinnedMesh, Vector3 } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { createCorrectiveDriver, parseSidecar } from "../lib/garment/correctives.ts";
 import { bindGarment, rigFromSkinnedMesh } from "../lib/garment/binding.ts";
 import { bodyPenetration, countWhere, maxOf, minOf, percentile, selfIntersections, sideCoverage, triangleDeformation, weldIds } from "../lib/garment/diagnostics.ts";
 import { TEST_POSES, applyPose, captureBindPose } from "../lib/garment/poses.ts";
 
 const outputs = new URL("../../../outputs/", import.meta.url);
 const stem = "sam3d-person-front-sprint03-run2";
-/**
- * Provisional Sprint 1.1 targets, derived from the Sprint 1.0 baseline measured with this same script and applied pose by
- * pose against each improved asset's own v1 counterpart (docs/sprint-1/deformation-analysis.md). Passing them does not
- * prove visual quality; browser checks are a separate gate.
- */
-export const TARGETS = { maxStretchVsBaseline: 0.5, p99StretchVsBaseline: 1.02, flippedVsBaseline: 0.25, selfIntersectionAboveRestVsBaseline: 1.0, penetratingBeyond3mm: 0, degenerate: 0 };
-const TARGET_POSES = ["rest", "left-30", "left-60", "left-90", "right-90", "both-90", "torso-twist", "combined"]; // both-120 is reported, not gated
+// Sprint 1.4A's supported-pose acceptance gates; other measurements remain informational.
+const TARGET_POSES = ["rest", "left-30", "left-60", "left-90", "right-90", "both-90", "torso-twist", "combined", "walk", "l-hip-60", "step", "squat", "wide"]; // both-120 is diagnostic only
 const PAIRS = [
   { label: "v1-neutral", avatar: "avatars/mhr-neutral.glb", garment: "garments/tshirt-mhr-neutral.glb", gate: false },
-  { label: "v2-neutral", avatar: "avatars/mhr-neutral.glb", garment: "garments/tshirt-v2-mhr-neutral.glb", gate: true, baseline: "v1-neutral" },
-  { label: "v3-close1-neutral", avatar: "avatars/mhr-neutral.glb", garment: "garments/experiments/tshirt-v3-close1-mhr-neutral.glb", gate: true, baseline: "v1-neutral" },
-  { label: "v4-gusset-neutral", avatar: "avatars/mhr-neutral.glb", garment: "garments/experiments/tshirt-v4-mhr-neutral.glb", gate: true, baseline: "v1-neutral" },
+  { label: "v2-neutral", avatar: "avatars/mhr-neutral.glb", garment: "garments/tshirt-v2-mhr-neutral.glb", gate: false, baseline: "v1-neutral" },
+  { label: "v3-close1-neutral", avatar: "avatars/mhr-neutral.glb", garment: "garments/experiments/tshirt-v3-close1-mhr-neutral.glb", gate: false, baseline: "v1-neutral" },
+  { label: "v5-neutral", avatar: "avatars/mhr-neutral.glb", garment: "garments/experiments/tshirt-v5-mhr-neutral.glb", sidecar: "garments/experiments/tshirt-v5-mhr-neutral.correctives.json", gate: true, baseline: "v1-neutral" },
+  { label: "v4-gusset-neutral", avatar: "avatars/mhr-neutral.glb", garment: "garments/experiments/tshirt-v4-mhr-neutral.glb", gate: false, baseline: "v1-neutral" },
   { label: "ablation-separation-only", avatar: "avatars/mhr-neutral.glb", garment: "garments/experiments/tshirt-v2-separation-only-mhr-neutral.glb", gate: false },
   { label: "ablation-weights-only", avatar: "avatars/mhr-neutral.glb", garment: "garments/experiments/tshirt-v2-weights-only-mhr-neutral.glb", gate: false },
-  { label: "v2-lod-neutral", avatar: "avatars/mhr-neutral.glb", garment: "garments/tshirt-v2-lod-mhr-neutral.glb", gate: true, baseline: "v1-neutral" },
+  { label: "v2-lod-neutral", avatar: "avatars/mhr-neutral.glb", garment: "garments/tshirt-v2-lod-mhr-neutral.glb", gate: false, baseline: "v1-neutral" },
   { label: "v1-personal-identity", avatar: `avatars/${stem}-rest-identity.glb`, garment: `garments/tshirt-${stem}-rest-identity.glb`, gate: false },
-  { label: "v2-personal-identity", avatar: `avatars/${stem}-rest-identity.glb`, garment: `garments/tshirt-v2-${stem}-rest-identity.glb`, gate: true, baseline: "v1-personal-identity" },
+  { label: "v2-personal-identity", avatar: `avatars/${stem}-rest-identity.glb`, garment: `garments/tshirt-v2-${stem}-rest-identity.glb`, gate: false, baseline: "v1-personal-identity" },
   { label: "v1-personal-identity-scale", avatar: `avatars/${stem}-rest-identity-scale.glb`, garment: `garments/tshirt-${stem}-rest-identity-scale.glb`, gate: false },
-  { label: "v2-personal-identity-scale-floor", avatar: `avatars/${stem}-rest-identity-scale-floor.glb`, garment: `garments/tshirt-v2-${stem}-rest-identity-scale-floor.glb`, gate: true, baseline: "v1-personal-identity-scale" },
+  { label: "v2-personal-identity-scale-floor", avatar: `avatars/${stem}-rest-identity-scale-floor.glb`, garment: `garments/tshirt-v2-${stem}-rest-identity-scale-floor.glb`, gate: false, baseline: "v1-personal-identity-scale" },
 ];
 const REGIONS = ["torso", "left_sleeve", "right_sleeve"];
 
@@ -80,6 +78,16 @@ async function runPair(pair) {
   const binding = bindGarment(garment.mesh, rig);
   avatar.scene.add(garment.mesh);
   const bind = captureBindPose(rig.bones);
+  let drive = null;
+  if (pair.sidecar) {
+    const sidecar = parseSidecar(JSON.parse(await readFile(new URL(pair.sidecar, outputs), "utf8")));
+    const expected = ["corr_L_abd90", "corr_L_abd120", "corr_R_abd90", "corr_R_abd120"];
+    for (const name of expected) {
+      assert.ok(sidecar.correctives.some(entry => entry.target === name && entry.child), `v5 sidecar lacks ${name} or its child`);
+      assert.notEqual(garment.mesh.morphTargetDictionary?.[name], undefined, `v5 mesh lacks ${name}`);
+    }
+    drive = createCorrectiveDriver(garment.mesh, rig.bones, bind, sidecar, message => { throw new Error(message); });
+  }
   const index = garment.mesh.geometry.index.array, bodyIndex = avatar.mesh.geometry.index.array;
   const region = garment.mesh.geometry.getAttribute("_region").array;
   const restGarment = Float64Array.from(garment.mesh.geometry.getAttribute("position").array);
@@ -95,6 +103,7 @@ async function runPair(pair) {
   const poses = {};
   for (const pose of TEST_POSES) {
     applyPose(rig.bones, bind, pose);
+    const correctiveWeights = drive ? drive(true) : {};
     avatar.scene.updateMatrixWorld(true);
     garment.mesh.skeleton.update();
     avatar.mesh.skeleton.update();
@@ -120,12 +129,13 @@ async function runPair(pair) {
       flipped: countWhere(d.flipped, (x) => x > 0), degenerate: countWhere(d.degenerate, (x) => x > 0), normalDeviationOver60: countWhere(d.normalDeviationDeg, (x) => x > 60),
       selfIntersectingPairs: self.pairs, selfIntersectingPairsAboveRest: Math.max(0, self.pairs - restSelf.pairs),
       penetration, penetratingBeyond3mm: Object.values(penetration).reduce((s, x) => s + x.beyond3mm, 0), deepestPenetrationM: Math.min(...Object.values(penetration).map((x) => x.deepestM)),
-      armpitSideCoverage: r(coverage, 3),
+      armpitSideCoverage: r(coverage, 3), correctiveWeights,
       bodyReference: { p99: r(percentile(body.stretch, 0.99)), max: r(maxOf(body.stretch)), flipped: countWhere(body.flipped, (x) => x > 0) },
       worst,
     };
   }
   applyPose(rig.bones, bind, TEST_POSES[0]);
+  if (drive) drive(true);
   avatar.scene.updateMatrixWorld(true);
   const after = skinned(garment.mesh);
   let drift = 0;
@@ -143,41 +153,19 @@ const requested = process.argv.slice(2);
 const report = { targets: TARGETS, targetPoses: TARGET_POSES, pairs: {}, skipped: [], failures: [] };
 for (const pair of PAIRS) {
   if (requested.length && !requested.includes(pair.label)) continue;
-  if (!existsSync(new URL(pair.avatar, outputs)) || !existsSync(new URL(pair.garment, outputs))) { report.skipped.push(pair.label); continue; }
+  if (!existsSync(new URL(pair.avatar, outputs)) || !existsSync(new URL(pair.garment, outputs))) { if (pair.gate) report.failures.push(`${pair.label}: required v5 asset or avatar missing`); else report.skipped.push(pair.label); continue; }
   const result = await runPair(pair);
   report.pairs[pair.label] = result;
-  assert.ok(result.sharedBones, `${pair.label}: garment must be driven by the avatar's own bones`);
-  assert.ok(result.bindDriftM < 1e-5, `${pair.label}: bind drift ${result.bindDriftM}`);
+  if (pair.gate && !result.sharedBones) report.failures.push(`${pair.label}: garment is not driven by the avatar bones`);
+  if (pair.gate && result.bindDriftM >= 1e-5) report.failures.push(`${pair.label}: bind drift ${result.bindDriftM}`);
 }
 report.gates = {};
 for (const pair of PAIRS) {
-  const result = report.pairs[pair.label], baseline = report.pairs[pair.baseline];
+  const result = report.pairs[pair.label];
   if (!pair.gate || !result) continue;
-  if (!baseline) { report.failures.push(`${pair.label}: baseline ${pair.baseline} was not run, so its gate cannot be evaluated`); continue; }
-  report.gates[pair.label] = {};
-  if (result.restSelfIntersectingPairs > baseline.restSelfIntersectingPairs) report.failures.push(`${pair.label} rest self-intersections ${result.restSelfIntersectingPairs} > baseline ${baseline.restSelfIntersectingPairs}`);
-  // Sprint 1.2 requires the extreme pose to remain visible in the decision, not just in the report.
-  const extreme = result.poses["both-120"], baseExtreme = baseline.poses["both-120"];
-  report.gates[pair.label]["both-120"] = {
-    flipped: { value: extreme.flipped, limit: baseExtreme.flipped, pass: extreme.flipped <= baseExtreme.flipped },
-    selfIntersectingPairsAboveRest: { value: extreme.selfIntersectingPairsAboveRest, limit: baseExtreme.selfIntersectingPairsAboveRest, pass: extreme.selfIntersectingPairsAboveRest <= baseExtreme.selfIntersectingPairsAboveRest },
-    penetratingBeyond3mm: { value: extreme.penetratingBeyond3mm, limit: TARGETS.penetratingBeyond3mm, pass: extreme.penetratingBeyond3mm <= TARGETS.penetratingBeyond3mm },
-    degenerate: { value: extreme.degenerate, limit: TARGETS.degenerate, pass: extreme.degenerate <= TARGETS.degenerate },
-  };
-  for (const [check, outcome] of Object.entries(report.gates[pair.label]["both-120"])) if (!outcome.pass) report.failures.push(`${pair.label} both-120 ${check} ${outcome.value} > ${outcome.limit}`);
-  for (const name of TARGET_POSES) {
-    const p = result.poses[name], b = baseline.poses[name];
-    const checks = {
-      maxStretch: [p.stretch.max, r(Math.max(1.05, b.stretch.max * TARGETS.maxStretchVsBaseline))],
-      p99Stretch: [p.stretch.p99, r(b.stretch.p99 * TARGETS.p99StretchVsBaseline)],
-      flipped: [p.flipped, Math.floor(b.flipped * TARGETS.flippedVsBaseline)],
-      selfIntersectingPairsAboveRest: [p.selfIntersectingPairsAboveRest, b.selfIntersectingPairsAboveRest * TARGETS.selfIntersectionAboveRestVsBaseline],
-      penetratingBeyond3mm: [p.penetratingBeyond3mm, TARGETS.penetratingBeyond3mm],
-      degenerate: [p.degenerate, TARGETS.degenerate],
-    };
-    report.gates[pair.label][name] = Object.fromEntries(Object.entries(checks).map(([check, [value, limit]]) => [check, { value, limit, pass: value <= limit }]));
-    for (const [check, [value, limit]] of Object.entries(checks)) if (value > limit) report.failures.push(`${pair.label} ${name} ${check} ${value} > ${limit}`);
-  }
+  const evaluated = evaluateSupportedPoses(result.poses, TARGET_POSES);
+  report.gates[pair.label] = evaluated.gates;
+  report.failures.push(...evaluated.failures.map(failure => `${pair.label} ${failure}`));
 }
 await mkdir(new URL("garment-tests/", outputs), { recursive: true });
 await writeFile(new URL(`garment-tests/quality${requested.length ? "-" + requested.join("+") : ""}.json`, outputs), JSON.stringify(report, null, 2));

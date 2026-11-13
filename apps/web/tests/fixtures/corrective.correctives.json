@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "correctives": [
+    {
+      "target": "corr_L_abd90",
+      "joint": "arm",
+      "measure": "swing_deg",
+      "ramp": [
+        90,
+        120
+      ],
+      "child": "tip"
+    }
+  ]
+}
