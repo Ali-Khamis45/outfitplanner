@@ -2,6 +2,7 @@
 /* Thumbnails come from a private local route or an in-memory canvas. */
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useState } from "react";
+import { loadGarmentTexture } from "../../lib/garment/texture";
 import type { WardrobeItem } from "../../lib/wardrobe/schema";
 
 const knownTemplates: Record<string, string> = { "tshirt-v5.2": "v5.2", "pants-v2": "pants-v2", "pants-basic-v2": "pants-v2" };
@@ -24,13 +25,14 @@ async function createRenderer() {
   const models = new Map<string, Promise<import("three").Object3D>>();
   return { THREE, renderer, scene, loader, models };
 }
-async function draw(template: string, color: string): Promise<string> {
+async function draw(template: string, color: string, texturePath?: string | null): Promise<string> {
   rendererState ??= createRenderer();
   const { THREE, renderer, scene, loader, models } = await rendererState;
   const variant = knownTemplates[template];
   if (!models.has(variant)) models.set(variant, loader.loadAsync(`/api/demo-garment?variant=${variant}`).then(gltf => gltf.scene));
   const model = await models.get(variant)!;
-  model.traverse(object => { if (object instanceof THREE.Mesh) { object.material = new THREE.MeshStandardMaterial({ color, roughness: 0.85, side: THREE.DoubleSide }); object.frustumCulled = false; } });
+  const texture = texturePath ? await loadGarmentTexture(texturePath).catch(() => null) : null;
+  model.traverse(object => { if (object instanceof THREE.Mesh) { object.material = new THREE.MeshStandardMaterial({ color: texture ? "#ffffff" : color, map: texture, roughness: 0.85, side: THREE.DoubleSide }); object.frustumCulled = false; } });
   scene.add(model); model.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(model), center = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
   const height = Math.max(size.y, size.x * 360 / 320) * 1.3;
@@ -41,9 +43,11 @@ async function draw(template: string, color: string): Promise<string> {
   const png = renderer.domElement.toDataURL("image/png");
   scene.remove(model);
   model.traverse(object => { if (object instanceof THREE.Mesh) { const materials = Array.isArray(object.material) ? object.material : [object.material]; materials.forEach(material => material.dispose()); } });
+  texture?.dispose();
   return png;
 }
-function thumbnail(template: string, color: string): Promise<string | null> {
+function thumbnail(template: string, color: string, texture?: string | null): Promise<string | null> {
+  if (texture) { const render = queue.then(() => draw(template, color, texture)); queue = render.catch(() => {}); return render.catch(() => null); }
   const key = `${template}:${color.toLowerCase()}`, existing = pending.get(key);
   if (existing) return existing;
   const url = `/api/wardrobe-thumbnail?${new URLSearchParams({ template, color: color.slice(1) })}`;
@@ -63,8 +67,8 @@ function thumbnail(template: string, color: string): Promise<string | null> {
 export function TemplateThumbnail({ item }: { item: WardrobeItem }) {
   const template = item.template ?? "", color = item.colors.reduce((best, entry) => entry.share > best.share ? entry : best).hex;
   const [result, setResult] = useState<{ key: string; url: string | null } | null>(null);
-  const key = `${template}:${color.toLowerCase()}`;
-  useEffect(() => { let active = true; if (Object.hasOwn(knownTemplates, template)) void thumbnail(template, color).then(url => { if (active) setResult({ key, url }); }); return () => { active = false; }; }, [template, color, key]);
+  const key = `${template}:${color.toLowerCase()}:${item.texture ?? ""}`;
+  useEffect(() => { let active = true; if (Object.hasOwn(knownTemplates, template)) void thumbnail(template, color, item.texture).then(url => { if (active) setResult({ key, url }); }); return () => { active = false; }; }, [template, color, key, item.texture]);
   const src = result?.key === key ? result.url : null;
   return src ? <img src={src} alt="" /> : <span>{item.category}</span>;
 }
