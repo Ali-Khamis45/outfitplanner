@@ -82,7 +82,8 @@ export function TryOn({ fixtures = false, outfitId = null }: { fixtures?: boolea
   const stageRef = useRef<HTMLElement>(null);
   const activeFit = avatar === "personal" && personalSource === "manifest" ? personalFit : null;
   const bodyId = avatar === "neutral" ? "neutral" : activeFit?.bodyId ?? null;
-  const topSizes = useSizes(bodyId, "top", fixtures && bodyId === "neutral"), bottomSizes = useSizes(bodyId, "bottom", fixtures && bodyId === "neutral");
+  const [outfitSizes, setOutfitSizes] = useState({ top: "", bottom: "" });
+  const topSizes = useSizes(bodyId, "top", fixtures && bodyId === "neutral", outfitSizes.top), bottomSizes = useSizes(bodyId, "bottom", fixtures && bodyId === "neutral", outfitSizes.bottom);
   const [heatmap, setHeatmap] = useState(false);
   useEffect(() => {
     if (!outfitId) return;
@@ -93,12 +94,13 @@ export function TryOn({ fixtures = false, outfitId = null }: { fixtures?: boolea
       if (!outfit) throw new Error("Outfit not found in your wardrobe.");
       const items = outfit.items.map(id => wardrobe.items.find(item => item.id === id)).filter(item => item !== undefined);
       const topItem = items.find(item => item.category === "top"), bottomItem = items.find(item => item.category === "bottom");
-      const topSupported = topItem?.template === "tshirt-v5.2", bottomSupported = bottomItem?.template === "pants-v2";
+      const topSupported = topItem?.template === "tshirt-v5.2", bottomSupported = bottomItem?.template === "pants-basic-v2" || bottomItem?.template === "pants-v2";
       setTopEnabled(topSupported); setBottomEnabled(bottomSupported);
+      setOutfitSizes({ top: topSupported ? topItem.size.trim().toUpperCase() : "", bottom: bottomSupported ? bottomItem.size.trim().toUpperCase() : "" });
       const mainColor = (item: NonNullable<typeof topItem>) => item.colors.reduce((best, color) => color.share > best.share ? color : best).hex;
       if (topSupported) setTopColor(mainColor(topItem));
       if (bottomSupported) setBottomColor(mainColor(bottomItem));
-      if (!topSupported || !bottomSupported) setMessage("Some pieces have no supported 3D template. Add tshirt-v5.2 for a top or pants-v2 for a bottom to preview them.");
+      if (!topSupported || !bottomSupported) setMessage("Some pieces have no supported 3D template. Add tshirt-v5.2 for a top or pants-basic-v2 for a bottom to preview them.");
       else setMessage(`Showing ${outfit.name} from your wardrobe.`);
     }).catch(error => { if (active) setMessage(error instanceof Error ? error.message : "Could not load the outfit."); });
     return () => { active = false; };
@@ -162,8 +164,10 @@ export function TryOn({ fixtures = false, outfitId = null }: { fixtures?: boolea
         <div className="try-section-heading"><div><span className="try-eyebrow">THE EDIT</span><h2>Your outfit<span>.</span></h2></div><span className="try-section-label">01 / 03</span></div>
         <OutfitSlot number="01" name="Top" description="The everyday T-shirt" enabled={topEnabled} onEnabled={showTop} color={topColor} onColor={setTopColor} available />
         <FitPicker title="Top" options={topSizes.options} selected={topSizes.size} onSize={topSizes.setSize} />
+        {outfitSizes.top && topSizes.resolved && !topSizes.options.some(option => option.size === outfitSizes.top) && <p className="try-hint">Saved top size {outfitSizes.top} is unavailable for this avatar; showing the available default.</p>}
         <OutfitSlot number="02" name="Bottom" description="The essential pants" enabled={bottomEnabled} onEnabled={showBottom} color={bottomColor} onColor={setBottomColor} available={!!activeFit || bottomAvailability === "available" || bottomAvailability === "checking"} />
         <FitPicker title="Bottom" options={bottomSizes.options} selected={bottomSizes.size} onSize={bottomSizes.setSize} />
+        {outfitSizes.bottom && bottomSizes.resolved && !bottomSizes.options.some(option => option.size === outfitSizes.bottom) && <p className="try-hint">Saved bottom size {outfitSizes.bottom} is unavailable for this avatar; showing the available default.</p>}
         <label className="fit-heatmap"><input type="checkbox" checked={heatmap} onChange={event => setHeatmap(event.target.checked)} /> Fit heatmap <span>Red: tight · Green: good · Blue: loose</span></label>
         <div className="try-divider" />
         <div className="try-section-heading compact"><div><span className="try-eyebrow">SEE THE FIT</span><h2>Strike a pose<span>.</span></h2></div><span className="try-section-label">02 / 03</span></div>

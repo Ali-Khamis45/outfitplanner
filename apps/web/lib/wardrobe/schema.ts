@@ -1,5 +1,6 @@
 export const CATEGORIES = ["top", "bottom", "outerwear", "shoes", "accessory"] as const;
 export const PATTERNS = ["solid", "striped", "checked", "graphic", "printed", "other"] as const;
+export const SEASONS = ["spring", "summer", "autumn", "winter"] as const;
 export type Category = typeof CATEGORIES[number];
 export type Pattern = typeof PATTERNS[number];
 export type WardrobeItem = { id: string; name: string; category: Category; type: string; template: string | null; colors: { name: string; hex: string; share: number }[]; pattern: Pattern; material: string; formality: number; warmth: number; seasons: string[]; occasions: string[]; size: string; photo: string; added_at: string; last_worn: string | null; times_worn: number; favorite: boolean; notes: string };
@@ -18,6 +19,8 @@ export function parseWardrobe(value: unknown): Wardrobe {
   const ids = new Set<string>();
   for (const item of value.items) {
     if (!record(item) || !keys(item, itemKeys) || !id(item.id) || ids.has(item.id) || !text(item.name) || !item.name.trim() || !CATEGORIES.includes(item.category as Category) || !text(item.type) || !item.type.trim() || !(item.template === null || templateId(item.template)) || !Array.isArray(item.colors) || item.colors.length < 1 || item.colors.length > 10 || !item.colors.every(c => record(c) && keys(c, ["name", "hex", "share"]) && text(c.name) && !!c.name.trim() && text(c.hex) && /^#[0-9a-fA-F]{6}$/.test(c.hex) && typeof c.share === "number" && Number.isFinite(c.share) && c.share >= 0 && c.share <= 1) || !PATTERNS.includes(item.pattern as Pattern) || !text(item.material) || !Number.isInteger(item.formality) || Number(item.formality) < 1 || Number(item.formality) > 5 || !Number.isInteger(item.warmth) || Number(item.warmth) < 1 || Number(item.warmth) > 5 || !strings(item.seasons) || !strings(item.occasions) || !text(item.size) || !text(item.photo) || !(item.photo === "" || /^outputs\/wardrobe\/photos\/[a-zA-Z0-9_-]+\.(jpg|png|webp)$/.test(item.photo)) || !date(item.added_at) || !(item.last_worn === null || date(item.last_worn)) || !Number.isSafeInteger(item.times_worn) || Number(item.times_worn) < 0 || typeof item.favorite !== "boolean" || !text(item.notes)) throw new Error("Invalid wardrobe item.");
+    const totalShare = (item.colors as { share: number }[]).reduce((sum, color) => sum + color.share, 0);
+    if (totalShare < 0.9 - 1e-9 || totalShare > 1.1 + 1e-9 || !(item.seasons as string[]).every(season => SEASONS.includes(season as typeof SEASONS[number]))) throw new Error("Invalid colour shares or seasons.");
     ids.add(item.id);
   }
   const outfitIds = new Set<string>();
@@ -31,10 +34,10 @@ export function exampleWardrobe(): Wardrobe {
   const examples: [string, Category, string, string | null, string, string, string, number, number, string[], string[]][] = [
     ["Navy everyday tee", "top", "t-shirt", "tshirt-v5.2", "navy", "#1F2A44", "cotton", 2, 1, ["spring", "summer"], ["casual", "work"]],
     ["Chalk cotton tee", "top", "t-shirt", "tshirt-v5.2", "chalk", "#e7e2d6", "cotton", 2, 1, ["spring", "summer"], ["casual"]],
-    ["Moss straight pants", "bottom", "trousers", "pants-v2", "moss", "#777f69", "cotton", 3, 3, ["spring", "autumn"], ["casual", "work"]],
-    ["Ink everyday pants", "bottom", "trousers", "pants-v2", "ink", "#303338", "cotton", 3, 2, ["spring", "summer", "autumn"], ["casual", "work"]],
-    ["Sand overshirt", "outerwear", "overshirt", null, "sand", "#c3ae92", "linen", 3, 3, ["spring", "autumn"], ["casual"]],
-    ["Brown leather shoes", "shoes", "shoes", null, "brown", "#6c4b38", "leather", 4, 2, ["autumn", "winter"], ["work"]],
+    ["Moss straight pants", "bottom", "trousers", "pants-basic-v2", "moss", "#777f69", "cotton", 3, 3, ["spring", "autumn"], ["casual", "work"]],
+    ["Ink everyday pants", "bottom", "trousers", "pants-basic-v2", "ink", "#303338", "cotton", 3, 2, ["spring", "summer", "autumn"], ["casual", "work"]],
+    ["Sand cotton tee", "top", "t-shirt", "tshirt-v5.2", "sand", "#c3ae92", "cotton", 2, 1, ["spring", "summer"], ["casual"]],
+    ["Slate straight pants", "bottom", "trousers", "pants-basic-v2", "slate", "#85888a", "cotton", 3, 3, ["autumn", "winter"], ["work"]],
   ];
   return { version: 1, items: examples.map(([name, category, type, template, color, hex, material, formality, warmth, seasons, occasions], i) => ({ id: `example-${i + 1}`, name, category, type, template, colors: [{ name: color, hex, share: 1 }], pattern: "solid", material, formality, warmth, seasons, occasions, size: "M", photo: "", added_at: "2026-11-13", last_worn: null, times_worn: 0, favorite: false, notes: "" })), outfits: [] };
 }

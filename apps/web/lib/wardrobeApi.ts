@@ -29,12 +29,12 @@ export function createWardrobeHandler(outputs = path.resolve(process.cwd(), "../
       if ((req.method !== "PUT" && req.method !== "POST") || !/^application\/json(?:;|$)/i.test(req.headers["content-type"] ?? "")) return res.status(404).end();
       if (req.method === "POST") {
         const body: unknown = req.body;
-        if (!body || typeof body !== "object" || !("data" in body) || typeof body.data !== "string" || body.data.length > 7_000_000) return res.status(400).json({ error: "Choose a JPEG, PNG or WebP photo under 5 MB." });
+        if (!body || typeof body !== "object" || !("data" in body) || typeof body.data !== "string" || body.data.length > 13_333_360) return res.status(400).json({ error: "Choose a JPEG, PNG or WebP photo of 10 MB or less." });
         const match = body.data.match(/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/);
-        if (!match) return res.status(400).json({ error: "Choose a JPEG, PNG or WebP photo under 5 MB." });
+        if (!match) return res.status(400).json({ error: "Choose a JPEG, PNG or WebP photo of 10 MB or less." });
         const bytes = Buffer.from(match[2], "base64"), kind = match[1];
         const valid = kind === "jpeg" ? bytes.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff])) : kind === "png" ? bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) : bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP";
-        if (!valid || bytes.length > 5_000_000) return res.status(400).json({ error: "Invalid or oversized photo." });
+        if (!valid || bytes.length > 10_000_000) return res.status(400).json({ error: "Invalid photo or photo larger than 10 MB." });
         await mkdir(photos, { recursive: true });
         const realPhotos = await checkedPhotos();
         const name = `${randomUUID()}.${kind === "jpeg" ? "jpg" : kind}`;

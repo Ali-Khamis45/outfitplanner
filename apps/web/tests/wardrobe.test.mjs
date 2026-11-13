@@ -17,10 +17,17 @@ try {
   assert.equal((await request(handler, "PUT", {}, {}, { headers: { host: "localhost:3000", "content-type": "application/json", origin: "http://evil.example" } })).code, 404);
   assert.equal((await request(handler, "PUT", {}, {}, { headers: { host: "localhost:3000", "content-type": "text/plain" } })).code, 404);
   const examples = await request(handler); assert.equal(examples.code, 200); assert.equal(examples.body.items.length, 6); assert.ok(examples.body.items.every(x => x.id.startsWith("example-")));
+  assert.equal(examples.body.items.filter(x => x.category === "top").length, 3);
+  assert.equal(examples.body.items.filter(x => x.category === "bottom").length, 3);
   assert.throws(() => parseWardrobe({ ...exampleWardrobe(), extra: true }));
   assert.doesNotThrow(() => parseWardrobe({ version: 1, items: [{ id: "tee-001", name: "Navy everyday tee", category: "top", type: "t-shirt", template: "tshirt-v5.2", colors: [{ name: "navy", hex: "#1F2A44", share: 0.9 }], pattern: "solid", material: "cotton", formality: 2, warmth: 1, seasons: ["spring", "summer"], occasions: ["casual", "work"], size: "L", photo: "outputs/wardrobe/photos/tee-001.jpg", added_at: "2026-11-13", last_worn: null, times_worn: 0, favorite: false, notes: "" }], outfits: [{ id: "outfit-001", name: "Friday casual", items: ["tee-001", "pants-002"], occasion: "casual", worn_on: [] }] }));
   const invalid = exampleWardrobe(); invalid.items[0].formality = 6;
   assert.equal((await request(handler, "PUT", invalid)).code, 400);
+  invalid.items[0].formality = 2; invalid.items[0].seasons = ["monsoon"];
+  assert.equal((await request(handler, "PUT", invalid)).code, 400);
+  invalid.items[0].seasons = ["summer"]; invalid.items[0].colors[0].share = 0.4;
+  assert.equal((await request(handler, "PUT", invalid)).code, 400);
+  invalid.items[0].colors[0].share = 1;
   invalid.items[0].formality = 2; invalid.items[0].photo = "outputs/wardrobe/photos/../../secret.jpg";
   assert.equal((await request(handler, "PUT", invalid)).code, 400);
   const data = exampleWardrobe(); data.outfits.push({ id: "outfit-1", name: "Test", items: [data.items[0].id, data.items[2].id], occasion: "casual", worn_on: [] });
@@ -28,6 +35,9 @@ try {
   assert.deepEqual(JSON.parse(await readFile(path.join(root, "wardrobe/wardrobe.json"), "utf8")), data);
   assert.deepEqual((await request(handler)).body, data);
   assert.equal((await request(handler, "POST", { data: "data:image/png;base64,ZmFrZQ==" })).code, 400);
+  const large = Buffer.alloc(10_000_000); Buffer.from([0xff, 0xd8, 0xff]).copy(large);
+  assert.equal((await request(handler, "POST", { data: `data:image/jpeg;base64,${large.toString("base64")}` })).code, 201);
+  assert.equal((await request(handler, "POST", { data: `data:image/jpeg;base64,${Buffer.concat([large, Buffer.from([0])]).toString("base64")}` })).code, 400);
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lXcAAAAASUVORK5CYII=", "base64");
   const upload = await request(handler, "POST", { data: `data:image/png;base64,${png.toString("base64")}` }); assert.equal(upload.code, 201);
   const photo = upload.body.photo.split("/").pop(); const downloaded = await request(handler, "GET", null, { photo }); assert.equal(downloaded.code, 200); assert.deepEqual(downloaded.body, png);

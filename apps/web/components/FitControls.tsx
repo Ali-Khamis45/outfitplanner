@@ -4,8 +4,9 @@ import { emptyMeasurements, measurementError, measurementFields, names, serializ
 import { parseSidecar, type Sidecar } from "../lib/garment/correctives";
 import { formatRegion, isFullyClamped, parseFitMap, regionEstimateNote, SIZES, type Size, type SizeOption, type Slot } from "../lib/garment/fitMap";
 
-export function useSizes(body: string | null, slot: Slot, fixtures = false) {
+export function useSizes(body: string | null, slot: Slot, fixtures = false, preferredSize = "") {
   const [options, setOptions] = useState<SizeOption[]>([]), [size, setSize] = useState<Size | null>(null);
+  const [resolved, setResolved] = useState(false);
   const [loaded, setLoaded] = useState<{ url: string; sidecar: Sidecar } | null>(null);
   useEffect(() => {
     let active = true;
@@ -17,10 +18,10 @@ export function useSizes(body: string | null, slot: Slot, fixtures = false) {
       .then((items: SizeOption[]) => {
         if (!active) return;
         const valid = Array.isArray(items) ? items.filter(item => { try { parseFitMap(item.fit); return SIZES.includes(item.size) && typeof item.glb === "string" && typeof item.sidecar === "string"; } catch { return false; } }) : [];
-        setOptions(valid); setSize(valid.find(item => item.fit.recommended)?.size ?? valid[0]?.size ?? null); setLoaded(null);
-      }).catch(() => { if (active) { setOptions([]); setSize(null); setLoaded(null); } });
+        setOptions(valid); setSize(valid.find(item => item.size === preferredSize)?.size ?? valid.find(item => item.fit.recommended)?.size ?? valid[0]?.size ?? null); setLoaded(null); setResolved(true);
+      }).catch(() => { if (active) { setOptions([]); setSize(null); setLoaded(null); setResolved(true); } });
     return () => { active = false; };
-  }, [body, slot, fixtures]);
+  }, [body, slot, fixtures, preferredSize]);
   const selected = body ? options.find(option => option.size === size && option.fit.body === body) ?? null : null;
   useEffect(() => {
     if (!selected) return;
@@ -28,7 +29,7 @@ export function useSizes(body: string | null, slot: Slot, fixtures = false) {
     fetch(selected.sidecar, { cache: "no-store" }).then(response => { if (!response.ok) throw new Error("Sidecar unavailable"); return response.json(); }).then(value => { if (active) setLoaded({ url: selected.glb, sidecar: parseSidecar(value) }); }).catch(() => { if (active) setLoaded(null); });
     return () => { active = false; };
   }, [selected]);
-  return { options: body ? options.filter(option => option.fit.body === body) : [], size, setSize, selected, garment: selected && loaded?.url === selected.glb ? { url: selected.glb, sidecar: loaded.sidecar } : null };
+  return { options: body ? options.filter(option => option.fit.body === body) : [], size, setSize, selected, resolved, garment: selected && loaded?.url === selected.glb ? { url: selected.glb, sidecar: loaded.sidecar } : null };
 }
 
 export function FitPicker({ title, options, selected, onSize }: { title: string; options: SizeOption[]; selected: Size | null; onSize: (size: Size) => void }) {

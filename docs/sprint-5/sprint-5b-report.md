@@ -2,19 +2,19 @@
 
 ## Delivered
 
-- `/wardrobe` shows a searchable grid with category, season, occasion and colour filters. Six items identified by `example-` IDs are labeled Example. If no wardrobe file exists they appear as defaults and are first persisted when the user saves; their blank photo paths render a colour placeholder.
-- The editor covers the supplied item fields, local JPEG/PNG/WebP upload, multiple named colour swatches and their shares, and photo colour suggestions sampled in the browser. The suggestions include the whole image, including its background; they are not garment segmentation.
-- The outfit builder saves a named top-and-bottom outfit. Try-on loads the selected items' templates and the colours with the greatest shares. The currently supported templates are `tshirt-v5.2` for tops and `pants-v2` for bottoms; unsupported or missing templates produce a visible message rather than claiming a match.
-- The socket-checked `/api/wardrobe` handler is development-only and localhost-only, with the same request boundary as personal-fit. It validates the complete JSON document before each write, restricts photo names and locations, checks image signatures and size, and uses an atomic document replacement. Files are local under ignored `outputs/wardrobe/`.
+- `/wardrobe` provides responsive item cards with photos, colour chips and formality dots, plus search and category, season, occasion and colour filters. Six clearly labeled examples (three tops and three bottoms) appear when no file exists. They can be deleted individually; deleting one warns if a saved outfit references it. Examples are first persisted when a change is saved, and use colour placeholders instead of photos.
+- Add/edit covers the supplied item fields, JPEG/PNG/WebP photos up to 10 MB, multiple colours and shares, season choices, occasion suggestions, and three dominant-colour suggestions sampled from the photo where available. Sampling includes the background and is not garment segmentation.
+- The outfit builder saves a named top and bottom. Try-on uses their main colours, supported templates (`tshirt-v5.2`, `pants-basic-v2`, and the earlier `pants-v2` alias) and saved sizes when matching size assets are available. If a saved size is unavailable, the UI says so and shows the available default. Unsupported or missing templates produce a visible message.
+- The socket-checked `/api/wardrobe` endpoint is localhost-only in development and returns 404 in production. It validates each document write, including the season enum, colour shares between 0.9 and 1.1, and the other supplied fields. It checks photo signatures and size, confines photos to the local directory, and atomically replaces the JSON. Local files under `outputs/wardrobe/` are ignored by Git.
 
 ## Verification
 
 - `npm run typecheck`, `npm run lint`, `npm run build`, and `npm test` in `apps/web`: passed.
-- Automated schema/storage checks cover the supplied example schema, invalid writes, local-only and production access, photo upload/read and traversal rejection.
-- A headless Chrome test against a separate scratch copy with synthetic examples passed: six labeled examples, category filtering, item edit, image upload and colour suggestions, photo loading, outfit save, and try-on handoff with both colours. The initial page was visually inspected at 1440 × 900. The scratch test used only neutral demo assets and did not write the user's wardrobe.
+- Automated checks cover the supplied schema example, invalid seasons and shares, exact and oversized photo limits, local-only and production access, photos and traversal rejection.
+- Headless Chrome against a separate scratch workspace with synthetic size assets passed the example grid and deletion, category filter, item edit, photo upload and colour suggestions, outfit save, and try-on handoff including main colours and saved sizes. The original page was visually inspected at 1440 × 900. No user wardrobe data was touched.
 
 ## Limits
 
-- Example items use colour placeholders rather than photographs. User-uploaded photos remain local. Photo files replaced or removed from an item are not automatically deleted.
+- Replaced or removed item photos are not automatically deleted. Saved outfits referring to a deleted example show a missing piece.
 - Whole-document saves are intended for one local session; simultaneous edits from multiple browser tabs can overwrite one another.
-- The user-provided contract was used directly; `docs/contracts/wardrobe.md` was not yet available on this branch.
+- The user-provided schema was used directly; `docs/contracts/wardrobe.md` was not available on this branch.
