@@ -54,6 +54,7 @@ export function TryOn() {
   const [personal, setPersonal] = useState<LocalGlb | null>(null), [avatar, setAvatar] = useState<"neutral" | "personal">("neutral");
   const [avatarReady, setAvatarReady] = useState(false), [avatarFailed, setAvatarFailed] = useState(false), [message, setMessage] = useState("");
   const personalUrl = useRef<string | null>(null);
+  const stageRef = useRef<HTMLElement>(null);
   const avatarUrl = avatar === "personal" && personal ? personal.url : NEUTRAL_URL;
   useEffect(() => {
     let active = true;
@@ -84,9 +85,9 @@ export function TryOn() {
     } catch (error) { setMessage(error instanceof LocalGlbError ? error.message : "Could not open that file. Please try another GLB."); }
   }
   return <main className="try-page">
-    <section className="try-stage" aria-label="3D outfit preview">
+    <section className="try-stage" ref={stageRef} aria-label="3D outfit preview">
       <div className="try-stage-top"><Link href="/" className="try-brand"><span className="try-brand-icon">v<span>.</span></span><span>virtual<br />wardrobe</span></Link><span className="try-stage-caption">THE FITTING ROOM <i /> 01</span></div>
-      <div className="try-viewport"><SceneBoundary key={avatarUrl} onError={onAvatarError}><Suspense fallback={null}><TryOnScene key={avatarUrl} avatarUrl={avatarUrl} pose={pose} top={top} bottom={bottom} view={view} turntable={turntable} onAvatarReady={onAvatarReady} onAvatarError={onAvatarError} onTopError={onTopError} onBottomError={onBottomError} /></Suspense></SceneBoundary></div>
+      <div className="try-viewport"><SceneBoundary key={avatarUrl} onError={onAvatarError}><Suspense fallback={null}><TryOnScene key={avatarUrl} stageRef={stageRef} avatarUrl={avatarUrl} pose={pose} top={top} bottom={bottom} view={view} turntable={turntable} onAvatarReady={onAvatarReady} onAvatarError={onAvatarError} onTopError={onTopError} onBottomError={onBottomError} /></Suspense></SceneBoundary></div>
       {!avatarReady && !avatarFailed && <div className="try-stage-loading" role="status">Preparing your fitting room<span>...</span></div>}
       <div className="try-stage-bottom"><div><span className="try-eyebrow light">YOUR PERSPECTIVE</span><p>Make it yours.</p></div><span className="try-drag-hint">DRAG TO ROTATE <ArrowClockwise size={17} /></span></div>
       <div className="try-camera" aria-label="Camera views"><button onClick={() => changeView("front")}>Front</button><button onClick={() => changeView("left")}>Side</button><button onClick={() => changeView("back")}>Back</button><span className="try-camera-rule" /><button className={turntable ? "active" : ""} aria-pressed={turntable} onClick={() => setTurntable(!turntable)}><ArrowsClockwise size={16} /> 360°</button></div>

@@ -1,11 +1,12 @@
 "use client";
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { MeshStandardMaterial, SkinnedMesh, Vector3, type Object3D } from "three";
+import { MeshStandardMaterial, PerspectiveCamera, SkinnedMesh, Vector3, type Object3D } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import type { Sidecar } from "../../lib/garment/correctives";
 import { advancePoseTransition, beginPoseTransition, type PoseTransition } from "../../lib/garment/poseTransition";
+import { tryOnFraming } from "../../lib/garment/tryOnFraming";
 import type { PoseName } from "../../lib/garment/poses";
 import { AvatarModel, type LoadedRig } from "../avatar-lab/AvatarModel";
 import { GarmentErrorBoundary, GarmentModel } from "../avatar-lab/GarmentModel";
@@ -15,20 +16,44 @@ export interface OutfitItem { url: string; color: string; sidecar: Sidecar | nul
 const ignoreWeights = () => {};
 const ignoreInfo = () => {};
 
-function TryOnCamera({ model, command, turntable }: { model: ModelInfo | null; command: { view: CameraView; id: number }; turntable: boolean }) {
+function updateCameraAspect(camera: Object3D, width: number, height: number) {
+  if (camera instanceof PerspectiveCamera) { camera.aspect = width / height; camera.updateProjectionMatrix(); }
+}
+
+function StageResize({ stageRef }: { stageRef: RefObject<HTMLElement | null> }) {
+  const { gl, camera, setSize, invalidate } = useThree();
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const resize = () => {
+      const { width, height, top, left } = stage.getBoundingClientRect();
+      if (width <= 0 || height <= 0) return;
+      setSize(width, height, top, left);
+      gl.setSize(width, height, false);
+      updateCameraAspect(camera, width, height);
+      invalidate();
+    };
+    const observer = new ResizeObserver(resize);
+    observer.observe(stage); resize();
+    return () => observer.disconnect();
+  }, [stageRef, gl, camera, setSize, invalidate]);
+  return null;
+}
+
+function TryOnCamera({ model, command, turntable, pose }: { model: ModelInfo | null; command: { view: CameraView; id: number }; turntable: boolean; pose: PoseName }) {
   const controls = useRef<OrbitControlsImpl>(null);
   const { camera, size } = useThree();
   useEffect(() => {
     if (!model || !controls.current) return;
     const center = new Vector3(...model.center), height = Math.max(model.size[1], 0.01);
-    const aspect = size.width / Math.max(size.height, 1);
-    // The canvas itself is confined above the controls. Fit the body's height and
-    // leave extra width for the arms-out pose at narrow aspect ratios.
-    const distance = Math.max(height * 1.72, height * 1.55 / Math.max(aspect, 0.2));
+    // Fill roughly 82% vertically, reserving room for the bottom controls.
+    // Arms-out needs extra width on portrait screens.
+    const { distance, targetYOffset } = tryOnFraming(height, model.size[0], size.width, size.height, camera instanceof PerspectiveCamera ? camera.fov : 40, pose === "both-90");
+    center.y += targetYOffset;
     const directions: Record<CameraView, [number, number, number]> = { front: [0, 0, 1], back: [0, 0, -1], left: [-1, 0, 0], right: [1, 0, 0], reset: [0, 0, 1] };
     camera.position.copy(center).addScaledVector(new Vector3(...directions[command.view]), distance);
     controls.current.target.copy(center); controls.current.minDistance = height * 0.6; controls.current.maxDistance = height * 6; controls.current.update();
-  }, [camera, command, model, size.width, size.height]);
+  }, [camera, command, model, pose, size.width, size.height]);
   return <OrbitControls ref={controls} makeDefault enableDamping dampingFactor={0.12} autoRotate={turntable} autoRotateSpeed={4} />;
 }
 
@@ -78,7 +103,8 @@ function NoWebGL({ onError }: { onError: () => void }) {
   return <div className="try-stage-message">3D viewing is unavailable in this browser.</div>;
 }
 
-export function TryOnScene({ avatarUrl, pose, top, bottom, view, turntable, onAvatarReady, onAvatarError, onTopError, onBottomError }: {
+export function TryOnScene({ stageRef, avatarUrl, pose, top, bottom, view, turntable, onAvatarReady, onAvatarError, onTopError, onBottomError }: {
+  stageRef: RefObject<HTMLElement | null>;
   avatarUrl: string; pose: PoseName; top: OutfitItem | null; bottom: OutfitItem | null;
   view: { view: CameraView; id: number }; turntable: boolean; onAvatarReady: () => void; onAvatarError: () => void;
   onTopError: (message: string) => void; onBottomError: (message: string) => void;
@@ -97,6 +123,6 @@ export function TryOnScene({ avatarUrl, pose, top, bottom, view, turntable, onAv
     {rig && <PoseMotion rig={rig} pose={pose} />}
     {rig && top && <GarmentErrorBoundary key={`top|${top.url}|${rig.id}`} onError={onTopError}><Suspense fallback={null}><GarmentModel layer="upper" url={top.url} rig={rig} color={top.color} visible wireframe={false} inspection={false} onReady={ignoreInfo} sidecar={top.sidecar} correctives onWeights={ignoreWeights} /></Suspense></GarmentErrorBoundary>}
     {rig && bottom && <GarmentErrorBoundary key={`bottom|${bottom.url}|${rig.id}`} onError={onBottomError}><Suspense fallback={null}><GarmentModel layer="lower" url={bottom.url} rig={rig} color={bottom.color} visible wireframe={false} inspection={false} onReady={ignoreInfo} sidecar={bottom.sidecar} correctives onWeights={ignoreWeights} /></Suspense></GarmentErrorBoundary>}
-    <TryOnCamera model={model} command={view} turntable={turntable} /><FpsLogger />
+    <StageResize stageRef={stageRef} /><TryOnCamera model={model} command={view} turntable={turntable} pose={pose} /><FpsLogger />
   </Canvas>;
 }

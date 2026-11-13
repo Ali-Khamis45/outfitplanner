@@ -5,11 +5,11 @@
 .try-page button { cursor: pointer; }
 .try-page button:focus-visible, .try-page a:focus-visible, .try-upload:focus-within { outline: 2px solid #647c4c; outline-offset: 4px; }
 .try-stage { position: sticky; top: 0; height: 100vh; min-height: 610px; overflow: hidden; background: #202321; color: #f3f2e9; }
-.try-viewport { position: absolute; inset: 76px 0 180px; }
+.try-viewport { position: absolute; inset: 0; }
 .try-viewport > div { width: 100%; height: 100%; }
 .try-stage-top, .try-stage-bottom { position: absolute; z-index: 2; left: 6.5%; right: 6.5%; display: flex; justify-content: space-between; align-items: center; pointer-events: none; }
 .try-stage-top { top: 35px; }
-.try-stage-bottom { bottom: 36px; align-items: end; }
+.try-stage-bottom { bottom: 74px; align-items: end; }
 .try-brand { pointer-events: auto; display: flex; align-items: center; gap: 10px; color: #f4f4ec; text-decoration: none; font-size: 12px; font-weight: 700; line-height: 0.98; letter-spacing: -.04em; }
 .try-brand-icon { font-family: Georgia, serif; font-size: 35px; line-height: 1; font-weight: 400; }
 .try-brand-icon span, .try-heading em, .try-section-heading h2 span { color: #a9ba80; }
@@ -20,7 +20,7 @@
 .try-eyebrow { display: block; color: #8c9180; }
 .try-eyebrow.light { color: #a8b2a0; }
 .try-drag-hint { display: flex; align-items: center; gap: 9px; color: #b7bdb1; }
-.try-camera { position: absolute; z-index: 2; bottom: 115px; left: 50%; transform: translateX(-50%); display: flex; gap: 3px; align-items: center; padding: 5px; border: 1px solid #ffffff22; border-radius: 6px; background: #262c29df; box-shadow: 0 10px 32px #0002; white-space: nowrap; }
+.try-camera { position: absolute; z-index: 2; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 3px; align-items: center; padding: 5px; border: 1px solid #ffffff22; border-radius: 6px; background: #262c29df; box-shadow: 0 10px 32px #0002; white-space: nowrap; }
 .try-camera button { display: flex; align-items: center; gap: 6px; border: 0; border-radius: 3px; padding: 9px 12px; background: transparent; color: #e6e9e1; font-size: 11px; }
 .try-camera button:hover, .try-camera button.active { background: #edf0e51f; }
 .try-camera-rule { width: 1px; height: 20px; background: #ffffff24; margin: 0 3px; }
@@ -69,5 +69,6 @@
 .try-message { padding: 12px; background: #eee5db; color: #784b3c; font-size: 12px; line-height: 1.5; }
 .try-footer { display: flex; justify-content: space-between; gap: 10px; margin-top: 54px; padding: 22px 0 28px; border-top: 1px solid var(--line); color: #a8aa9e; font-size: 8px; }
 .try-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-@media (max-width: 800px) { .try-page { display: block; } .try-stage { position: relative; height: 60vh; min-height: 360px; } .try-panel-inner { width: min(100% - 48px, 560px); } .try-panel-top { padding-top: 28px; } .try-heading { padding: 44px 0 40px; } .try-stage-caption { display: none; } }
+@media (max-width: 800px), (max-height: 500px) { .try-page { display: block; } .try-stage { position: relative; height: 60vh; min-height: 0; } .try-panel-inner { width: min(100% - 48px, 560px); } .try-panel-top { padding-top: 28px; } .try-heading { padding: 44px 0 40px; } .try-stage-caption, .try-stage-bottom { display: none; } }
+@media (max-height: 500px) and (min-width: 600px) and (min-aspect-ratio: 3/2) { .try-camera { left: auto; right: 12px; transform: none; } }
 @media (max-width: 420px) { .try-stage-bottom p { font-size: 24px; } .try-camera button { padding: 9px; } .try-swatches { gap: 5px; } }

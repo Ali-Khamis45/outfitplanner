@@ -7,7 +7,7 @@
     "build": "next build",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit --incremental false",
-    "test": "node --no-warnings tests/correctives.test.mjs && node --no-warnings tests/demo-resources.test.mjs && node --no-warnings tests/demo-route.test.mjs && node tests/garment-quality-gates.test.mjs && node --no-warnings tests/leg-poses.test.mjs && node --no-warnings tests/pose-transition.test.mjs && node --no-warnings tests/layering.test.mjs && node tests/mhr-loader.test.mjs && node --no-warnings tests/garment-binding.test.mjs && node --no-warnings tests/inspection.test.mjs",
+    "test": "node --no-warnings tests/correctives.test.mjs && node --no-warnings tests/demo-resources.test.mjs && node --no-warnings tests/demo-route.test.mjs && node tests/garment-quality-gates.test.mjs && node --no-warnings tests/leg-poses.test.mjs && node --no-warnings tests/pose-transition.test.mjs && node --no-warnings tests/try-on-frame.test.mjs && node --no-warnings tests/layering.test.mjs && node tests/mhr-loader.test.mjs && node --no-warnings tests/garment-binding.test.mjs && node --no-warnings tests/inspection.test.mjs",
     "test:garment-quality": "node --no-warnings tests/garment-quality.test.mjs"
   },
   "dependencies": {
