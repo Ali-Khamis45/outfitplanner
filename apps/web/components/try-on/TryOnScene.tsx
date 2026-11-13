@@ -14,7 +14,6 @@ import type { CameraView, ModelInfo } from "../avatar-lab/types";
 
 export interface OutfitItem { url: string; color: string; sidecar: Sidecar | null }
 const ignoreWeights = () => {};
-const ignoreInfo = () => {};
 
 function updateCameraAspect(camera: Object3D, width: number, height: number) {
   if (camera instanceof PerspectiveCamera) { camera.aspect = width / height; camera.updateProjectionMatrix(); }
@@ -98,21 +97,17 @@ function FpsLogger() {
   return null;
 }
 
-function NoWebGL({ onError }: { onError: () => void }) {
-  useEffect(() => { onError(); }, [onError]);
-  return <div className="try-stage-message">3D viewing is unavailable in this browser.</div>;
-}
-
-export function TryOnScene({ stageRef, avatarUrl, pose, top, bottom, view, turntable, onAvatarReady, onAvatarError, onTopError, onBottomError }: {
+export function TryOnScene({ stageRef, avatarUrl, pose, top, bottom, view, turntable, onAvatarReady, onTopReady, onBottomReady, onTopError, onBottomError }: {
   stageRef: RefObject<HTMLElement | null>;
   avatarUrl: string; pose: PoseName; top: OutfitItem | null; bottom: OutfitItem | null;
-  view: { view: CameraView; id: number }; turntable: boolean; onAvatarReady: () => void; onAvatarError: () => void;
+  view: { view: CameraView; id: number }; turntable: boolean; onAvatarReady: () => void;
+  onTopReady: () => void; onBottomReady: () => void;
   onTopError: (message: string) => void; onBottomError: (message: string) => void;
 }) {
   const [rig, setRig] = useState<LoadedRig | null>(null);
   const [model, setModel] = useState<ModelInfo | null>(null);
   const onReady = useCallback((info: ModelInfo) => { setModel(info); onAvatarReady(); }, [onAvatarReady]);
-  return <Canvas shadows dpr={[1, 1.5]} camera={{ position: [0, 1, 3], fov: 40 }} gl={{ antialias: true }} fallback={<NoWebGL onError={onAvatarError} />}>
+  return <Canvas shadows dpr={[1, 1.5]} camera={{ position: [0, 1, 3], fov: 40 }} gl={{ antialias: true }} fallback={<div className="try-stage-message">3D viewing is unavailable in this browser.</div>}>
     <color attach="background" args={["#202321"]} />
     <ambientLight intensity={0.8} /><hemisphereLight args={["#f8eee3", "#313a33", 1.1]} />
     <directionalLight position={[3, 5, 4]} intensity={2.6} castShadow shadow-mapSize={[2048, 2048]} shadow-camera-left={-2} shadow-camera-right={2} shadow-camera-top={2} shadow-camera-bottom={-2} shadow-normalBias={0.02} />
@@ -121,8 +116,8 @@ export function TryOnScene({ stageRef, avatarUrl, pose, top, bottom, view, turnt
     <Suspense fallback={null}><AvatarModel url={avatarUrl} pose="rest" wireframe={false} inspection={false} skeleton={false} onReady={onReady} onRig={setRig} /></Suspense>
     {rig && avatarUrl === "/api/demo-avatar" && <NeutralSkin rig={rig} />}
     {rig && <PoseMotion rig={rig} pose={pose} />}
-    {rig && top && <GarmentErrorBoundary key={`top|${top.url}|${rig.id}`} onError={onTopError}><Suspense fallback={null}><GarmentModel layer="upper" url={top.url} rig={rig} color={top.color} visible wireframe={false} inspection={false} onReady={ignoreInfo} sidecar={top.sidecar} correctives onWeights={ignoreWeights} /></Suspense></GarmentErrorBoundary>}
-    {rig && bottom && <GarmentErrorBoundary key={`bottom|${bottom.url}|${rig.id}`} onError={onBottomError}><Suspense fallback={null}><GarmentModel layer="lower" url={bottom.url} rig={rig} color={bottom.color} visible wireframe={false} inspection={false} onReady={ignoreInfo} sidecar={bottom.sidecar} correctives onWeights={ignoreWeights} /></Suspense></GarmentErrorBoundary>}
+    {rig && top && <GarmentErrorBoundary key={`top|${top.url}|${rig.id}`} onError={onTopError}><Suspense fallback={null}><GarmentModel layer="upper" url={top.url} rig={rig} color={top.color} visible wireframe={false} inspection={false} onReady={onTopReady} sidecar={top.sidecar} correctives onWeights={ignoreWeights} /></Suspense></GarmentErrorBoundary>}
+    {rig && bottom && <GarmentErrorBoundary key={`bottom|${bottom.url}|${rig.id}`} onError={onBottomError}><Suspense fallback={null}><GarmentModel layer="lower" url={bottom.url} rig={rig} color={bottom.color} visible wireframe={false} inspection={false} onReady={onBottomReady} sidecar={bottom.sidecar} correctives onWeights={ignoreWeights} /></Suspense></GarmentErrorBoundary>}
     <StageResize stageRef={stageRef} /><TryOnCamera model={model} command={view} turntable={turntable} pose={pose} /><FpsLogger />
   </Canvas>;
 }

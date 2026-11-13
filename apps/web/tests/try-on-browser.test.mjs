@@ -43,6 +43,8 @@ try {
   await send("Page.enable"); await send("Runtime.enable"); await send("Network.enable");
   await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
   await send("Page.navigate", { url: process.env.TRY_ON_URL ?? "http://localhost:3000/try-on" });
+  await waitFor("!!document.querySelector('.try-stage-loading')", "loading indicator");
+  const initialStage = await evaluate("(() => { const r = document.querySelector('.try-stage').getBoundingClientRect(); return [r.width, r.height]; })()");
   let loaded = false;
   for (let i = 0; i < 80; i++) {
     loaded = await evaluate("!!document.querySelector('canvas') && !document.body.innerText.includes('Preparing your fitting room') && !!document.querySelector('[aria-label=\"Top: Ocean\"]')");
@@ -50,6 +52,7 @@ try {
     await new Promise(resolve => setTimeout(resolve, 250));
   }
   assert.ok(loaded, "Try-on did not finish loading");
+  assert.deepEqual(await evaluate("(() => { const r = document.querySelector('.try-stage').getBoundingClientRect(); return [r.width, r.height]; })()"), initialStage, "loading must not change stage dimensions");
   for (const variant of ["v5.2", "pants-v2"]) assert.ok(requests.some(url => url.includes(`variant=${variant}&sidecar=1`)), `${variant} sidecar not requested`);
   await evaluate("window.__tryOnTestCanvas = document.querySelector('canvas'); true");
   const sizes = [[390, 844], [1024, 844], [1440, 900], [390, 844], [844, 390]];
