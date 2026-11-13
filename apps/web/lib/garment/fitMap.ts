@@ -20,9 +20,9 @@ export function regionEstimateNote(region: Region): string | null {
   return region.clamped === true ? "estimated from size chart" : null;
 }
 
-export function isFullyClamped(fit: FitMap): boolean {
+export function isFullyClampedAndTight(fit: FitMap): boolean {
   const majorRegions = fit.garment === "tshirt-v5.2" ? ["chest", "waist", "hips"] : fit.garment === "pants-v2" ? ["waist", "hips"] : [];
-  return majorRegions.length > 0 && majorRegions.every(name => fit.regions[name]?.clamped === true);
+  return majorRegions.length > 0 && majorRegions.every(name => fit.regions[name]?.clamped === true && fit.regions[name]?.status === "tight");
 }
 
 export function formatRegion(name: string, region: Region, garment: string): string {
