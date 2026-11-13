@@ -2,6 +2,17 @@
 
 Sprint 0 investigates single-photo body reconstruction with SAM 3D Body and MHR, rigged GLB export, and React Three Fiber display. This foundation does not implement or demonstrate those capabilities.
 
+## Setup
+
+Run `npm ci` (or `npm install`) in `apps/web` before building or testing. The web app's asset-compression sub-package (`apps/web/asset-compression`, which uses glTF-Transform and meshoptimizer) has its own lockfile. It is installed by `apps/web`'s `postinstall` script, so a checkout that never ran an install in `apps/web` fails `npm run build` and `npm run test` with `Cannot find package '@gltf-transform/core'`.
+
+```powershell
+cd apps/web
+npm.cmd ci
+# if postinstall did not run, install the sub-package directly from its lockfile:
+npm.cmd ci --prefix ./asset-compression --workspaces=false --no-audit --no-fund
+```
+
 ## Frontend
 
 Requires Node.js and npm. In PowerShell, `npm.cmd` avoids a blocked `npm.ps1` execution policy.
