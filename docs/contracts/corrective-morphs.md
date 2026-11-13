@@ -49,6 +49,15 @@ The sidecar is the source of truth: a consumer drives whatever targets it lists,
 | 2 | `corr_R_hip90` | `r_upleg` → `r_lowleg` | [20, 90] | `r_upleg` [1,0,0] −90 |
 | 3 | `corr_R_knee90` | `r_lowleg` → `r_foot` | [0, 90] | `r_lowleg` [1,0,0] +90 |
 
+Pants v2 (`pants-basic-v2-mhr-neutral.glb`, Sprint 2.1A) uses the same four names and ramps.
+
+The T-shirt **v5.1** (`tshirt-v5.1-mhr-neutral.glb`, Sprint 2.1A) has the four shoulder targets above, followed by two hem correctives (indices 4 and 5). They lift the front hem off the raised thigh:
+
+| Index | Target | `joint` → `child` | `ramp` | Solved at |
+| --- | --- | --- | --- | --- |
+| 4 | `corr_L_hip90` | `l_upleg` → `l_lowleg` | [20, 90] | `l_upleg` [1,0,0] −90 |
+| 5 | `corr_R_hip90` | `r_upleg` → `r_lowleg` | [20, 90] | `r_upleg` [1,0,0] −90 |
+
 `swing_deg` has no direction. The hip ramps therefore start at 20°, so hip extension (15°) and abduction (20°), which swing the thigh as much as a small flexion, leave the hip targets at 0. Each target is solved alone. In combined poses (for example `step` = hip 90 + knee 90) the weights simply add, as §4 says.
 
 ## 3. `swing_deg`

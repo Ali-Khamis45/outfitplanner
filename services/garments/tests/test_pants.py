@@ -106,5 +106,56 @@ class GeneratedPantsTests(unittest.TestCase):
         self.assertGreaterEqual(float(self.pants.positions[:, 1].max() - load_asset(shirt).positions[:, 1].min()), 0.03)
 
 
+PANTS_V2 = PROJECT / "outputs" / "garments" / "pants-basic-v2-mhr-neutral.glb"
+
+
+@unittest.skipUnless(PANTS_V2.is_file() and NEUTRAL_AVATAR.is_file(), "generate pants v2 first")
+class GeneratedPantsV2Tests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.pants = load_asset(PANTS_V2)
+
+    def test_v2_validates_and_has_the_gusset_region(self) -> None:
+        from garment_glb import read_glb
+        from pants import REGION_GUSSET
+        from validate_garment import validate
+
+        report = validate(PANTS_V2, NEUTRAL_AVATAR)
+        self.assertEqual(report["shell"]["genus"], 2)
+        self.assertEqual(report["rest_clearance"]["penetrating_vertices"], 0)
+        document, _ = read_glb(PANTS_V2)
+        self.assertEqual(document["asset"]["extras"]["garment"]["regions"][REGION_GUSSET], "crotch_gusset")
+        gusset = self.pants.region == REGION_GUSSET
+        self.assertGreater(int(gusset.sum()), 100)
+        centre = self.pants.positions[gusset].mean(axis=0)
+        self.assertLess(abs(float(centre[0])), 0.01)  # centred on the crotch seam
+        self.assertLess(float(centre[1]), 0.80)
+
+    def test_crotch_seam_shares_are_balanced_after_the_twist_fold(self) -> None:
+        names = self.pants.skeleton.names
+        left = np.array([n.startswith("l_") for n in names])[self.pants.joints]
+        right = np.array([n.startswith("r_") for n in names])[self.pants.joints]
+        share_l, share_r = (self.pants.weights * left).sum(axis=1), (self.pants.weights * right).sum(axis=1)
+        seam = (np.abs(self.pants.positions[:, 0]) < 0.002) & (self.pants.positions[:, 1] < 0.79) & (self.pants.positions[:, 1] > 0.76)
+        self.assertGreater(int(seam.sum()), 10)
+        self.assertLess(float(np.abs(share_l[seam] - share_r[seam]).max()), 0.05)
+
+    def test_cuffs_are_turned_in(self) -> None:
+        from garment_glb import read_glb
+
+        v1_document, _ = read_glb(PANTS)
+        v2_document, _ = read_glb(PANTS_V2)
+        v1, v2 = load_asset(PANTS), self.pants
+        for kind in ("left_hem", "right_hem"):
+            edge_v1 = v1.positions[v1_document["meshes"][0]["extras"]["openingVertices"][kind]]
+            edge_v2 = v2.positions[v2_document["meshes"][0]["extras"]["openingVertices"][kind]]
+            width_v1 = np.ptp(edge_v1[:, [0, 2]], axis=0).sum()
+            width_v2 = np.ptp(edge_v2[:, [0, 2]], axis=0).sum()
+            self.assertLess(width_v2, 0.85 * width_v1, kind)  # the hem opening is clearly narrower
+
+    def test_v2_sidecar_matches_v1_names_and_ramps(self) -> None:
+        self.assertEqual(self.pants.sidecar, load_asset(PANTS).sidecar)
+
+
 if __name__ == "__main__":
     unittest.main()

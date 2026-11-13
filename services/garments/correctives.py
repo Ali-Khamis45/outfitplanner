@@ -18,7 +18,7 @@ deltas (delta = SkinMatrix⁻¹ · desired − rest):
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import numpy as np
@@ -44,6 +44,21 @@ class CorrectiveRules:
     anchor_weights: tuple[tuple[float, float], ...] = ((90.0, 0.3), (120.0, 1.0))
     iterations: int = 25
     body_clearance_m: float = 0.006  # outer surface; the inner layer sits 2 mm inside it
+    # Sprint 2.1A: push along the closest point on the body's triangles (face normal) instead of the nearest body
+    # vertex's normal, which picks the wrong side of deep creases (belly/thigh at 90 deg hip flexion). Off for v5.
+    triangle_collision: bool = False
+    # Sprint 2.1A: scale of the rest edge lengths ARAP aims for (1 = ARAP; < 1 lets crease fabric compress smoothly
+    # instead of buckling into folds; 0 = membrane smoothing of the start shape). 1 for v5.
+    rest_edge_scale: float = 1.0
+
+
+SPRINT_2_1_FIELDS = ("triangle_collision", "rest_edge_scale")
+
+
+def rules_record(rules: CorrectiveRules) -> dict[str, Any]:
+    """Rules for reports; Sprint 2.1A fields are omitted at their defaults so earlier reports stay byte-identical."""
+    defaults = CorrectiveRules()
+    return {k: v for k, v in rules.__dict__.items() if k not in SPRINT_2_1_FIELDS or v != getattr(defaults, k)}
 
 
 def sidecar() -> dict[str, Any]:
@@ -88,7 +103,33 @@ def dual_quaternion_skin(positions: np.ndarray, joints: np.ndarray, weights: np.
     return np.einsum("vij,vj->vi", Rotation.from_quat(b0).as_matrix(), positions) + translation
 
 
-def _arap(rest: np.ndarray, start: np.ndarray, faces: np.ndarray, free: np.ndarray, body: np.ndarray, body_normals: np.ndarray, rules: CorrectiveRules, anchor: float) -> np.ndarray:
+def _triangle_signed_distance(points: np.ndarray, body: np.ndarray, body_faces: np.ndarray, tree: cKDTree, vertex_faces: np.ndarray, neighbours: int = 8) -> tuple[np.ndarray, np.ndarray]:
+    """Signed distance to the closest point on the body triangles (candidates around the nearest vertices) and the
+    outward normal of that face."""
+    from tshirt import closest_point_on_triangles
+
+    _, nearest = tree.query(points, k=neighbours, workers=-1)
+    candidates = vertex_faces[nearest].reshape(len(points), -1)
+    best = np.full(len(points), np.inf)
+    signed = np.zeros(len(points))
+    normals = np.zeros((len(points), 3))
+    for column in range(candidates.shape[1]):
+        face = candidates[:, column]
+        valid = face >= 0
+        corners = body[body_faces[np.where(valid, face, 0)]]
+        bary = closest_point_on_triangles(points, corners[:, 0], corners[:, 1], corners[:, 2])
+        closest = np.einsum("ij,ijk->ik", bary, corners)
+        distance = np.where(valid, np.linalg.norm(points - closest, axis=1), np.inf)
+        normal = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+        normal /= np.clip(np.linalg.norm(normal, axis=1, keepdims=True), 1e-30, None)
+        better = distance < best - 1e-12
+        best[better] = distance[better]
+        signed[better] = np.einsum("ij,ij->i", points[better] - closest[better], normal[better])
+        normals[better] = normal[better]
+    return signed, normals
+
+
+def _arap(rest: np.ndarray, start: np.ndarray, faces: np.ndarray, free: np.ndarray, body: np.ndarray, body_normals: np.ndarray, rules: CorrectiveRules, anchor: float, body_faces: np.ndarray | None = None) -> np.ndarray:
     edges = trimesh.Trimesh(rest, faces, process=False).edges_unique
     edges = edges[free[edges].any(axis=1)]
     n = len(rest)
@@ -100,6 +141,7 @@ def _arap(rest: np.ndarray, start: np.ndarray, faces: np.ndarray, free: np.ndarr
     solver = splu(system)
     coupling = adjacency[free_ids][:, fixed_ids]
     tree = cKDTree(body)
+    vertex_faces = trimesh.Trimesh(body, body_faces, process=False).vertex_faces if rules.triangle_collision and body_faces is not None else None
     current = start.copy()
     dx = rest[edges[:, 0]] - rest[edges[:, 1]]
     for _ in range(rules.iterations):
@@ -113,11 +155,17 @@ def _arap(rest: np.ndarray, start: np.ndarray, faces: np.ndarray, free: np.ndarr
         u[flip, :, -1] *= -1
         rotation = u @ vt
         rotated = 0.5 * np.einsum("eij,ej->ei", rotation[edges[:, 0]] + rotation[edges[:, 1]], dx)
+        if rules.rest_edge_scale != 1.0:
+            rotated = rules.rest_edge_scale * rotated
         rhs = np.zeros((n, 3))
         np.add.at(rhs, edges[:, 0], rotated)
         np.add.at(rhs, edges[:, 1], -rotated)
         b = rhs[free_ids] + coupling @ current[fixed_ids] + anchor * start[free_ids]
         current[free_ids] = solver.solve(b)
+        if rules.triangle_collision and body_faces is not None:
+            signed, normals = _triangle_signed_distance(current[free_ids], body, body_faces, tree, vertex_faces)
+            current[free_ids] += normals * np.clip(rules.body_clearance_m - signed, 0.0, None)[:, None]
+            continue
         # collision: push free vertices out of the posed body along the nearest body vertex normal
         _, nearest = tree.query(current[free_ids], workers=-1)
         signed = np.einsum("ij,ij->i", current[free_ids] - body[nearest], body_normals[nearest])
@@ -142,7 +190,7 @@ def _solve_pose(data: dict[str, np.ndarray], outer_vertices: np.ndarray, outer_f
     matrices = skin_matrices(skeleton, pose_local(skeleton, rotations))
     posed_body = skin(body.positions, body.joints, body.weights, skin_matrices(body.skeleton, pose_local(body.skeleton, rotations)))
     start = dual_quaternion_skin(outer_vertices, data["outer_joints"], data["outer_weights"], matrices)
-    solved = _arap(outer_vertices, start, outer_faces, mask > 0, posed_body, vertex_normals(posed_body, body.indices), rules, anchor)
+    solved = _arap(outer_vertices, start, outer_faces, mask > 0, posed_body, vertex_normals(posed_body, body.indices), rules, anchor, body.indices)
     # inner layer and rims: the rest offset from the welded outer vertex, carried by the same DQS rotation
     target = solved[source] + dual_quaternion_skin(rest_all, joints_all, weights_all, matrices) - start[source]
     skinned_all = skin(rest_all, joints_all, weights_all, matrices)
@@ -158,7 +206,7 @@ def solve_targets(arrays: dict[str, Any], outer_vertices: np.ndarray, outer_face
     data = _skinning_inputs(arrays, outer_vertices)
     rest_world = world_from_local(skeleton, skeleton.local)
     morphs: dict[str, np.ndarray] = {}
-    report: dict[str, Any] = {"rules": dict(rules.__dict__), "targets": {}}
+    report: dict[str, Any] = {"rules": rules_record(rules), "targets": {}}
     for side, low, high in TARGETS:
         pivot = rest_world[skeleton.index(f"{side}_uparm")][:3, 3]
         mask = region_weight(outer_vertices, pivot, side, rules)
@@ -184,13 +232,18 @@ class CorrectiveSpec:
     outer_radius_m: float
     side: str | None = None  # gate to this side of the midline ("l": x > 0)
     anchor: float = 1.0
+    # Sprint 2.1A: "influence" gates by the vertex's skin-weight share of `joint` and its descendants instead of by
+    # the midline, so a corrective covers every vertex its joint moves (crotch vertices blended across the seam).
+    gate: str = "midline"
+    influence_full_share: float = 0.1  # share at which the influence gate reaches 1
+    midline_cross_m: float = 0.0  # Sprint 2.1A: let a midline-gated region extend this far past the midline
 
 
 def spec_region(rest: np.ndarray, pivot: np.ndarray, spec: CorrectiveSpec, midline_fade_m: float) -> np.ndarray:
     radial = _smoothstep((spec.outer_radius_m - np.linalg.norm(rest - pivot, axis=1)) / (spec.outer_radius_m - spec.inner_radius_m))
     if spec.side is None:
         return radial
-    lateral = rest[:, 0] if spec.side == "l" else -rest[:, 0]
+    lateral = (rest[:, 0] if spec.side == "l" else -rest[:, 0]) + spec.midline_cross_m
     return radial * _smoothstep(lateral / midline_fade_m)
 
 
@@ -203,9 +256,27 @@ def solve_specs(arrays: dict[str, Any], outer_vertices: np.ndarray, outer_faces:
     data = _skinning_inputs(arrays, outer_vertices)
     rest_world = world_from_local(skeleton, skeleton.local)
     morphs: dict[str, np.ndarray] = {}
-    report: dict[str, Any] = {"rules": dict(rules.__dict__), "targets": {}}
+    report: dict[str, Any] = {"rules": rules_record(rules), "targets": {}}
     for spec in specs:
-        mask = spec_region(outer_vertices, rest_world[skeleton.index(spec.pivot_joint)][:3, 3], spec, rules.midline_fade_m)
+        mask = spec_region(outer_vertices, rest_world[skeleton.index(spec.pivot_joint)][:3, 3], spec if spec.gate == "midline" else replace(spec, side=None), rules.midline_fade_m)
+        if spec.gate == "influence":
+            subtree = np.zeros(len(skeleton.names), dtype=bool)
+            subtree[skeleton.index(spec.joint)] = True
+            for k, parent in enumerate(skeleton.parents):  # parents precede children
+                if parent >= 0 and subtree[parent]:
+                    subtree[k] = True
+            share = (data["outer_weights"] * subtree[data["outer_joints"]]).sum(axis=1)
+            mask = mask * _smoothstep(share / spec.influence_full_share)
         morphs[spec.target] = _solve_pose(data, outer_vertices, outer_faces, mask, list(spec.rotations), skeleton, body, rules, spec.anchor)
         report["targets"][spec.target] = {"region_vertices": int((mask > 0).sum()), "max_delta_m": float(np.linalg.norm(morphs[spec.target], axis=1).max())}
     return morphs, report
+
+
+SHIRT_HIP_RULES = CorrectiveRules(triangle_collision=True)
+
+
+def shirt_hip_specs() -> tuple[CorrectiveSpec, ...]:
+    """Sprint 2.1A T-shirt hem correctives: solved at 90 deg hip flexion (leg-poses.md), driven by thigh swing with the
+    pants' hip ramp (20 -> 90 deg, so hip extension and abduction leave them off)."""
+    x = (1.0, 0.0, 0.0)
+    return tuple(CorrectiveSpec(f"corr_{tag}_hip90", f"{side}_upleg", f"{side}_lowleg", (20.0, 90.0), ((f"{side}_upleg", x, -90.0),), f"{side}_upleg", 0.20, 0.30, side, 0.3) for side, tag in (("l", "L"), ("r", "R")))

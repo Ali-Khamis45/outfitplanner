@@ -178,5 +178,36 @@ class GeneratedV5Tests(unittest.TestCase):
         self.assertEqual(self.v5.sidecar, sidecar())
 
 
+V51_GARMENT = PROJECT / "outputs" / "garments" / "experiments" / "tshirt-v5.1-mhr-neutral.glb"
+
+
+@unittest.skipUnless(V51_GARMENT.is_file() and V5_GARMENT.is_file() and V2_GARMENT.is_file(), "generate the v5.1 shirt first")
+class GeneratedV51Tests(unittest.TestCase):
+    def test_v51_is_v5_plus_two_hip_targets(self) -> None:
+        from correctives import shirt_hip_specs, spec_sidecar
+        from evaluate_correctives import accessor_bytes
+
+        v5, v51 = load_asset(V5_GARMENT), load_asset(V51_GARMENT)
+        self.assertEqual(list(v51.morphs), CONTRACT_NAMES + ["corr_L_hip90", "corr_R_hip90"])
+        for name in CONTRACT_NAMES:  # shoulder targets unchanged
+            np.testing.assert_array_equal(v51.morphs[name], v5.morphs[name])
+        self.assertEqual(v51.sidecar["correctives"], sidecar()["correctives"] + spec_sidecar(shirt_hip_specs())["correctives"])
+        mine, base = accessor_bytes(V51_GARMENT), accessor_bytes(V2_GARMENT)
+        for key in base:
+            self.assertEqual(mine[key], base[key], key)
+
+    def test_hip_targets_are_off_in_arm_poses_and_on_at_step(self) -> None:
+        from leg_poses import LEG_POSES
+
+        v51 = load_asset(V51_GARMENT)
+        for rotations in ([raise_arm("l", 120), raise_arm("r", 120)], LEG_POSES["wide"], []):
+            weights = corrective_weights(v51.sidecar, v51.skeleton, pose_local(v51.skeleton, rotations))
+            self.assertEqual(weights["corr_L_hip90"], 0.0)
+            self.assertEqual(weights["corr_R_hip90"], 0.0)
+        step = corrective_weights(v51.sidecar, v51.skeleton, pose_local(v51.skeleton, LEG_POSES["step"]))
+        self.assertGreater(step["corr_L_hip90"], 0.98)
+        self.assertEqual(step["corr_R_hip90"], 0.0)
+
+
 if __name__ == "__main__":
     unittest.main()

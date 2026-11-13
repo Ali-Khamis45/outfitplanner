@@ -56,9 +56,19 @@ def pose_report(pants: SkinnedAsset, body: SkinnedAsset, name: str, welded: np.n
     stretch, compression = edge_ratios(pants.positions, posed, pants.indices)
     body_stretch, body_compression = edge_ratios(body.positions, body_posed, body.indices)
     body_flips = triangle_deformation(body.positions, body_posed, body.indices, body.joints, body.weights, body_matrices)["flipped"]
-    pairs, _ = self_intersections(posed, pants.indices, welded)
+    pairs, self_triangles = self_intersections(posed, pants.indices, welded)
+    flipped = deformation["flipped"]
+    penetrating_triangles = inside[pants.indices].any(axis=1)  # a corner strictly inside the posed body (exact parity)
+    flipped_and_colliding = flipped & (self_triangles | penetrating_triangles)
     worst = np.argmax(stretch)
+    body_flipped = int(body_flips.sum())
     return {
+        # Sprint 2.1A flip gate: a fold may flip triangles, but a flipped triangle must not also intersect the garment
+        # or lie inside the body, and the total must stay within 3x the body skin's own flips at the same pose.
+        "flipped_and_self_intersecting_or_penetrating": int(flipped_and_colliding.sum()),
+        "flipped_and_self_intersecting": int((flipped & self_triangles).sum()),
+        "flipped_and_penetrating": int((flipped & penetrating_triangles).sum()),
+        "flip_limit_3x_body": 3 * body_flipped,
         "inside_vertices_exact": int(inside.sum()),
         "beyond_3mm_exact": int((depth > 0.003).sum()),
         "max_depth_mm_exact": round(float(depth.max(initial=0.0)) * 1000, 2),
@@ -73,7 +83,7 @@ def pose_report(pants: SkinnedAsset, body: SkinnedAsset, name: str, welded: np.n
         "self_pairs_above_rest": max(0, pairs - rest_pairs),
         "body_skin_stretch_max": round(float(body_stretch.max()), 4),
         "body_skin_compression_min": round(float(body_compression.min()), 4),
-        "body_skin_flipped": int(body_flips.sum()),
+        "body_skin_flipped": body_flipped,
     }
 
 

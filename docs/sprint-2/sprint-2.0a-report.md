@@ -71,3 +71,18 @@ cd services/garments; ../../external/mhr-venv/Scripts/python.exe -m unittest dis
 external/mhr-venv/Scripts/python.exe services/garments/generate_tshirt.py --rules v1|v2|v4|v5 --out-dir <empty dir>
 external/mhr-venv/Scripts/python.exe services/garments/generate_tshirt.py --rules v2 --name v3-close1 --override close_voxels=1 --out-dir <empty dir>
 ```
+
+## Update (Sprint 2.1A): revised flip gate, v1 rescored
+
+The flip gate was replaced. (a) Flipped triangles that also self-intersect or have a corner inside the body must be 0. (b) Total flips must be ≤ 3 × the body skin's own flips at the same pose. Pants v1 under the revised gate:
+
+| Pose | Flipped | Flipped and colliding (a) | Body skin flips → limit (b) | Result |
+| --- | --- | --- | --- | --- |
+| rest | 0 | 0 | 0 → 0 | PASS |
+| walk | 24 | 18 | 0 → 0 | FAIL |
+| l-hip-60 | 118 | 76 | 8 → 24 | FAIL |
+| step | 2,786 | 1,424 (18 inside the body) | 95 → 285 | FAIL |
+| squat | 459 | 117 | 0 → 0 | FAIL |
+| wide | 0 | 0 | 0 → 0 | PASS |
+
+Pants v2 and the v1-vs-v2 comparison are in [sprint-2.1a-report.md](sprint-2.1a-report.md).

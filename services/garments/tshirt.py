@@ -73,9 +73,10 @@ class FitRules:
     gusset_close_voxels: int = 0  # extra closing near each axilla: turns the sharp armpit crease into a broader gusset (0 = off)
     gusset_radius_m: float = 0.07  # region around the axilla where the gusset closing applies
     shoulder_correctives: bool = False  # Sprint 1.4A: pose-driven shoulder corrective morph targets (correctives.py)
+    hip_correctives: bool = False  # Sprint 2.1A: hip-flexion correctives that lift the hem off the raised thigh
 
 
-SPRINT_1_1_FIELDS = ("underarm_separation_m", "underarm_length_m", "weight_mode", "weight_band_m", "clearance_smoothing_iterations", "retarget_smoothing_iterations", "discontinuity_ratio", "discontinuity_radius_m", "discontinuity_iterations", "gusset_close_voxels", "gusset_radius_m", "discontinuity_spatial_radius_m", "underarm_panel_radius_m", "underarm_panel_target_stretch", "shoulder_correctives")
+SPRINT_1_1_FIELDS = ("underarm_separation_m", "underarm_length_m", "weight_mode", "weight_band_m", "clearance_smoothing_iterations", "retarget_smoothing_iterations", "discontinuity_ratio", "discontinuity_radius_m", "discontinuity_iterations", "gusset_close_voxels", "gusset_radius_m", "discontinuity_spatial_radius_m", "underarm_panel_radius_m", "underarm_panel_target_stretch", "shoulder_correctives", "hip_correctives")
 
 
 def rules_record(rules: FitRules) -> dict[str, Any]:
@@ -758,3 +759,6 @@ V4_RULES = replace(V2_RULES, underarm_panel_radius_m=0.04, underarm_panel_target
 
 # Sprint 1.4A: v2 geometry and weights unchanged, plus shoulder corrective morph targets and their sidecar.
 V5_RULES = replace(V2_RULES, shoulder_correctives=True)
+
+# Sprint 2.1A: v5 plus hip-flexion hem correctives (the raised thigh no longer pokes through the hem at "step").
+V5_1_RULES = replace(V5_RULES, hip_correctives=True)
