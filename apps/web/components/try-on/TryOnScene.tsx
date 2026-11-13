@@ -1,17 +1,52 @@
 "use client";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { OrbitControls } from "@react-three/drei";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { MeshStandardMaterial, SkinnedMesh, Vector3, type Object3D } from "three";
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import type { Sidecar } from "../../lib/garment/correctives";
 import { advancePoseTransition, beginPoseTransition, type PoseTransition } from "../../lib/garment/poseTransition";
 import type { PoseName } from "../../lib/garment/poses";
 import { AvatarModel, type LoadedRig } from "../avatar-lab/AvatarModel";
-import { CameraController } from "../avatar-lab/CameraController";
 import { GarmentErrorBoundary, GarmentModel } from "../avatar-lab/GarmentModel";
 import type { CameraView, ModelInfo } from "../avatar-lab/types";
 
 export interface OutfitItem { url: string; color: string; sidecar: Sidecar | null }
 const ignoreWeights = () => {};
 const ignoreInfo = () => {};
+
+function TryOnCamera({ model, command, turntable }: { model: ModelInfo | null; command: { view: CameraView; id: number }; turntable: boolean }) {
+  const controls = useRef<OrbitControlsImpl>(null);
+  const { camera, size } = useThree();
+  useEffect(() => {
+    if (!model || !controls.current) return;
+    const center = new Vector3(...model.center), height = Math.max(model.size[1], 0.01);
+    const aspect = size.width / Math.max(size.height, 1);
+    // The canvas itself is confined above the controls. Fit the body's height and
+    // leave extra width for the arms-out pose at narrow aspect ratios.
+    const distance = Math.max(height * 1.72, height * 1.55 / Math.max(aspect, 0.2));
+    const directions: Record<CameraView, [number, number, number]> = { front: [0, 0, 1], back: [0, 0, -1], left: [-1, 0, 0], right: [1, 0, 0], reset: [0, 0, 1] };
+    camera.position.copy(center).addScaledVector(new Vector3(...directions[command.view]), distance);
+    controls.current.target.copy(center); controls.current.minDistance = height * 0.6; controls.current.maxDistance = height * 6; controls.current.update();
+  }, [camera, command, model, size.width, size.height]);
+  return <OrbitControls ref={controls} makeDefault enableDamping dampingFactor={0.12} autoRotate={turntable} autoRotateSpeed={4} />;
+}
+
+function NeutralSkin({ rig }: { rig: LoadedRig }) {
+  useEffect(() => {
+    let root: Object3D | undefined = rig.rig.bones.values().next().value;
+    if (!root) return;
+    while (root.parent && root.parent.type !== "Scene") root = root.parent;
+    root.traverse(node => {
+      if (!(node instanceof SkinnedMesh)) return;
+      const materials = Array.isArray(node.material) ? node.material : [node.material];
+      for (const material of materials) if (material instanceof MeshStandardMaterial) {
+        material.color.set("#ead5c8"); material.metalness = 0.15; material.roughness = 0.8;
+      }
+    });
+  }, [rig]);
+  return null;
+}
 
 function PoseMotion({ rig, pose }: { rig: LoadedRig; pose: PoseName }) {
   const transition = useRef<PoseTransition | null>(null);
@@ -58,9 +93,10 @@ export function TryOnScene({ avatarUrl, pose, top, bottom, view, turntable, onAv
     <directionalLight position={[-3, 2, -3]} intensity={1.1} color="#d2dfd3" />
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.003, 0]} receiveShadow><circleGeometry args={[8, 64]} /><meshStandardMaterial color="#202321" roughness={1} /></mesh>
     <Suspense fallback={null}><AvatarModel url={avatarUrl} pose="rest" wireframe={false} inspection={false} skeleton={false} onReady={onReady} onRig={setRig} /></Suspense>
+    {rig && avatarUrl === "/api/demo-avatar" && <NeutralSkin rig={rig} />}
     {rig && <PoseMotion rig={rig} pose={pose} />}
     {rig && top && <GarmentErrorBoundary key={`top|${top.url}|${rig.id}`} onError={onTopError}><Suspense fallback={null}><GarmentModel layer="upper" url={top.url} rig={rig} color={top.color} visible wireframe={false} inspection={false} onReady={ignoreInfo} sidecar={top.sidecar} correctives onWeights={ignoreWeights} /></Suspense></GarmentErrorBoundary>}
     {rig && bottom && <GarmentErrorBoundary key={`bottom|${bottom.url}|${rig.id}`} onError={onBottomError}><Suspense fallback={null}><GarmentModel layer="lower" url={bottom.url} rig={rig} color={bottom.color} visible wireframe={false} inspection={false} onReady={ignoreInfo} sidecar={bottom.sidecar} correctives onWeights={ignoreWeights} /></Suspense></GarmentErrorBoundary>}
-    <CameraController model={model} command={view} turntable={turntable} /><FpsLogger />
+    <TryOnCamera model={model} command={view} turntable={turntable} /><FpsLogger />
   </Canvas>;
 }

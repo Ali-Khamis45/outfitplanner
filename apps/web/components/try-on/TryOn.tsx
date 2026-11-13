@@ -46,7 +46,7 @@ function OutfitSlot({ number, name, description, enabled, onEnabled, color, onCo
 
 export function TryOn() {
   const [topEnabled, setTopEnabled] = useState(true), [bottomEnabled, setBottomEnabled] = useState(true);
-  const [topColor, setTopColor] = useState(colors[0].value), [bottomColor, setBottomColor] = useState(colors[1].value);
+  const [topColor, setTopColor] = useState(colors[4].value), [bottomColor, setBottomColor] = useState(colors[1].value);
   const [topSidecar, setTopSidecar] = useState<Sidecar | null | undefined>(undefined), [bottomSidecar, setBottomSidecar] = useState<Sidecar | null | undefined>(undefined);
   const [bottomAvailability, setBottomAvailability] = useState<"checking" | "available" | "missing" | "error">("checking");
   const [pose, setPose] = useState<Pose>("rest"), [turntable, setTurntable] = useState(false);
@@ -86,7 +86,7 @@ export function TryOn() {
   return <main className="try-page">
     <section className="try-stage" aria-label="3D outfit preview">
       <div className="try-stage-top"><Link href="/" className="try-brand"><span className="try-brand-icon">v<span>.</span></span><span>virtual<br />wardrobe</span></Link><span className="try-stage-caption">THE FITTING ROOM <i /> 01</span></div>
-      <SceneBoundary key={avatarUrl} onError={onAvatarError}><Suspense fallback={null}><TryOnScene key={avatarUrl} avatarUrl={avatarUrl} pose={pose} top={top} bottom={bottom} view={view} turntable={turntable} onAvatarReady={onAvatarReady} onAvatarError={onAvatarError} onTopError={onTopError} onBottomError={onBottomError} /></Suspense></SceneBoundary>
+      <div className="try-viewport"><SceneBoundary key={avatarUrl} onError={onAvatarError}><Suspense fallback={null}><TryOnScene key={avatarUrl} avatarUrl={avatarUrl} pose={pose} top={top} bottom={bottom} view={view} turntable={turntable} onAvatarReady={onAvatarReady} onAvatarError={onAvatarError} onTopError={onTopError} onBottomError={onBottomError} /></Suspense></SceneBoundary></div>
       {!avatarReady && !avatarFailed && <div className="try-stage-loading" role="status">Preparing your fitting room<span>...</span></div>}
       <div className="try-stage-bottom"><div><span className="try-eyebrow light">YOUR PERSPECTIVE</span><p>Make it yours.</p></div><span className="try-drag-hint">DRAG TO ROTATE <ArrowClockwise size={17} /></span></div>
       <div className="try-camera" aria-label="Camera views"><button onClick={() => changeView("front")}>Front</button><button onClick={() => changeView("left")}>Side</button><button onClick={() => changeView("back")}>Back</button><span className="try-camera-rule" /><button className={turntable ? "active" : ""} aria-pressed={turntable} onClick={() => setTurntable(!turntable)}><ArrowsClockwise size={16} /> 360°</button></div>

@@ -1,5 +1,22 @@
 import type { Bone, Quaternion } from "three";
-import { applyPose, findPose, type PoseName } from "./poses.ts";
+import { applyPose, findPose, type JointRotation, type PoseName } from "./poses.ts";
+
+/** Try-on only, in degrees relative to the MHR rest pose; world-space axes as in poses.ts. */
+export const TRY_ON_ARM_CONFIG = { adductionDeg: 18, walkSwingDeg: 10 } as const;
+
+export function tryOnPose(name: PoseName) {
+  const base = findPose(name);
+  if (name !== "rest" && name !== "walk") return base;
+  const arms: JointRotation[] = [
+    { joint: "l_uparm", axis: [0, 0, 1], degrees: -TRY_ON_ARM_CONFIG.adductionDeg },
+    { joint: "r_uparm", axis: [0, 0, 1], degrees: TRY_ON_ARM_CONFIG.adductionDeg },
+  ];
+  if (name === "walk") arms.push(
+    { joint: "l_uparm", axis: [1, 0, 0], degrees: TRY_ON_ARM_CONFIG.walkSwingDeg },
+    { joint: "r_uparm", axis: [1, 0, 0], degrees: -TRY_ON_ARM_CONFIG.walkSwingDeg },
+  );
+  return { ...base, rotations: [...base.rotations, ...arms] };
+}
 
 export interface PoseTransition {
   bones: ReadonlyMap<string, Bone>;
@@ -12,7 +29,7 @@ export interface PoseTransition {
 export function beginPoseTransition(bones: ReadonlyMap<string, Bone>, bind: ReadonlyMap<string, Quaternion>, pose: PoseName): PoseTransition {
   const from = new Map([...bones].map(([name, bone]) => [name, bone.quaternion.clone()]));
   try {
-    applyPose(bones, bind, findPose(pose));
+    applyPose(bones, bind, tryOnPose(pose));
     const to = new Map([...bones].map(([name, bone]) => [name, bone.quaternion.clone()]));
     return { bones, from, to, elapsed: 0 };
   } finally {
