@@ -1,8 +1,10 @@
 import { parseSidecar, type Sidecar } from "./correctives.ts";
 
-export const DEFAULT_DEMO_VARIANT = "v5";
+export const DEFAULT_DEMO_VARIANT = "v5.1";
+export const DEFAULT_PANTS_VARIANT = "pants-v2";
+export const pantsUrl = (variant: "pants" | "pants-v2") => `/api/demo-garment?variant=${variant}`;
 export function sidecarUrlForSelection(selection: { kind: string; url: string; variant?: string }): string | null {
-  return selection.kind === "demo" && selection.variant === "v5" ? selection.url : null;
+  return selection.kind === "demo" && (selection.variant === "v5" || selection.variant === "v5.1") ? selection.url : null;
 }
 export function sidecarIsPending(url: string | null, loaded: { url: string } | null): boolean {
   return url !== null && loaded?.url !== url;

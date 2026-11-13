@@ -11,7 +11,9 @@ const VARIANTS: Record<string, string> = {
   v3: "experiments/tshirt-v3-close1-mhr-neutral.glb",
   v4: "experiments/tshirt-v4-mhr-neutral.glb",
   v5: "experiments/tshirt-v5-mhr-neutral.glb",
+  "v5.1": "experiments/tshirt-v5.1-mhr-neutral.glb",
   pants: "pants-basic-v1-mhr-neutral.glb",
+  "pants-v2": "pants-basic-v2-mhr-neutral.glb",
 };
 export async function HEAD(request: Request) {
   const variant = new URL(request.url).searchParams.get("variant") ?? "v1";
@@ -32,7 +34,7 @@ export async function GET(request: Request) {
     const bytes = await readFile(path.resolve(process.cwd(), "../../outputs/garments", sidecar ? file.replace(/\.glb$/, ".correctives.json") : file));
     return new Response(new Uint8Array(bytes), { headers: { "Content-Type": sidecar ? "application/json" : "model/gltf-binary", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
   } catch (error) {
-    if (!sidecar && variant !== "pants") console.error("Unable to read the local demo garment:", error);
-    return Response.json({ error: variant === "pants" ? "Pants not generated yet." : "Demo garment not found." }, { status: 404 });
+    if (!sidecar && variant !== "pants" && variant !== "pants-v2") console.error("Unable to read the local demo garment:", error);
+    return Response.json({ error: variant === "pants" || variant === "pants-v2" ? "Pants not generated yet." : "Demo garment not found." }, { status: 404 });
   }
 }

@@ -66,13 +66,15 @@ async function verifyV5(selection) {
   assert.ok(Math.abs(weights.corr_L_abd90 - 1) < 1e-6);
   assert.ok(Math.abs(weights.corr_R_abd90 - 1) < 1e-6);
 }
-assert.equal(DEFAULT_DEMO_VARIANT, "v5");
+assert.equal(DEFAULT_DEMO_VARIANT, "v5.1");
 await Promise.all([verifyV5(select(DEFAULT_DEMO_VARIANT)), pants(), pants()]);
 assert.equal(calls.filter(url => url.includes("variant=pants")).length, 1);
-assert.equal(calls.filter(url => url.includes("variant=v5&sidecar=1")).length, 1);
+assert.equal(calls.filter(url => url.includes("variant=v5.1&sidecar=1")).length, 1);
 assert.equal(await load(sidecarUrlForSelection(select("v2"))), null);
+await verifyV5(select("v5.1"));
+assert.equal(calls.filter(url => url.includes("variant=v5.1&sidecar=1")).length, 2);
 await verifyV5(select("v5"));
-assert.equal(calls.filter(url => url.includes("variant=v5&sidecar=1")).length, 2);
+assert.equal(calls.filter(url => url.includes("variant=v5&sidecar=1")).length, 1);
 assert.equal(calls.filter(url => url.includes("variant=v2")).length, 0);
 // A standalone pants fixture exercises separate loading and influence buffers even
 // when the optional generated garment assets are absent.
@@ -109,8 +111,8 @@ assert.ok(pantsMesh.morphTargetInfluences.every(weight => weight === 0));
 // When the optional generated v5 is present, also exercise its real targets and the MHR rig.
 const outputs = new URL("../../../outputs/", import.meta.url);
 const avatarPath = new URL("avatars/mhr-neutral.glb", outputs);
-const shirtPath = new URL("garments/experiments/tshirt-v5-mhr-neutral.glb", outputs);
-const sidecarPath = new URL("garments/experiments/tshirt-v5-mhr-neutral.correctives.json", outputs);
+const shirtPath = new URL("garments/experiments/tshirt-v5.1-mhr-neutral.glb", outputs);
+const sidecarPath = new URL("garments/experiments/tshirt-v5.1-mhr-neutral.correctives.json", outputs);
 if ([avatarPath, shirtPath, sidecarPath].every(existsSync)) {
   async function readMesh(path) {
     const bytes = await readFile(path);
@@ -125,7 +127,7 @@ if ([avatarPath, shirtPath, sidecarPath].every(existsSync)) {
   const loadReal = createSidecarLoader(async () => new Response(file));
   for (let i = 0; i < 2; i++) {
     if (i) await loadReal(sidecarUrlForSelection(select("v2")));
-    const driver = createCorrectiveDriver(shirt, rig.bones, rest, await loadReal(sidecarUrlForSelection(select("v5"))));
+    const driver = createCorrectiveDriver(shirt, rig.bones, rest, await loadReal(sidecarUrlForSelection(select("v5.1"))));
     applyPose(rig.bones, rest, findPose("both-90"));
     const actual = driver(true);
     assert.equal(actual.corr_L_abd90.toFixed(2), "1.00");

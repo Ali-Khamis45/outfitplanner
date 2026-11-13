@@ -8,7 +8,7 @@ import { LocalGlbError, readLocalGlb, type LocalGlb } from "../../lib/localGlb";
 import type { CameraView } from "../avatar-lab/types";
 import { TryOnScene, type OutfitItem } from "./TryOnScene";
 
-const TOP_URL = "/api/demo-garment?variant=v5", BOTTOM_URL = "/api/demo-garment?variant=pants";
+const TOP_URL = "/api/demo-garment?variant=v5.1", BOTTOM_URL = "/api/demo-garment?variant=pants-v2";
 const NEUTRAL_URL = "/api/demo-avatar";
 const loadTopSidecar = createSidecarLoader(), loadBottomSidecar = createSidecarLoader();
 const checkBottom = createPantsChecker(BOTTOM_URL);

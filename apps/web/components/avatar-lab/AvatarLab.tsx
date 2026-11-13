@@ -8,9 +8,9 @@ import { AvatarInspector, LeftInspector } from "./AvatarInspector";
 import { SceneControls } from "./SceneControls";
 import { NEUTRAL_SOURCE } from "./AvatarSourcePanel";
 import { DEMO_GARMENT, demoGarment, GarmentPanel } from "./GarmentPanel";
-import { PantsPanel, PANTS_URL } from "./PantsPanel";
+import { PantsPanel, type PantsVariant } from "./PantsPanel";
 import type { Sidecar } from "../../lib/garment/correctives";
-import { createSidecarLoader, sidecarIsPending, sidecarUrlForSelection } from "../../lib/garment/demoResources";
+import { createSidecarLoader, DEFAULT_PANTS_VARIANT, pantsUrl, sidecarIsPending, sidecarUrlForSelection } from "../../lib/garment/demoResources";
 import type { PoseName } from "../../lib/garment/poses";
 import type { AssetStatus, AvatarSource, CameraView, GarmentInfo, GarmentSource, GarmentStatus, ModelInfo, RenderStats } from "./types";
 
@@ -35,21 +35,24 @@ export function AvatarLab() {
   const garmentEnabledRef = useRef(garmentEnabled), garmentSourceRef = useRef(garmentSource);
   const [garmentStatus, setGarmentStatus] = useState<GarmentStatus>({ state: "loading" });
   const [pantsEnabled, setPantsEnabled] = useState(false), [pantsVisible, setPantsVisible] = useState(true), [pantsColor, setPantsColor] = useState("#4c5360"), [pantsWireframe, setPantsWireframe] = useState(false);
+  const [pantsVariant, setPantsVariant] = useState<PantsVariant>(DEFAULT_PANTS_VARIANT);
+  const selectedPantsUrl = pantsUrl(pantsVariant);
   const [pantsStatus, setPantsStatus] = useState<GarmentStatus>({ state: "off" });
   const [pantsCorrectives, setPantsCorrectives] = useState(true);
   const [pantsWeights, setPantsWeights] = useState<Record<string, number>>({});
-  const [pantsSidecar, setPantsSidecar] = useState<Sidecar | null>(null);
+  const [pantsSidecar, setPantsSidecar] = useState<{ url: string; data: Sidecar | null } | null>(null);
   const pantsSidecarLoader = useMemo(() => createSidecarLoader(), []);
   useEffect(() => {
     let active = true;
-    pantsSidecarLoader(pantsEnabled ? PANTS_URL : null).then(data => { if (active) setPantsSidecar(data); });
+    pantsSidecarLoader(pantsEnabled ? selectedPantsUrl : null).then(data => { if (active && pantsEnabled) setPantsSidecar({ url: selectedPantsUrl, data }); });
     return () => { active = false; };
-  }, [pantsEnabled, pantsSidecarLoader]);
+  }, [pantsEnabled, selectedPantsUrl, pantsSidecarLoader]);
   const onPantsReady = useCallback((info: GarmentInfo) => setPantsStatus({ state: "ready", info }), []);
   const onPantsError = useCallback((message: string) => setPantsStatus({ state: "error", message }), []);
   const onPantsWeights = useCallback((next: Record<string, number>) => setPantsWeights(previous => JSON.stringify(previous) === JSON.stringify(next) ? previous : next), []);
-  const pantsLayer = useMemo(() => pantsEnabled ? { url: PANTS_URL, color: pantsColor, visible: pantsVisible, sidecar: pantsSidecar, correctives: pantsCorrectives, onWeights: onPantsWeights, onReady: onPantsReady, onError: onPantsError } : null, [pantsEnabled, pantsColor, pantsVisible, pantsSidecar, pantsCorrectives, onPantsWeights, onPantsReady, onPantsError]);
+  const pantsLayer = useMemo(() => pantsEnabled && pantsSidecar?.url === selectedPantsUrl ? { url: selectedPantsUrl, color: pantsColor, visible: pantsVisible, sidecar: pantsSidecar.data, correctives: pantsCorrectives, onWeights: onPantsWeights, onReady: onPantsReady, onError: onPantsError } : null, [pantsEnabled, selectedPantsUrl, pantsColor, pantsVisible, pantsSidecar, pantsCorrectives, onPantsWeights, onPantsReady, onPantsError]);
   const enablePants = useCallback((value: boolean) => { setPantsEnabled(value); setPantsStatus({ state: value ? "loading" : "off" }); if (!value) { setPantsSidecar(null); setPantsWeights({}); } }, []);
+  const choosePants = useCallback((value: PantsVariant) => { setPantsVariant(value); setPantsSidecar(null); setPantsWeights({}); setPantsStatus({ state: pantsEnabled ? "loading" : "off" }); }, [pantsEnabled]);
   const [correctives, setCorrectives] = useState(true);
   const [weights, setWeights] = useState<Record<string, number>>({});
   const [demoSidecar, setDemoSidecar] = useState<{ url: string; data: Sidecar | null } | null>(null);
@@ -98,7 +101,7 @@ export function AvatarLab() {
       const dir = await root.getDirectoryHandle(date, { create: true });
       const rows: string[] = [], skipped: string[] = [];
       setTurntable(false); if (!garmentEnabled) enableGarment(true); setGarmentVisible(true);
-      const pantsResponse = await fetch(PANTS_URL, { cache: "no-store" });
+      const pantsResponse = await fetch(selectedPantsUrl, { cache: "no-store" });
       if (pantsResponse.ok) {
         if (!pantsEnabled) enablePants(true);
         setPantsVisible(true);
@@ -107,7 +110,7 @@ export function AvatarLab() {
         while (pantsStatusRef.current.state === "loading" && performance.now() < pantsDeadline) await new Promise(resolve => setTimeout(resolve, 100));
         if (pantsStatusRef.current.state !== "ready") skipped.push("pants (load failed)");
       } else skipped.push(pantsResponse.status === 404 ? "pants (not generated)" : "pants (unavailable)");
-      for (const variant of ["v1", "v2", "v4", "v5"] as const) {
+      for (const variant of ["v1", "v2", "v4", "v5", "v5.1"] as const) {
         const response = await fetch(`/api/demo-garment?variant=${variant}`, { method: "GET" });
         if (!response.ok) { skipped.push(variant); continue; }
         chooseGarment(demoGarment(variant));
@@ -161,7 +164,7 @@ export function AvatarLab() {
     </header>
     <div className="lab-body"><LeftInspector source={source} onSelectSource={selectSource} skeleton={skeleton} wireframe={wireframe} garmentWireframe={garmentWireframe} grid={grid} turntable={turntable} setSkeleton={setSkeleton} setWireframe={setWireframe} setGarmentWireframe={setGarmentWireframe} setGrid={setGrid} setTurntable={setTurntable} status={status}>
       <GarmentPanel enabled={garmentEnabled} setEnabled={enableGarment} source={garmentSource} onSource={chooseGarment} visible={garmentVisible} setVisible={setGarmentVisible} color={garmentColor} setColor={setGarmentColor} pose={pose} setPose={setPose} status={garmentStatus} correctives={correctives} setCorrectives={setCorrectives} weights={weights} avatarReady={status === "ready"} />
-      <PantsPanel enabled={pantsEnabled} setEnabled={enablePants} visible={pantsVisible} setVisible={setPantsVisible} color={pantsColor} setColor={setPantsColor} wireframe={pantsWireframe} setWireframe={setPantsWireframe} correctives={pantsCorrectives} setCorrectives={setPantsCorrectives} weights={pantsWeights} status={pantsStatus} avatarReady={status === "ready"} />
+      <PantsPanel variant={pantsVariant} setVariant={choosePants} enabled={pantsEnabled} setEnabled={enablePants} visible={pantsVisible} setVisible={setPantsVisible} color={pantsColor} setColor={setPantsColor} wireframe={pantsWireframe} setWireframe={setPantsWireframe} correctives={pantsCorrectives} setCorrectives={setPantsCorrectives} weights={pantsWeights} status={pantsStatus} avatarReady={status === "ready"} />
     </LeftInspector>
       <section className="workspace" aria-label="3D avatar studio"><div className="workspace-heading"><div><div className="overline">AVATAR RECONSTRUCTION <span>/</span> VIEWER</div><h1>Avatar studio<span>.</span></h1><p>Inspect the geometry behind the silhouette.</p></div><div className="workspace-id"><span>ACTIVE AVATAR</span><strong>{personal ? "PERSONAL / LOCAL" : "NEUTRAL / MHR"}</strong>{personal && <small title={source.fileName}>{source.fileName}</small>}</div></div>
         <div className="stage" ref={stage}><div className="stage-caption"><span className="status-dot" /> <span>3D VIEWPORT</span><span className="stage-caption-secondary"> / {personal ? "PERSONAL RECONSTRUCTION" : "MHR NEUTRAL"}</span></div><span className="stage-top-right">PERSPECTIVE <span>·</span> METERS</span>

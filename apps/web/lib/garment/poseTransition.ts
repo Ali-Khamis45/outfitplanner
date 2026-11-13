@@ -2,7 +2,7 @@ import type { Bone, Quaternion } from "three";
 import { applyPose, findPose, type JointRotation, type PoseName } from "./poses.ts";
 
 /** Try-on only, in degrees relative to the MHR rest pose; world-space axes as in poses.ts. */
-export const TRY_ON_ARM_CONFIG = { adductionDeg: 18, walkSwingDeg: 10 } as const;
+export const TRY_ON_ARM_CONFIG = { adductionDeg: 15, walkSwingDeg: 10 } as const;
 
 export function tryOnPose(name: PoseName) {
   const base = findPose(name);

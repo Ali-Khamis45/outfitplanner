@@ -12,4 +12,11 @@ const sidecarPresent = existsSync(new URL("../../../outputs/garments/experiments
 const v5 = await GET(request("v5", "&sidecar=1"));
 assert.equal(v5.status, sidecarPresent ? 200 : 404);
 if (sidecarPresent) assert.equal((await v5.json()).version, 1);
+for (const [variant, path] of [["v5.1", "garments/experiments/tshirt-v5.1-mhr-neutral.glb"], ["pants-v2", "garments/pants-basic-v2-mhr-neutral.glb"]]) {
+  const exists = existsSync(new URL(`../../../outputs/${path}`, import.meta.url));
+  assert.equal((await HEAD(request(variant))).status, exists ? 200 : 404);
+  const sidecar = await GET(request(variant, "&sidecar=1"));
+  const sidecarExists = existsSync(new URL(`../../../outputs/${path.replace(/\.glb$/, ".correctives.json")}`, import.meta.url));
+  assert.equal(sidecar.status, sidecarExists ? 200 : 404);
+}
 console.log("Garment route HEAD and optional sidecar checks passed");

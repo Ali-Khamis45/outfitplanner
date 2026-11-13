@@ -34,33 +34,39 @@ if (existsSync(pantsFile)) {
   assert.ok(pants.skeleton.bones.every(bone => rig.bones.get(bone.name) === bone));
   console.log("Neutral pants binds to the same avatar skeleton as the shirt");
 } else console.log("Neutral pants binding skipped: asset not generated");
-const pantsSidecarPath = new URL("../../../outputs/garments/pants-basic-v1-mhr-neutral.correctives.json", import.meta.url);
-const shirtFile = new URL("../../../outputs/garments/experiments/tshirt-v5-mhr-neutral.glb", import.meta.url);
-const shirtSidecarPath = new URL("../../../outputs/garments/experiments/tshirt-v5-mhr-neutral.correctives.json", import.meta.url);
-if ([pantsFile, pantsSidecarPath, shirtFile, shirtSidecarPath].every(existsSync)) {
-  const shirt = meshOf((await load("../../../outputs/garments/experiments/tshirt-v5-mhr-neutral.glb")).scene);
-  const pants = meshOf((await load("../../../outputs/garments/pants-basic-v1-mhr-neutral.glb")).scene);
+const rest = captureBindPose(rig.bones);
+for (const [shirtVersion, pantsVersion] of [["v5", "v1"], ["v5.1", "v2"]]) {
+  const shirtPath = `../../../outputs/garments/experiments/tshirt-${shirtVersion}-mhr-neutral.glb`;
+  const pantsPath = `../../../outputs/garments/pants-basic-${pantsVersion}-mhr-neutral.glb`;
+  const shirtFile = new URL(shirtPath, import.meta.url), pantsAsset = new URL(pantsPath, import.meta.url);
+  const shirtSidecarPath = new URL(shirtPath.replace(/\.glb$/, ".correctives.json"), import.meta.url);
+  const pantsSidecarPath = new URL(pantsPath.replace(/\.glb$/, ".correctives.json"), import.meta.url);
+  if (![pantsAsset, pantsSidecarPath, shirtFile, shirtSidecarPath].every(existsSync)) { console.log(`${shirtVersion} / pants ${pantsVersion} corrective check skipped: optional assets unavailable`); continue; }
+  applyPose(rig.bones, rest, findPose("rest"));
+  const shirt = meshOf((await load(shirtPath)).scene);
+  const pants = meshOf((await load(pantsPath)).scene);
   bindGarment(shirt, rig); bindGarment(pants, rig);
   const shirtJson = await readFile(shirtSidecarPath, "utf8"), pantsJson = await readFile(pantsSidecarPath, "utf8");
   const requests = [];
   const fetcher = async url => { requests.push(url); return new Response(url.includes("variant=pants") ? pantsJson : shirtJson); };
   const shirtLoader = createSidecarLoader(fetcher), pantsLoader = createSidecarLoader(fetcher);
-  const shirtSidecar = await shirtLoader("/api/demo-garment?variant=v5");
-  const pantsSidecar = await pantsLoader("/api/demo-garment?variant=pants");
-  assert.deepEqual(requests, ["/api/demo-garment?variant=v5&sidecar=1", "/api/demo-garment?variant=pants&sidecar=1"]);
+  const shirtUrl = `/api/demo-garment?variant=${shirtVersion}`, pantsUrl = `/api/demo-garment?variant=${pantsVersion === "v1" ? "pants" : "pants-v2"}`;
+  const shirtSidecar = await shirtLoader(shirtUrl);
+  const pantsSidecar = await pantsLoader(pantsUrl);
+  assert.deepEqual(requests, [`${shirtUrl}&sidecar=1`, `${pantsUrl}&sidecar=1`]);
   assert.deepEqual(pantsSidecar, parseSidecar(JSON.parse(pantsJson)));
-  const rest = captureBindPose(rig.bones);
   const driveShirt = createCorrectiveDriver(shirt, rig.bones, rest, shirtSidecar);
   const drivePants = createCorrectiveDriver(pants, rig.bones, rest, pantsSidecar);
   applyPose(rig.bones, rest, findPose("step"));
   const shirtWeights = driveShirt(true), pantsWeights = drivePants(true);
   assert.ok(pantsWeights.corr_L_hip90 > 0.95 && pantsWeights.corr_L_knee90 > 0.95);
   assert.equal(shirtWeights.corr_L_abd90, 0);
+  if (shirtVersion === "v5.1") assert.ok(shirtWeights.corr_L_hip90 > 0.95, "v5.1 hem corrective responds to step");
   assert.ok(Object.values(drivePants(false)).every(weight => weight === 0));
   applyPose(rig.bones, rest, findPose("both-90"));
   assert.equal(driveShirt(true).corr_L_abd90.toFixed(2), "1.00");
   assert.ok(Object.values(drivePants(true)).every(weight => weight === 0));
   assert.ok(shirt.morphTargetInfluences.some(weight => weight > 0.99));
   assert.ok(pants.morphTargetInfluences.every(weight => weight === 0));
-  console.log("Shirt and pants sidecars drive their own real morph targets independently");
-} else console.log("Real layered corrective check skipped: optional assets unavailable");
+  console.log(`${shirtVersion} / pants ${pantsVersion} sidecars drive their real targets independently`);
+}
