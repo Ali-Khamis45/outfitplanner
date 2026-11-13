@@ -1,0 +1,47 @@
+// Run against an isolated development server whose outputs directory is disposable.
+import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+const browser = [process.env.CHROME_PATH, "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe", "/usr/bin/chromium"].filter(Boolean).find(existsSync);
+assert.ok(browser, "Set CHROME_PATH");
+const profile = await mkdtemp(path.join(os.tmpdir(), "wardrobe-browser-"));
+const chrome = spawn(browser, ["--headless", "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--disable-extensions", "--no-first-run", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "about:blank"], { stdio: "ignore", windowsHide: true });
+try {
+  let port; for (let i = 0; i < 100; i++) { try { port = (await readFile(path.join(profile, "DevToolsActivePort"), "utf8")).split("\n")[0]; break; } catch { await new Promise(r => setTimeout(r, 100)); } } assert.ok(port);
+  const tabs = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json(), socket = new WebSocket(tabs[0].webSocketDebuggerUrl);
+  await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject; });
+  let id = 0; const pending = new Map(); socket.onmessage = event => { const m = JSON.parse(event.data); if (m.id && pending.has(m.id)) { const [resolve, reject] = pending.get(m.id); pending.delete(m.id); if (m.error) reject(new Error(m.error.message)); else resolve(m.result); } };
+  const send = (method, params = {}) => new Promise((resolve, reject) => { const next = ++id; pending.set(next, [resolve, reject]); socket.send(JSON.stringify({ id: next, method, params })); });
+  const evaluate = async expression => (await send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true })).result.value;
+  const waitFor = async (expression, message) => { for (let i=0; i<100; i++) { if (await evaluate(expression)) return; await new Promise(r => setTimeout(r, 200)); } throw new Error(`Timed out: ${message}`); };
+  const url = process.env.WARDROBE_TEST_URL ?? "http://localhost:3190/wardrobe";
+  await send("Page.enable"); await send("Runtime.enable"); await send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false }); await send("Page.navigate", { url });
+  await waitFor("document.querySelectorAll('.wardrobe-card').length === 6", "six examples");
+  assert.ok(await evaluate("document.body.innerText.includes('Example')"));
+  const shot = await send("Page.captureScreenshot", { format: "png" });
+  const samplePhoto = path.join(profile, "sample.png"); await writeFile(samplePhoto, Buffer.from(shot.data, "base64"));
+  if (process.env.WARDROBE_SCREENSHOT) await writeFile(process.env.WARDROBE_SCREENSHOT, Buffer.from(shot.data, "base64"));
+  await evaluate(`(() => { const x = document.querySelector('.wardrobe-filters select'); x.value='top'; x.dispatchEvent(new Event('change', {bubbles:true})); })()`);
+  await waitFor("document.querySelectorAll('.wardrobe-card').length === 2", "category filter");
+  await evaluate(`(() => { const x = document.querySelector('.wardrobe-filters select'); x.value=''; x.dispatchEvent(new Event('change', {bubbles:true})); })()`);
+  await evaluate("document.querySelector('.wardrobe-edit').click()");
+  await waitFor("!!document.querySelector('[role=dialog]')", "item editor");
+  await send("DOM.enable"); const documentNode = await send("DOM.getDocument");
+  const fileInput = await send("DOM.querySelector", { nodeId: documentNode.root.nodeId, selector: '.wardrobe-form input[type="file"]' });
+  await send("DOM.setFileInputFiles", { nodeId: fileInput.nodeId, files: [samplePhoto] });
+  await waitFor("document.querySelectorAll('.wardrobe-suggestions button').length > 0", "photo colour suggestions");
+  await evaluate(`(() => { const input = [...document.querySelectorAll('.wardrobe-form label')].find(x=>x.textContent.trim()==='Name').querySelector('input'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input, 'Edited navy tee'); input.dispatchEvent(new Event('input',{bubbles:true})); document.querySelector('.wardrobe-form').requestSubmit(); })()`);
+  await waitFor("!document.querySelector('[role=dialog]') && document.body.innerText.includes('Edited navy tee')", "save item");
+  await waitFor("!!document.querySelector('.wardrobe-card img') && document.querySelector('.wardrobe-card img').naturalWidth > 0", "saved photo");
+  await evaluate(`(() => { const form=document.querySelector('.wardrobe-outfits form'); const inputs=form.querySelectorAll('input'), selects=form.querySelectorAll('select'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(inputs[0], 'Browser look'); inputs[0].dispatchEvent(new Event('input',{bubbles:true})); selects[0].value='example-1'; selects[0].dispatchEvent(new Event('change',{bubbles:true})); selects[1].value='example-3'; selects[1].dispatchEvent(new Event('change',{bubbles:true})); })()`);
+  await evaluate("document.querySelector('.wardrobe-outfits form').requestSubmit()");
+  await waitFor("document.querySelector('.wardrobe-saved a') && document.querySelector('.wardrobe-saved').textContent.includes('Browser look')", "save outfit");
+  await evaluate("document.querySelector('.wardrobe-saved a').click()");
+  await waitFor("location.pathname === '/try-on' && document.body.innerText.includes('Showing Browser look from your wardrobe.')", "try-on handoff");
+  const displayed = await evaluate("[...document.querySelectorAll('.try-color-heading')].map(x => x.innerText)");
+  assert.deepEqual(displayed, ["COLOUR\n#1F2A44", "COLOUR\nMOSS"], "outfit colours applied");
+  console.log("Wardrobe grid, filter, edit, save outfit and try-on handoff passed"); socket.close();
+} finally { chrome.kill(); await new Promise(resolve => { if (chrome.exitCode !== null) resolve(); else { chrome.once("exit", resolve); setTimeout(resolve, 2000); } }); await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); }

@@ -9,6 +9,7 @@ import { LocalGlbError, readLocalGlb, type LocalGlb } from "../../lib/localGlb";
 import type { CameraView } from "../avatar-lab/types";
 import { TryOnScene, type OutfitItem } from "./TryOnScene";
 import { FitPicker, MeasurementsForm, useSizes } from "../FitControls";
+import { parseWardrobe } from "../../lib/wardrobe/schema";
 
 const TOP_URL = "/api/demo-garment?variant=v5.2", BOTTOM_URL = "/api/demo-garment?variant=pants-v2";
 const NEUTRAL_URL = "/api/demo-avatar";
@@ -57,7 +58,7 @@ function OutfitSlot({ number, name, description, enabled, onEnabled, color, onCo
     <div className="try-slot-heading"><span className="try-slot-number">{number}</span><div><h3>{name}</h3><p>{description}</p></div>
       <label className="try-switch"><span className="try-sr-only">Show {name.toLowerCase()}</span><input type="checkbox" checked={enabled} disabled={!available} onChange={event => onEnabled(event.target.checked)} /><span aria-hidden="true" /></label>
     </div>
-    <div className="try-color-heading"><span>COLOUR</span><span>{colors.find(item => item.value === color)?.name}</span></div>
+    <div className="try-color-heading"><span>COLOUR</span><span>{colors.find(item => item.value.toLowerCase() === color.toLowerCase())?.name ?? color}</span></div>
     <div className="try-swatches" role="group" aria-label={`${name} colour`}>
       {colors.map(item => <button key={item.value} type="button" title={item.name} aria-label={`${name}: ${item.name}`} aria-pressed={color === item.value} disabled={!enabled || !available} className={color === item.value ? "try-swatch selected" : "try-swatch"} onClick={() => onColor(item.value)}><span style={{ backgroundColor: item.value }} /></button>)}
     </div>
@@ -65,7 +66,7 @@ function OutfitSlot({ number, name, description, enabled, onEnabled, color, onCo
   </section>;
 }
 
-export function TryOn({ fixtures = false }: { fixtures?: boolean }) {
+export function TryOn({ fixtures = false, outfitId = null }: { fixtures?: boolean; outfitId?: string | null }) {
   const [topEnabled, setTopEnabled] = useState(true), [bottomEnabled, setBottomEnabled] = useState(true);
   const [topColor, setTopColor] = useState(colors[4].value), [bottomColor, setBottomColor] = useState(colors[1].value);
   const [topSidecar, setTopSidecar] = useState<Sidecar | null | undefined>(undefined), [bottomSidecar, setBottomSidecar] = useState<Sidecar | null | undefined>(undefined);
@@ -83,6 +84,25 @@ export function TryOn({ fixtures = false }: { fixtures?: boolean }) {
   const bodyId = avatar === "neutral" ? "neutral" : activeFit?.bodyId ?? null;
   const topSizes = useSizes(bodyId, "top", fixtures && bodyId === "neutral"), bottomSizes = useSizes(bodyId, "bottom", fixtures && bodyId === "neutral");
   const [heatmap, setHeatmap] = useState(false);
+  useEffect(() => {
+    if (!outfitId) return;
+    let active = true;
+    fetch("/api/wardrobe", { cache: "no-store" }).then(response => { if (!response.ok) throw new Error("This outfit is only available on the local development server."); return response.json(); }).then(value => {
+      if (!active) return;
+      const wardrobe = parseWardrobe(value), outfit = wardrobe.outfits.find(item => item.id === outfitId);
+      if (!outfit) throw new Error("Outfit not found in your wardrobe.");
+      const items = outfit.items.map(id => wardrobe.items.find(item => item.id === id)).filter(item => item !== undefined);
+      const topItem = items.find(item => item.category === "top"), bottomItem = items.find(item => item.category === "bottom");
+      const topSupported = topItem?.template === "tshirt-v5.2", bottomSupported = bottomItem?.template === "pants-v2";
+      setTopEnabled(topSupported); setBottomEnabled(bottomSupported);
+      const mainColor = (item: NonNullable<typeof topItem>) => item.colors.reduce((best, color) => color.share > best.share ? color : best).hex;
+      if (topSupported) setTopColor(mainColor(topItem));
+      if (bottomSupported) setBottomColor(mainColor(bottomItem));
+      if (!topSupported || !bottomSupported) setMessage("Some pieces have no supported 3D template. Add tshirt-v5.2 for a top or pants-v2 for a bottom to preview them.");
+      else setMessage(`Showing ${outfit.name} from your wardrobe.`);
+    }).catch(error => { if (active) setMessage(error instanceof Error ? error.message : "Could not load the outfit."); });
+    return () => { active = false; };
+  }, [outfitId]);
   const avatarUrl = activeFit?.body ?? (avatar === "personal" && personalSource === "file" && personal ? personal.url : NEUTRAL_URL);
   useEffect(() => {
     let active = true;
@@ -137,7 +157,7 @@ export function TryOn({ fixtures = false }: { fixtures?: boolean }) {
       <div className="try-camera" aria-label="Camera views"><button onClick={() => changeView("front")}>Front</button><button onClick={() => changeView("left")}>Side</button><button onClick={() => changeView("back")}>Back</button><span className="try-camera-rule" /><button className={turntable ? "active" : ""} aria-pressed={turntable} onClick={() => setTurntable(!turntable)}><ArrowsClockwise size={16} /> 360°</button></div>
     </section>
     <aside className="try-panel" aria-label="Outfit controls">
-      <div className="try-panel-inner"><div className="try-panel-top"><Link href="/" className="try-back"><ArrowLeft size={15} /> BACK</Link><span>YOUR SPACE / 01</span></div>
+      <div className="try-panel-inner"><div className="try-panel-top"><Link href="/" className="try-back"><ArrowLeft size={15} /> BACK</Link><Link href="/wardrobe">WARDROBE</Link></div>
         <header className="try-heading"><span className="try-eyebrow">THE VIRTUAL FITTING ROOM</span><h1>Make yourself<br /><em>at home.</em></h1><p>Good style starts with a little exploration. Find a look that feels like you.</p>{fixtures && <p role="status">Synthetic size fixtures are active for the neutral avatar. Fit values and heatmap are illustrative.</p>}</header>
         <div className="try-section-heading"><div><span className="try-eyebrow">THE EDIT</span><h2>Your outfit<span>.</span></h2></div><span className="try-section-label">01 / 03</span></div>
         <OutfitSlot number="01" name="Top" description="The everyday T-shirt" enabled={topEnabled} onEnabled={showTop} color={topColor} onColor={setTopColor} available />
