@@ -65,7 +65,7 @@ function OutfitSlot({ number, name, description, enabled, onEnabled, color, onCo
   </section>;
 }
 
-export function TryOn() {
+export function TryOn({ fixtures = false }: { fixtures?: boolean }) {
   const [topEnabled, setTopEnabled] = useState(true), [bottomEnabled, setBottomEnabled] = useState(true);
   const [topColor, setTopColor] = useState(colors[4].value), [bottomColor, setBottomColor] = useState(colors[1].value);
   const [topSidecar, setTopSidecar] = useState<Sidecar | null | undefined>(undefined), [bottomSidecar, setBottomSidecar] = useState<Sidecar | null | undefined>(undefined);
@@ -81,7 +81,7 @@ export function TryOn() {
   const stageRef = useRef<HTMLElement>(null);
   const activeFit = avatar === "personal" && personalSource === "manifest" ? personalFit : null;
   const bodyId = avatar === "neutral" ? "neutral" : activeFit?.bodyId ?? null;
-  const topSizes = useSizes(bodyId, "top"), bottomSizes = useSizes(bodyId, "bottom");
+  const topSizes = useSizes(bodyId, "top", fixtures && bodyId === "neutral"), bottomSizes = useSizes(bodyId, "bottom", fixtures && bodyId === "neutral");
   const [heatmap, setHeatmap] = useState(false);
   const avatarUrl = activeFit?.body ?? (avatar === "personal" && personalSource === "file" && personal ? personal.url : NEUTRAL_URL);
   useEffect(() => {
@@ -138,7 +138,7 @@ export function TryOn() {
     </section>
     <aside className="try-panel" aria-label="Outfit controls">
       <div className="try-panel-inner"><div className="try-panel-top"><Link href="/" className="try-back"><ArrowLeft size={15} /> BACK</Link><span>YOUR SPACE / 01</span></div>
-        <header className="try-heading"><span className="try-eyebrow">THE VIRTUAL FITTING ROOM</span><h1>Make yourself<br /><em>at home.</em></h1><p>Good style starts with a little exploration. Find a look that feels like you.</p></header>
+        <header className="try-heading"><span className="try-eyebrow">THE VIRTUAL FITTING ROOM</span><h1>Make yourself<br /><em>at home.</em></h1><p>Good style starts with a little exploration. Find a look that feels like you.</p>{fixtures && <p role="status">Synthetic size fixtures are active for the neutral avatar. Fit values and heatmap are illustrative.</p>}</header>
         <div className="try-section-heading"><div><span className="try-eyebrow">THE EDIT</span><h2>Your outfit<span>.</span></h2></div><span className="try-section-label">01 / 03</span></div>
         <OutfitSlot number="01" name="Top" description="The everyday T-shirt" enabled={topEnabled} onEnabled={showTop} color={topColor} onColor={setTopColor} available />
         <FitPicker title="Top" options={topSizes.options} selected={topSizes.size} onSize={topSizes.setSize} />

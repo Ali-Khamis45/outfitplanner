@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "fixtures:build": "node tests/build-fit-fixtures.mjs",
     "build": "next build && node asset-compression/warm-cache.mjs",
     "postinstall": "npm install --prefix ./asset-compression --workspaces=false --no-audit --no-fund",
     "lint": "eslint .",

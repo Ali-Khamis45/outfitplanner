@@ -4,13 +4,15 @@ import { emptyMeasurements, measurementError, measurementFields, names, serializ
 import { parseSidecar, type Sidecar } from "../lib/garment/correctives";
 import { formatRegion, parseFitMap, SIZES, type Size, type SizeOption, type Slot } from "../lib/garment/fitMap";
 
-export function useSizes(body: string | null, slot: Slot) {
+export function useSizes(body: string | null, slot: Slot, fixtures = false) {
   const [options, setOptions] = useState<SizeOption[]>([]), [size, setSize] = useState<Size | null>(null);
   const [loaded, setLoaded] = useState<{ url: string; sidecar: Sidecar } | null>(null);
   useEffect(() => {
     let active = true;
     if (!body) return;
-    fetch(`/api/size-garment?${new URLSearchParams({ body, slot })}`, { cache: "no-store" })
+    const query = new URLSearchParams({ body, slot });
+    if (fixtures) query.set("fixtures", "1");
+    fetch(`/api/size-garment?${query}`, { cache: "no-store" })
       .then(response => response.ok ? response.json() : [])
       .then((items: SizeOption[]) => {
         if (!active) return;
@@ -18,7 +20,7 @@ export function useSizes(body: string | null, slot: Slot) {
         setOptions(valid); setSize(valid.find(item => item.fit.recommended)?.size ?? valid[0]?.size ?? null); setLoaded(null);
       }).catch(() => { if (active) { setOptions([]); setSize(null); setLoaded(null); } });
     return () => { active = false; };
-  }, [body, slot]);
+  }, [body, slot, fixtures]);
   const selected = body ? options.find(option => option.size === size && option.fit.body === body) ?? null : null;
   useEffect(() => {
     if (!selected) return;
