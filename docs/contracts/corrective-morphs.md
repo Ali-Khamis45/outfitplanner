@@ -1,6 +1,6 @@
 # Contract: pose-driven corrective morph targets (garment GLB)
 
-**Status:** v1, Sprint 1.4A. **Producer:** `services/garments` (Python). **Consumer:** the web lab (Three.js). Both sides must implement exactly this; any change bumps `version`.
+**Status:** v2, Sprint 2.2A (v1: Sprint 1.4A). v2 adds the signed measure (§3b) and ramps in either direction (§4); every v1 sidecar stays valid. **Producer:** `services/garments` (Python). **Consumer:** the web lab (Three.js). Both sides must implement exactly this; any change bumps `version`.
 
 ## 1. GLB
 
@@ -38,6 +38,17 @@
 
 Names are exact MHR joint names (glTF node names). `child` identifies the bone's end joint and is required to define the bone direction (§3).
 
+### Sidecar versions (v2, Sprint 2.2A)
+
+- `"version": 1`: every entry uses `"measure": "swing_deg"`. This is the format above; v1 sidecars remain valid and keep their meaning.
+- `"version": 2`: an entry may use `"measure": "swing_deg"` or `"measure": "signed_swing_deg"`. A signed entry also carries `"axis": [x, y, z]`, a direction in the **parent joint's space** (§3b). Ramps may run in either direction (§4).
+- Consumers must accept versions 1 and 2. They must reject other versions and unknown measures, leaving all influences at 0 and reporting the problem (§5).
+
+```json
+{ "target": "corr_L_add20", "joint": "l_uparm", "child": "l_lowarm", "measure": "signed_swing_deg",
+  "axis": [0.6731, 0.4009, -0.6214], "ramp": [0, -20] }
+```
+
 ### Target sets per garment (added in Sprint 2.0A; the format is unchanged)
 
 The sidecar is the source of truth: a consumer drives whatever targets it lists, matching them by name through `morphTargetDictionary`. The GLB's morph target order equals the sidecar order. The T-shirt set is the one above. The basic pants (`pants-basic-v1-mhr-neutral.glb`) carry four flexion correctives:
@@ -73,9 +84,33 @@ Both directions are in the parent's space. Twist about the bone axis does not ch
 
 **Epsilon at rest (added in Sprint 1.4A).** If `swing_deg < 0.01`, use 0. Round-off makes `acos` of two identical unit vectors return about 1e-6° instead of 0, and a pose reset rarely restores the rest quaternion bit-for-bit. This rule makes the rest weights exactly 0 regardless. The reference implementation is `services/garments/posing.py` `swing_deg` (`SWING_EPSILON_DEG`).
 
+## 3b. `signed_swing_deg` (v2)
+
+`swing_deg` has no direction: lowering an arm 15° gives the same value as raising it 15°. `signed_swing_deg` measures the swing within one plane, with a sign:
+
+- `r = normalize(R_rest·d)` and `n = normalize(R_now·d)`: the rest and current bone directions in the parent's space, as in §3.
+- `a` = the entry's `axis`, also in the parent's space. It must not be parallel to `r`.
+- `e = normalize(a − (a·r)·r)`: the axis made perpendicular to the rest direction. `r` and `e` span the measurement plane.
+- `signed_swing_deg = degrees(atan2(n·e, n·r))`, in (−180, 180]. It is positive when the bone has turned towards `axis` and negative when it has turned away. Motion out of the plane (for example a forward arm swing measured against an abduction axis) changes it very little, and twist does not change it at all.
+- **Epsilon:** if `|signed_swing_deg| < 0.01`, use 0.
+
+**Producer convention.** `axis` is the direction the bone tip starts to move in for the target's key motion, `ω × r_world`, expressed in the parent's rest frame, where `ω` is the key rotation's world axis signed by its angle. With the neutral MHR rig, the values are:
+
+| Joint → child | Positive direction | `axis` (parent space) | Sanity values on the neutral avatar |
+| --- | --- | --- | --- |
+| `l_uparm` → `l_lowarm` | abduction (poses.ts `raise`) | [0.6731, 0.4009, −0.6214] | raise 90 → +89.84; raise 120 → +119.83; lower 20 → −19.97; lower 20 + walk swing 10 → −20.04; swing 10 alone → +0.08 |
+| `r_uparm` → `r_lowarm` | abduction | [−0.6731, −0.4009, 0.6214] | as left |
+| `l_upleg` / `r_upleg` → `*_lowleg` | hip flexion | [0, −0.0581, 0.9983] | flex 90 → +89.18; extension 15 → −14.89; abduction 20 → −0.36 |
+| `l_lowleg` → `l_foot` | knee flexion | [−0.0262, 0.9992, 0.0312] | flex 90 → +89.25 |
+| `r_lowleg` → `r_foot` | knee flexion | [0.0262, −0.9992, −0.0312] | flex 90 → +89.25 |
+
+The reference implementation is `services/garments/posing.py` `signed_swing_deg`.
+
 ## 4. Weights
 
-`weight = clamp((swing_deg − ramp[0]) / (ramp[1] − ramp[0]), 0, 1)`
+`weight = clamp((s − ramp[0]) / (ramp[1] − ramp[0]), 0, 1)`, where `s` is the entry's measure.
+
+- **v2:** `ramp[0] ≠ ramp[1]`, in either order. `[0, -20]` means "0 at rest, 1 when the bone has turned 20° away from `axis`" (an arm lowered towards the body). `[0, 90]` means 0 at rest and 1 at +90°. Negative values are reached only by `signed_swing_deg`.
 
 - **Additive:** at 120° both targets of a side are fully on (1 + 1); `abd120` holds only the correction beyond `abd90`. At 90°: `abd90` = 1, `abd120` = 0. At 45°: `abd90` = 0.5.
 - **Independence:** each side reads only its own joint. Both arms raised is the sum of the left and right targets, whose vertex supports do not overlap.
@@ -83,7 +118,7 @@ Both directions are in the parent's space. Twist about the bone axis does not ch
 
 ## 5. Consumer checklist (Three.js)
 
-1. After applying the pose, read each `joint` bone's `quaternion` and compute `swing_deg` with the rest local rotation captured at load. Treat `swing_deg < 0.01` as 0 (§3).
+1. After applying the pose, read each `joint` bone's `quaternion` and compute the entry's measure with the rest local rotation captured at load: `swing_deg` (§3) or `signed_swing_deg` (§3b, `axis` from the sidecar). Apply the epsilon (|value| < 0.01 → 0). Accept sidecar versions 1 and 2 (§2).
 2. Set `mesh.morphTargetInfluences[mesh.morphTargetDictionary[target]] = weight`, then render. The default skinned-mesh shader already applies morphs before skinning.
 3. If the sidecar is missing, or names don't match, leave all influences at 0 (base garment behaviour) and report it.
 
