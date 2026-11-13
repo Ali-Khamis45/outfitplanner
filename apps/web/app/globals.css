@@ -12,6 +12,8 @@ body { font-family: Arial, Helvetica, sans-serif; }
 .fit-sizes button:disabled, .measurement-actions button:disabled { opacity: .35; cursor: not-allowed; }
 .fit-summary { padding: 12px; background: rgba(128, 150, 128, .12); }
 .fit-summary p, .fit-unavailable, .measurements p { margin: 5px 0; line-height: 1.4; }
+.fit-estimate-note { color: #566553; font-size: 11px; }
+.fit-summary .fit-clamped-warning { margin: 0 0 10px; font-weight: 700; }
 .fit-unavailable { opacity: .7; }
 .fit-heatmap { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; margin: 15px 0; }
 .fit-heatmap span { display: block; flex-basis: 100%; font-size: 11px; opacity: .7; }

@@ -2,7 +2,7 @@ export const SIZES = ["S", "M", "L", "XL"] as const;
 export type Size = typeof SIZES[number];
 export type Slot = "top" | "bottom";
 export type FitStatus = "tight" | "good" | "loose";
-export type Region = { status: FitStatus; ease_mm?: number; delta_mm?: number };
+export type Region = { status: FitStatus; ease_mm?: number; delta_mm?: number; clamped?: boolean };
 export interface FitMap { version: 1; garment: string; size: Size; body: string; regions: Record<string, Region>; recommended: boolean }
 export interface SizeOption { size: Size; fit: FitMap; glb: string; sidecar: string }
 
@@ -11,9 +11,18 @@ export function parseFitMap(value: unknown): FitMap {
   const data = value as FitMap;
   if (data.version !== 1 || typeof data.garment !== "string" || !SIZES.includes(data.size) || typeof data.body !== "string" || typeof data.recommended !== "boolean" || !data.regions || typeof data.regions !== "object" || Array.isArray(data.regions)) throw new Error("Invalid fit map");
   for (const [name, region] of Object.entries(data.regions)) {
-    if (!region || !["tight", "good", "loose"].includes(region.status) || !Number.isFinite(name === "length" ? region.delta_mm : region.ease_mm)) throw new Error("Invalid fit region");
+    if (!region || !["tight", "good", "loose"].includes(region.status) || !Number.isFinite(name === "length" ? region.delta_mm : region.ease_mm) || (region.clamped !== undefined && typeof region.clamped !== "boolean")) throw new Error("Invalid fit region");
   }
   return data;
+}
+
+export function regionEstimateNote(region: Region): string | null {
+  return region.clamped === true ? "estimated from size chart" : null;
+}
+
+export function isFullyClamped(fit: FitMap): boolean {
+  const majorRegions = fit.garment === "tshirt-v5.2" ? ["chest", "waist", "hips"] : fit.garment === "pants-v2" ? ["waist", "hips"] : [];
+  return majorRegions.length > 0 && majorRegions.every(name => fit.regions[name]?.clamped === true);
 }
 
 export function formatRegion(name: string, region: Region, garment: string): string {
