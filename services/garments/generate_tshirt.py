@@ -106,17 +106,23 @@ def topology_report(arrays: dict[str, Any]) -> dict[str, Any]:
     return {"vertices": int(len(arrays["position"])), "triangles": int(len(arrays["faces"])), "welded_vertices": int(len(welded.vertices)), "watertight": bool(welded.is_watertight), "winding_consistent": bool(welded.is_winding_consistent), "volume_m3": float(welded.volume), "euler_characteristic": int(euler), "genus": int((2 - euler) // 2)}
 
 
-def write(directory: Path, body: RestBody, outer: OuterGarment, rules: FitRules, name: str, garment_id: str, revision: str, personal: bool, source_variant: str | None, extra: dict[str, Any]) -> dict[str, Any]:
+def write(directory: Path, body: RestBody, outer: OuterGarment, rules: FitRules, name: str, garment_id: str, revision: str, personal: bool, source_variant: str | None, extra: dict[str, Any], avatar_path: Path = NEUTRAL_AVATAR, original: tuple[Path, Path] | None = None) -> dict[str, Any]:
     arrays = assemble(outer, rules.thickness_m)
     glb = new_file(directory / f"{name}.glb")
     info = metadata(body, rules, garment_id, revision, personal, source_variant)
     morphs = None
-    if rules.shoulder_correctives:  # Sprint 1.4A: solved against the neutral avatar GLB's skeleton and body
+    if rules.shoulder_correctives:  # Sprint 1.4A: solved against the avatar GLB's skeleton and body (Sprint 2.3A: also personal)
         import correctives
         from posing import load_asset
 
-        avatar = load_asset(NEUTRAL_AVATAR)
-        morphs, extra["correctives"] = correctives.solve_targets(arrays, outer.vertices, outer.faces, avatar.skeleton, avatar)
+        avatar = load_asset(avatar_path)
+        if original is not None:  # Sprint 2.3A: shoulder settings searched against this body's own gates
+            import personal_fit
+
+            gates = personal_fit.body_gates(original[0], load_asset(original[1]))
+            morphs, extra["correctives"] = personal_fit.fit_shoulders(arrays, outer, avatar, gates)
+        else:
+            morphs, extra["correctives"] = correctives.solve_targets(arrays, outer.vertices, outer.faces, avatar.skeleton, avatar)
         document = correctives.sidecar()
         if rules.hip_correctives:  # Sprint 2.1A: appended after the four shoulder targets
             specs = correctives.shirt_hip_specs()
@@ -155,6 +161,7 @@ def main() -> int:
     parser.add_argument("--out-dir", type=Path, default=PROJECT / "outputs" / "garments")
     parser.add_argument("--override", action="append", default=[], metavar="KEY=VALUE", help="experiment-only FitRules override (requires --name)")
     parser.add_argument("--name", help="revision name for an experiment (outputs tshirt-<name>-...)")
+    parser.add_argument("--personal-only", action="store_true", help="with --reconstruction, skip the neutral garment (Sprint 2.3A personal folder)")
     args = parser.parse_args()
     started = time.perf_counter()
     rules = replace(RULESETS[args.rules], voxel_m=LOD_VOXEL_M) if args.lod else RULESETS[args.rules]
@@ -167,8 +174,8 @@ def main() -> int:
             default = getattr(rules, key)
             values[key] = raw if isinstance(default, str) else type(default)(float(raw)) if isinstance(default, int) else float(raw)
         rules = replace(rules, **values)
-    if rules.shoulder_correctives and args.reconstruction:
-        parser.error("shoulder correctives are solved for the neutral body only (Sprint 1.4A)")
+    if rules.shoulder_correctives and args.reconstruction and not rules.adduction_correctives:
+        parser.error("personal correctives are supported from v5.2 on (Sprint 2.3A); v5/v5.1 were solved for the neutral body only")
     revision = args.name or args.rules + ("-lod" if args.lod else "")
     prefix = "tshirt" if revision == "v1" else f"tshirt-{revision}"
     garment_id = "tshirt-basic-v1" if revision == "v1" else f"tshirt-basic-{revision}"
@@ -180,7 +187,7 @@ def main() -> int:
     match = verify_glb_matches_body(NEUTRAL_AVATAR, neutral)
     outer, _ = design_tshirt(neutral, rules)
     reports: dict[str, Any] = {}
-    if not (args.out_dir / f"{prefix}-mhr-neutral.glb").exists():
+    if not args.personal_only and not (args.out_dir / f"{prefix}-mhr-neutral.glb").exists():
         reports["neutral"] = write(args.out_dir, neutral, outer, rules, f"{prefix}-mhr-neutral", garment_id, revision, False, None, {"neutral_avatar_match": match})
     if args.reconstruction:
         stem = args.reconstruction.resolve().parent.name
@@ -199,7 +206,16 @@ def main() -> int:
             after = enforce_clearance(mesh, surface, rules, np.zeros(len(moved.vertices), dtype=bool))
             moved.vertices = np.array(mesh.vertices)
             moved.report.update({"clearance_before_push": before, "clearance": after, "body_floor_offset_m": body.floor_offset_m})
-            reports[variant] = write(args.out_dir, body, moved, rules, f"{prefix}-{stem}-{suffix}", garment_id, revision, True, "neutral", {"body_glb_validation": body_report})
+            original = None
+            if rules.adduction_correctives:  # Sprint 2.3A personal fit: degenerate clean-up, per-body shoulder gates
+                from personal_fit import collapse_degenerate
+
+                moved, moved.report["degenerate_cleanup"] = collapse_degenerate(moved, len(body.joint_names))
+                base = suffix.removesuffix("-floor")  # the original (v1) fit was never floor-aligned; same shape
+                original = (PROJECT / "outputs" / "garments" / f"tshirt-{stem}-{base}.glb", AVATAR_DIR / f"{stem}-{base}.glb")
+                if not original[0].is_file():
+                    raise SystemExit(f"Per-body gates need the original personal fit {original[0]} (generate_tshirt.py --reconstruction ... with v1 rules).")
+            reports[variant] = write(args.out_dir, body, moved, rules, f"{prefix}-{stem}-{suffix}", garment_id, revision, True, "neutral", {"body_glb_validation": body_report}, AVATAR_DIR / f"{stem}-{suffix}.glb", original)
     print(json.dumps({variant: {"topology": r["topology"], "fit": r["fit_report"]} for variant, r in reports.items()}, indent=2, default=float))
     print(f"Total {time.perf_counter() - started:.1f} s")
     return 0

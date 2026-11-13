@@ -89,10 +89,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--garment", action="append", metavar="LABEL=PATH")
     parser.add_argument("--abd90-ramp-start", type=float, action="append", default=[], help="also evaluate the first garment with abd90 ramps starting here (what-if, sidecar copy in memory)")
+    parser.add_argument("--avatar", type=Path, default=AVATAR)
     parser.add_argument("--out", type=Path, default=PROJECT / "outputs" / "garment-tests" / "tshirt-arm-down.json")
     args = parser.parse_args()
     garments = dict(item.split("=", 1) for item in args.garment) if args.garment else {k: str(v) for k, v in GARMENTS.items()}
-    body = load_asset(AVATAR)
+    body = load_asset(args.avatar)
     results: dict[str, Any] = {"poses": {k: [list(r) for r in v] for k, v in poses().items()}, "garments": {}}
     first = None
     for label, path in garments.items():
