@@ -8,6 +8,7 @@ import { parseSidecar, type Sidecar } from "../../lib/garment/correctives";
 import { LocalGlbError, readLocalGlb, type LocalGlb } from "../../lib/localGlb";
 import type { CameraView } from "../avatar-lab/types";
 import { TryOnScene, type OutfitItem } from "./TryOnScene";
+import { FitPicker, MeasurementsForm, useSizes } from "../FitControls";
 
 const TOP_URL = "/api/demo-garment?variant=v5.2", BOTTOM_URL = "/api/demo-garment?variant=pants-v2";
 const NEUTRAL_URL = "/api/demo-avatar";
@@ -21,7 +22,7 @@ const colors = [
 ];
 const poses = [{ label: "Stand", value: "rest" }, { label: "Walk", value: "walk" }, { label: "Arms out", value: "both-90" }] as const;
 type Pose = (typeof poses)[number]["value"];
-type PersonalFit = { body: string; shirt: string; pants: string; shirtSidecar: Sidecar | null; pantsSidecar: Sidecar | null };
+type PersonalFit = { body: string; bodyId: string | null; shirt: string; pants: string; shirtSidecar: Sidecar | null; pantsSidecar: Sidecar | null };
 
 async function loadPersonalFit(): Promise<PersonalFit | null> {
   const response = await fetch("/api/personal-fit", { cache: "no-store" });
@@ -38,7 +39,7 @@ async function loadPersonalFit(): Promise<PersonalFit | null> {
     return parseSidecar(await result.json());
   }
   const [shirtSidecar, pantsSidecar] = await Promise.all([sidecar(data.shirtSidecar), sidecar(data.pantsSidecar)]);
-  return { body: data.body, shirt: data.shirt, pants: data.pants, shirtSidecar, pantsSidecar };
+  return { body: data.body, bodyId: typeof data.bodyId === "string" ? data.bodyId : null, shirt: data.shirt, pants: data.pants, shirtSidecar, pantsSidecar };
 }
 
 class SceneBoundary extends Component<{ children: ReactNode; onError: () => void }, { failed: boolean }> {
@@ -79,6 +80,9 @@ export function TryOn() {
   const selection = useRef(0);
   const stageRef = useRef<HTMLElement>(null);
   const activeFit = avatar === "personal" && personalSource === "manifest" ? personalFit : null;
+  const bodyId = avatar === "neutral" ? "neutral" : activeFit?.bodyId ?? null;
+  const topSizes = useSizes(bodyId, "top"), bottomSizes = useSizes(bodyId, "bottom");
+  const [heatmap, setHeatmap] = useState(false);
   const avatarUrl = activeFit?.body ?? (avatar === "personal" && personalSource === "file" && personal ? personal.url : NEUTRAL_URL);
   useEffect(() => {
     let active = true;
@@ -98,8 +102,8 @@ export function TryOn() {
   const onBottomReady = useCallback(() => setBottomReady(true), []);
   const onTopError = useCallback(() => { setTopReady(true); setMessage("This top could not be fitted to the selected avatar."); }, []);
   const onBottomError = useCallback(() => { setBottomReady(true); setMessage("These pants could not be fitted to the selected avatar."); }, []);
-  const top: OutfitItem | null = topEnabled && (activeFit || topSidecar !== undefined) ? { url: activeFit?.shirt ?? TOP_URL, color: topColor, sidecar: activeFit ? activeFit.shirtSidecar : topSidecar! } : null;
-  const bottom: OutfitItem | null = bottomEnabled && (activeFit || (bottomAvailability === "available" && bottomSidecar !== undefined)) ? { url: activeFit?.pants ?? BOTTOM_URL, color: bottomColor, sidecar: activeFit ? activeFit.pantsSidecar : bottomSidecar! } : null;
+  const top: OutfitItem | null = topEnabled && (topSizes.garment || activeFit || topSidecar !== undefined) ? { url: topSizes.garment?.url ?? activeFit?.shirt ?? TOP_URL, color: topColor, sidecar: topSizes.garment?.sidecar ?? (activeFit ? activeFit.shirtSidecar : topSidecar!) } : null;
+  const bottom: OutfitItem | null = bottomEnabled && (bottomSizes.garment || activeFit || (bottomAvailability === "available" && bottomSidecar !== undefined)) ? { url: bottomSizes.garment?.url ?? activeFit?.pants ?? BOTTOM_URL, color: bottomColor, sidecar: bottomSizes.garment?.sidecar ?? (activeFit ? activeFit.pantsSidecar : bottomSidecar!) } : null;
   const outfitReady = avatarReady && (!topEnabled || topReady) && (!bottomEnabled || (!activeFit && (bottomAvailability === "missing" || bottomAvailability === "error")) || bottomReady);
   const showTop = (enabled: boolean) => { if (enabled) setTopReady(false); setTopEnabled(enabled); };
   const showBottom = (enabled: boolean) => { if (enabled) setBottomReady(false); setBottomEnabled(enabled); };
@@ -127,7 +131,7 @@ export function TryOn() {
   return <main className="try-page">
     <section className="try-stage" ref={stageRef} aria-label="3D outfit preview">
       <div className="try-stage-top"><Link href="/" className="try-brand"><span className="try-brand-icon">v<span>.</span></span><span>virtual<br />wardrobe</span></Link><span className="try-stage-caption">THE FITTING ROOM <i /> 01</span></div>
-      <div className={outfitReady || avatarFailed ? "try-viewport ready" : "try-viewport"}><SceneBoundary key={avatarUrl} onError={onAvatarError}><Suspense fallback={null}><TryOnScene key={avatarUrl} stageRef={stageRef} avatarUrl={avatarUrl} pose={pose} top={top} bottom={bottom} view={view} turntable={turntable} onAvatarReady={onAvatarReady} onTopReady={onTopReady} onBottomReady={onBottomReady} onTopError={onTopError} onBottomError={onBottomError} /></Suspense></SceneBoundary></div>
+      <div className={outfitReady || avatarFailed ? "try-viewport ready" : "try-viewport"}><SceneBoundary key={avatarUrl} onError={onAvatarError}><Suspense fallback={null}><TryOnScene key={avatarUrl} stageRef={stageRef} avatarUrl={avatarUrl} pose={pose} top={top} bottom={bottom} heatmap={heatmap} view={view} turntable={turntable} onAvatarReady={onAvatarReady} onTopReady={onTopReady} onBottomReady={onBottomReady} onTopError={onTopError} onBottomError={onBottomError} /></Suspense></SceneBoundary></div>
       {!outfitReady && !avatarFailed && <div className="try-stage-loading" role="status">Preparing your fitting room<span>...</span><span className="try-loading-bar" aria-hidden="true"><i /></span></div>}
       <div className="try-stage-bottom"><div><span className="try-eyebrow light">YOUR PERSPECTIVE</span><p>Make it yours.</p></div><span className="try-drag-hint">DRAG TO ROTATE <ArrowClockwise size={17} /></span></div>
       <div className="try-camera" aria-label="Camera views"><button onClick={() => changeView("front")}>Front</button><button onClick={() => changeView("left")}>Side</button><button onClick={() => changeView("back")}>Back</button><span className="try-camera-rule" /><button className={turntable ? "active" : ""} aria-pressed={turntable} onClick={() => setTurntable(!turntable)}><ArrowsClockwise size={16} /> 360°</button></div>
@@ -137,7 +141,10 @@ export function TryOn() {
         <header className="try-heading"><span className="try-eyebrow">THE VIRTUAL FITTING ROOM</span><h1>Make yourself<br /><em>at home.</em></h1><p>Good style starts with a little exploration. Find a look that feels like you.</p></header>
         <div className="try-section-heading"><div><span className="try-eyebrow">THE EDIT</span><h2>Your outfit<span>.</span></h2></div><span className="try-section-label">01 / 03</span></div>
         <OutfitSlot number="01" name="Top" description="The everyday T-shirt" enabled={topEnabled} onEnabled={showTop} color={topColor} onColor={setTopColor} available />
+        <FitPicker title="Top" options={topSizes.options} selected={topSizes.size} onSize={topSizes.setSize} />
         <OutfitSlot number="02" name="Bottom" description="The essential pants" enabled={bottomEnabled} onEnabled={showBottom} color={bottomColor} onColor={setBottomColor} available={!!activeFit || bottomAvailability === "available" || bottomAvailability === "checking"} />
+        <FitPicker title="Bottom" options={bottomSizes.options} selected={bottomSizes.size} onSize={bottomSizes.setSize} />
+        <label className="fit-heatmap"><input type="checkbox" checked={heatmap} onChange={event => setHeatmap(event.target.checked)} /> Fit heatmap <span>Red: tight · Green: good · Blue: loose</span></label>
         <div className="try-divider" />
         <div className="try-section-heading compact"><div><span className="try-eyebrow">SEE THE FIT</span><h2>Strike a pose<span>.</span></h2></div><span className="try-section-label">02 / 03</span></div>
         <div className="try-pose-group" role="group" aria-label="Pose">{poses.map(item => <button key={item.value} type="button" aria-pressed={pose === item.value} className={pose === item.value ? "selected" : ""} onClick={() => setPose(item.value)}>{item.label}</button>)}</div>
@@ -146,6 +153,7 @@ export function TryOn() {
         <div className="try-avatar-options"><button type="button" className={avatar === "neutral" ? "selected" : ""} onClick={() => { selection.current++; if (avatar !== "neutral") switchAvatar("neutral"); }}><span>Neutral avatar</span>{avatar === "neutral" && <Check size={16} />}</button><button type="button" className={avatar === "personal" ? "selected" : ""} onClick={() => { if (avatar !== "personal" || personalSource !== "manifest") void selectPersonalFit(); }}><span>My avatar</span>{avatar === "personal" && <Check size={16} />}</button></div>
         <label htmlFor="try-avatar-file" className="try-upload"><UploadSimple size={17} /> {personal ? "Choose a different avatar" : "Choose your avatar file"}</label><input className="try-sr-only" id="try-avatar-file" type="file" accept=".glb,model/gltf-binary" onChange={chooseAvatar} />
         <p className="try-hint">Your GLB stays on this device. Garments need a matching avatar fit.</p>
+        <MeasurementsForm />
         {message && <p className="try-message" role="status">{message}</p>}
         <footer className="try-footer"><span>VIRTUAL WARDROBE</span><span>MADE FOR YOUR WORLD&nbsp; ✳</span></footer>
       </div>

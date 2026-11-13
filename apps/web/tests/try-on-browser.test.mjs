@@ -41,6 +41,7 @@ try {
     throw new Error(`Timed out: ${label}`);
   }
   await send("Page.enable"); await send("Runtime.enable"); await send("Network.enable");
+  if (process.env.TEST_FIT_SIZES === "1") await send("Page.addScriptToEvaluateOnNewDocument", { source: `window.__fitShaders = []; for (const p of [WebGLRenderingContext.prototype, WebGL2RenderingContext.prototype]) { const source = p.shaderSource, compile = p.compileShader; p.shaderSource = function(s, text) { if (text.includes('vEaseMm')) s.__fit = true; return source.call(this, s, text); }; p.compileShader = function(s) { compile.call(this, s); if (s.__fit) window.__fitShaders.push({ok: this.getShaderParameter(s, this.COMPILE_STATUS), log: this.getShaderInfoLog(s)}); }; }` });
   await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
   await send("Page.navigate", { url: process.env.TRY_ON_URL ?? "http://localhost:3000/try-on" });
   await waitFor("!!document.querySelector('.try-stage-loading') && getComputedStyle(document.querySelector('.try-viewport')).position === 'absolute'", "styled loading indicator");
@@ -53,6 +54,15 @@ try {
   }
   assert.ok(loaded, "Try-on did not finish loading");
   assert.deepEqual(await evaluate("(() => { const r = document.querySelector('.try-stage').getBoundingClientRect(); return [r.width, r.height]; })()"), initialStage, "loading must not change stage dimensions");
+  if (process.env.TEST_FIT_SIZES === "1") {
+    await waitFor("document.querySelector('[aria-label=\"Top fit\"] button[aria-pressed=\"true\"]')?.textContent === 'M' && document.querySelector('[aria-label=\"Bottom fit\"] button[aria-pressed=\"true\"]')?.textContent === 'M'", "recommended sizes");
+    assert.ok(await evaluate("document.querySelector('[aria-label=\"Top fit\"]').textContent.includes('Recommended') && document.body.innerText.includes('Chest: good fit, 10.0 cm ease')"));
+    await evaluate("[...document.querySelectorAll('[aria-label=\"Top fit\"] button')].find(e=>e.textContent==='L').click(); document.querySelector('.fit-heatmap input').click()");
+    await waitFor("document.querySelector('[aria-label=\"Top fit\"] button[aria-pressed=\"true\"]')?.textContent === 'L' && window.__fitShaders.length > 0", "size selection and heatmap shader");
+    assert.ok((await evaluate("window.__fitShaders")).every(shader => shader.ok), "heatmap shaders compile successfully");
+    assert.ok(requests.some(url => url.includes("size=L") && url.includes("asset=glb")), "selected size GLB requested");
+    console.log("Recommended sizes, size selection, fit summary and heatmap shader passed");
+  }
   if (process.env.TEST_PERSONAL_FALLBACK === "1") {
     await evaluate("[...document.querySelectorAll('button')].find(e => e.textContent.includes('My avatar')).click()");
     await waitFor("document.body.innerText.includes('No personal fit found') && !!document.querySelector('#try-avatar-file')", "personal fallback");
@@ -87,6 +97,10 @@ try {
   }
   await send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
   await send("Page.navigate", { url: new URL("/lab", process.env.TRY_ON_URL ?? "http://localhost:3000/try-on").href });
+  if (process.env.TEST_FIT_SIZES === "1") {
+    await waitFor("!!document.querySelector('.lab-fit-controls input')", "lab fit controls");
+    await evaluate("document.querySelector('.lab-fit-controls input').click()");
+  }
   await waitFor("document.querySelector('#garment-select')?.value === 'v5.2' && document.querySelector('#pants-select')?.value === 'pants-v2' && document.body.innerText.includes('corr_L_add20')", "lab defaults and v5.2 targets");
   await evaluate("(()=>{const e=document.querySelector('#garment-select'); e.value='v5.1'; e.dispatchEvent(new Event('change',{bubbles:true})); return true})()");
   await waitFor("document.querySelector('#garment-select')?.value === 'v5.1' && document.body.innerText.includes('corr_L_hip90') && !document.body.innerText.includes('corr_L_add20')", "v5.1 selection");

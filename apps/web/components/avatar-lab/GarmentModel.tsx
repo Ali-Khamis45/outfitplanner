@@ -7,6 +7,7 @@ import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { createCorrectiveDriver, type Sidecar } from "../../lib/garment/correctives";
 import { bindGarment } from "../../lib/garment/binding";
 import { applyMeshInspection } from "../../lib/garment/inspection";
+import { configureHeatmap } from "../../lib/garment/heatmap";
 import type { LoadedRig } from "./AvatarModel";
 import type { GarmentInfo } from "./types";
 
@@ -18,7 +19,7 @@ export class GarmentErrorBoundary extends Component<{ children: ReactNode; onErr
   render() { return this.state.failed ? null : this.props.children; }
 }
 
-export function GarmentModel({ url, rig, color, visible, wireframe, inspection, onReady, sidecar, correctives, onWeights, layer }: { url: string; rig: LoadedRig; color: string; visible: boolean; wireframe: boolean; inspection: boolean; onReady: (info: GarmentInfo) => void; sidecar: Sidecar | null; correctives: boolean; onWeights: (weights: Record<string, number>) => void; layer: "upper" | "lower" }) {
+export function GarmentModel({ url, rig, color, visible, wireframe, inspection, onReady, sidecar, correctives, onWeights, layer, heatmap = false }: { url: string; rig: LoadedRig; color: string; visible: boolean; wireframe: boolean; inspection: boolean; onReady: (info: GarmentInfo) => void; sidecar: Sidecar | null; correctives: boolean; onWeights: (weights: Record<string, number>) => void; layer: "upper" | "lower"; heatmap?: boolean }) {
   const gltf = useGLTF(url);
   const invalidate = useThree((state) => state.invalidate);
   const garment = useMemo(() => {
@@ -56,6 +57,7 @@ export function GarmentModel({ url, rig, color, visible, wireframe, inspection, 
   useEffect(() => { invalidate(); }, [drive, correctives, invalidate]);
   useEffect(() => { onReady(garment.info); }, [garment, onReady]);
   useEffect(() => { garment.material.color.set(color); invalidate(); }, [garment, color, invalidate]);
+  useEffect(() => { configureHeatmap(garment.material, garment.mesh.geometry, heatmap); invalidate(); }, [garment, heatmap, invalidate]);
   useEffect(() => { applyMeshInspection(garment.mesh, wireframe, inspection); invalidate(); }, [garment, wireframe, inspection, invalidate]);
   useEffect(() => { invalidate(); }, [visible, invalidate]);
   useEffect(() => () => { garment.material.dispose(); }, [garment]); // geometry belongs to the loader cache
