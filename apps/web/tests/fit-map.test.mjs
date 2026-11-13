@@ -7,10 +7,19 @@ import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.j
 import { easeAttributeName, formatRegion, parseFitMap } from "../lib/garment/fitMap.ts";
 import { configureHeatmap } from "../lib/garment/heatmap.ts";
 import { compressGlb } from "../asset-compression/compress.mjs";
+import { fixtureEase } from "./fixture-ease.mjs";
+
+assert.ok(fixtureEase("tshirt-v5.2", "S", 1.34) <= -20, "S chest displays tight red");
+assert.ok(fixtureEase("tshirt-v5.2", "XL", 1.34) >= 40, "XL chest displays loose blue");
+for (const garment of ["tshirt-v5.2", "pants-v2"]) for (const size of ["S", "M", "L", "XL"]) {
+  for (let y = 0.1; y < 1.5; y += 0.001) assert.ok(Math.abs(fixtureEase(garment, size, y + 0.001) - fixtureEase(garment, size, y)) < 1, "fixture field varies smoothly");
+}
 
 const fit = parseFitMap({ version: 1, garment: "tshirt", size: "M", body: "mhr-neutral", regions: { chest: { ease_mm: 62, status: "good" }, length: { delta_mm: -15, status: "tight" } }, recommended: true });
-assert.equal(formatRegion("chest", fit.regions.chest), "Chest: good fit, 6.2 cm ease");
-assert.equal(formatRegion("length", fit.regions.length), "Length: 1.5 cm short");
+assert.equal(formatRegion("chest", { ease_mm: 62, status: "tight" }, "tshirt-v5.2"), "Chest: tight, 6.2 cm ease (min 7.6 cm)");
+assert.equal(formatRegion("hips", { ease_mm: 40, status: "tight" }, "pants-v2"), "Hips: tight, 4.0 cm ease (min 5.1 cm)");
+assert.equal(formatRegion("waist", { ease_mm: -10, status: "tight" }, "pants-v2"), "Waist: tight, -1.0 cm ease (min 0.0 cm)");
+assert.equal(formatRegion("length", fit.regions.length, "tshirt-v5.2"), "Length: 1.5 cm short (min -4.0 cm from target)");
 assert.throws(() => parseFitMap({ ...fit, regions: { chest: { ease_mm: 3, status: "unknown" } } }));
 assert.equal(easeAttributeName(["position", "_ease_mm"]), "_ease_mm");
 assert.equal(easeAttributeName(["_EASE_MM"]), "_EASE_MM");

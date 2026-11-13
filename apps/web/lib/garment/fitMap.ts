@@ -16,13 +16,19 @@ export function parseFitMap(value: unknown): FitMap {
   return data;
 }
 
-export function formatRegion(name: string, region: Region): string {
+export function formatRegion(name: string, region: Region, garment: string): string {
   const label = name.replaceAll("_", " ").replace(/^./, char => char.toUpperCase());
+  const minima: Record<string, Record<string, number>> = {
+    "tshirt-v5.2": { chest: 76, waist: 76, hips: 51, shoulders: 0, length: -40 },
+    "pants-v2": { waist: 0, hips: 51, length: -40 },
+  };
+  const minimum = region.status === "tight" ? minima[garment]?.[name] : undefined;
+  const suffix = minimum === undefined ? "" : ` (min ${(minimum / 10).toFixed(1)} cm${name === "length" ? " from target" : ""})`;
   if (name === "length") {
     const cm = Math.abs(region.delta_mm ?? 0) / 10;
-    return `${label}: ${cm.toFixed(1)} cm ${region.delta_mm === 0 ? "on target" : (region.delta_mm ?? 0) < 0 ? "short" : "long"}`;
+    return `${label}: ${cm.toFixed(1)} cm ${region.delta_mm === 0 ? "on target" : (region.delta_mm ?? 0) < 0 ? "short" : "long"}${suffix}`;
   }
-  return `${label}: ${region.status} fit, ${((region.ease_mm ?? 0) / 10).toFixed(1)} cm ease`;
+  return `${label}: ${region.status}, ${((region.ease_mm ?? 0) / 10).toFixed(1)} cm ease${suffix}`;
 }
 
 export function easeAttributeName(names: string[]): string | undefined {

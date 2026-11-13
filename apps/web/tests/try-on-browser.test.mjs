@@ -41,7 +41,18 @@ try {
     throw new Error(`Timed out: ${label}`);
   }
   await send("Page.enable"); await send("Runtime.enable"); await send("Network.enable");
-  if (process.env.TEST_FIT_SIZES === "1") await send("Page.addScriptToEvaluateOnNewDocument", { source: `window.__fitShaders = []; for (const p of [WebGLRenderingContext.prototype, WebGL2RenderingContext.prototype]) { const source = p.shaderSource, compile = p.compileShader; p.shaderSource = function(s, text) { if (text.includes('vEaseMm')) s.__fit = true; return source.call(this, s, text); }; p.compileShader = function(s) { compile.call(this, s); if (s.__fit) window.__fitShaders.push({ok: this.getShaderParameter(s, this.COMPILE_STATUS), log: this.getShaderInfoLog(s)}); }; }` });
+  if (process.env.TEST_FIT_SIZES === "1") await send("Page.addScriptToEvaluateOnNewDocument", { source: `
+    window.__fitShaders = []; window.__easeDraws = [];
+    for (const p of [WebGLRenderingContext.prototype, WebGL2RenderingContext.prototype]) {
+      const source = p.shaderSource, compile = p.compileShader, data = p.bufferData, pointer = p.vertexAttribPointer, location = p.getAttribLocation, draw = p.drawElements;
+      const buffers = new WeakMap(), locations = new WeakMap(), bindings = new WeakMap();
+      p.shaderSource = function(s, text) { if (text.includes('vEaseMm')) s.__fit = true; return source.call(this, s, text); };
+      p.compileShader = function(s) { compile.call(this, s); if (s.__fit) window.__fitShaders.push({ok: this.getShaderParameter(s, this.COMPILE_STATUS), log: this.getShaderInfoLog(s)}); };
+      p.bufferData = function(target, value, ...rest) { if (target === this.ARRAY_BUFFER && ArrayBuffer.isView(value)) { const buffer = this.getParameter(this.ARRAY_BUFFER_BINDING); if (buffer) buffers.set(buffer, Array.from(new Float32Array(value.buffer, value.byteOffset, Math.floor(value.byteLength / 4))).slice(0, 16)); } return data.call(this, target, value, ...rest); };
+      p.getAttribLocation = function(program, name) { const result = location.call(this, program, name); if (name.toLowerCase() === '_ease_mm') locations.set(program, result); return result; };
+      p.vertexAttribPointer = function(index, ...args) { bindings.set(this, { ...(bindings.get(this) || {}), [index]: this.getParameter(this.ARRAY_BUFFER_BINDING) }); return pointer.call(this, index, ...args); };
+      p.drawElements = function(...args) { const program = this.getParameter(this.CURRENT_PROGRAM), index = locations.get(program), buffer = bindings.get(this)?.[index], values = buffers.get(buffer); if (index !== undefined && values) { const signature = JSON.stringify(values); if (!window.__easeDraws.includes(signature)) window.__easeDraws.push(signature); } return draw.call(this, ...args); };
+    }` });
   await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
   await send("Page.navigate", { url: process.env.TRY_ON_URL ?? "http://localhost:3000/try-on" });
   await waitFor("!!document.querySelector('.try-stage-loading') && getComputedStyle(document.querySelector('.try-viewport')).position === 'absolute'", "styled loading indicator");
@@ -56,11 +67,16 @@ try {
   assert.deepEqual(await evaluate("(() => { const r = document.querySelector('.try-stage').getBoundingClientRect(); return [r.width, r.height]; })()"), initialStage, "loading must not change stage dimensions");
   if (process.env.TEST_FIT_SIZES === "1") {
     await waitFor("document.querySelector('[aria-label=\"Top fit\"] button[aria-pressed=\"true\"]')?.textContent === 'M' && document.querySelector('[aria-label=\"Bottom fit\"] button[aria-pressed=\"true\"]')?.textContent === 'M'", "recommended sizes");
-    assert.ok(await evaluate("document.querySelector('[aria-label=\"Top fit\"]').textContent.includes('Recommended') && document.body.innerText.includes('Chest: good fit, 10.0 cm ease')"));
-    await evaluate("[...document.querySelectorAll('[aria-label=\"Top fit\"] button')].find(e=>e.textContent==='L').click(); document.querySelector('.fit-heatmap input').click()");
-    await waitFor("document.querySelector('[aria-label=\"Top fit\"] button[aria-pressed=\"true\"]')?.textContent === 'L' && window.__fitShaders.length > 0", "size selection and heatmap shader");
+    assert.ok(await evaluate("document.querySelector('[aria-label=\"Top fit\"] button[aria-label=\"M, Recommended\"]') && document.body.innerText.includes('Chest: good, 10.0 cm ease')"));
+    await evaluate("document.querySelector('.fit-heatmap input').click()");
+    await waitFor("window.__easeDraws.length > 0", "rendered M ease attribute");
+    const initialEase = await evaluate("window.__easeDraws.slice()");
+    await evaluate("document.querySelector('[aria-label=\"Top fit\"] button[aria-label=\"S\"]').click()");
+    await waitFor("document.querySelector('[aria-label=\"Top fit\"] button[aria-label=\"S\"]').getAttribute('aria-pressed') === 'true' && document.body.innerText.includes('Chest: tight, 6.2 cm ease (min 7.6 cm)') && window.__easeDraws.length > " + initialEase.length, "rendered S ease attribute");
+    assert.ok((await evaluate("window.__easeDraws")).some(signature => !initialEase.includes(signature)), "rendered S ease values differ from M");
+    assert.ok(await evaluate("!!document.querySelector('[aria-label=\"Top fit\"] button[aria-label=\"M, Recommended\"] .fit-recommended-dot')"), "recommended marker remains on M when S is selected");
     assert.ok((await evaluate("window.__fitShaders")).every(shader => shader.ok), "heatmap shaders compile successfully");
-    assert.ok(requests.some(url => url.includes("size=L") && url.includes("asset=glb")), "selected size GLB requested");
+    assert.ok(requests.some(url => url.includes("size=S") && url.includes("asset=glb")), "selected size GLB requested");
     console.log("Recommended sizes, size selection, fit summary and heatmap shader passed");
   }
   if (process.env.TEST_PERSONAL_FALLBACK === "1") {

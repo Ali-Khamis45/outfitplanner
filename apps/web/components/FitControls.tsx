@@ -34,9 +34,9 @@ export function useSizes(body: string | null, slot: Slot, fixtures = false) {
 export function FitPicker({ title, options, selected, onSize }: { title: string; options: SizeOption[]; selected: Size | null; onSize: (size: Size) => void }) {
   const fit = options.find(option => option.size === selected)?.fit;
   return <section className="fit-picker" aria-label={`${title} fit`}>
-    <div className="fit-heading"><strong>{title} size</strong>{fit?.recommended && <span className="fit-badge">Recommended</span>}</div>
-    <div className="fit-sizes" role="group" aria-label={`${title} size`}>{SIZES.map(size => <button type="button" key={size} disabled={!options.some(option => option.size === size)} aria-pressed={selected === size} onClick={() => onSize(size)}>{size}</button>)}</div>
-    {fit ? <div className="fit-summary"><strong>Fit summary</strong>{Object.entries(fit.regions).map(([name, region]) => <p key={name}>{formatRegion(name, region)}</p>)}</div> : <p className="fit-unavailable">Size fits are not available yet.</p>}
+    <div className="fit-heading"><strong>{title} size</strong>{options.some(option => option.fit.recommended) && <span>● Recommended</span>}</div>
+    <div className="fit-sizes" role="group" aria-label={`${title} size`}>{SIZES.map(size => { const recommended = options.some(option => option.size === size && option.fit.recommended); return <button type="button" key={size} disabled={!options.some(option => option.size === size)} aria-label={recommended ? `${size}, Recommended` : size} aria-pressed={selected === size} onClick={() => onSize(size)}>{size}{recommended && <span className="fit-recommended-dot" aria-hidden="true" title="Recommended" />}</button>; })}</div>
+    {fit ? <div className="fit-summary"><strong>Fit summary</strong>{Object.entries(fit.regions).map(([name, region]) => <p key={name}>{formatRegion(name, region, fit.garment)}</p>)}</div> : <p className="fit-unavailable">Size fits are not available yet.</p>}
   </section>;
 }
 
