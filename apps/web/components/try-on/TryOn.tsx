@@ -50,17 +50,18 @@ class SceneBoundary extends Component<{ children: ReactNode; onError: () => void
   render() { return this.state.failed ? <div className="try-stage-message">This avatar could not be displayed. Please choose another file.</div> : this.props.children; }
 }
 
-function OutfitSlot({ number, name, description, enabled, onEnabled, color, onColor, available }: {
+function OutfitSlot({ number, name, description, enabled, onEnabled, color, onColor, available, hasOriginal, original, onOriginal }: {
   number: string; name: string; description: string; enabled: boolean; onEnabled: (value: boolean) => void;
-  color: string; onColor: (value: string) => void; available: boolean;
+  color: string; onColor: (value: string) => void; available: boolean; hasOriginal: boolean; original: boolean; onOriginal: () => void;
 }) {
   return <section className="try-slot" aria-label={name}>
     <div className="try-slot-heading"><span className="try-slot-number">{number}</span><div><h3>{name}</h3><p>{description}</p></div>
       <label className="try-switch"><span className="try-sr-only">Show {name.toLowerCase()}</span><input type="checkbox" checked={enabled} disabled={!available} onChange={event => onEnabled(event.target.checked)} /><span aria-hidden="true" /></label>
     </div>
-    <div className="try-color-heading"><span>COLOUR</span><span>{colors.find(item => item.value.toLowerCase() === color.toLowerCase())?.name ?? color}</span></div>
+    <div className="try-color-heading"><span>COLOUR</span><span>{original ? "Original" : colors.find(item => item.value.toLowerCase() === color.toLowerCase())?.name ?? color}</span></div>
     <div className="try-swatches" role="group" aria-label={`${name} colour`}>
-      {colors.map(item => <button key={item.value} type="button" title={item.name} aria-label={`${name}: ${item.name}`} aria-pressed={color === item.value} disabled={!enabled || !available} className={color === item.value ? "try-swatch selected" : "try-swatch"} onClick={() => onColor(item.value)}><span style={{ backgroundColor: item.value }} /></button>)}
+      {hasOriginal && <button type="button" title="Original texture" aria-label={`${name}: Original`} aria-pressed={original} disabled={!enabled || !available} className={original ? "try-swatch selected try-original" : "try-swatch try-original"} onClick={onOriginal}><span aria-hidden="true" /></button>}
+      {colors.map(item => <button key={item.value} type="button" title={item.name} aria-label={`${name}: ${item.name}`} aria-pressed={!original && color === item.value} disabled={!enabled || !available} className={!original && color === item.value ? "try-swatch selected" : "try-swatch"} onClick={() => onColor(item.value)}><span style={{ backgroundColor: item.value }} /></button>)}
     </div>
     {!available && <p className="try-hint">Pants are not available yet.</p>}
   </section>;
@@ -70,6 +71,7 @@ export function TryOn({ textureFixture = false, fixtures = false, outfitId = nul
   const [topEnabled, setTopEnabled] = useState(true), [bottomEnabled, setBottomEnabled] = useState(true);
   const [topColor, setTopColor] = useState(colors[4].value), [bottomColor, setBottomColor] = useState(colors[1].value);
   const [topTexture, setTopTexture] = useState<string | null>(textureFixture ? "fixture:/shirt.png" : null), [bottomTexture, setBottomTexture] = useState<string | null>(textureFixture ? "fixture:/pants.png" : null);
+  const [topOriginal, setTopOriginal] = useState(true), [bottomOriginal, setBottomOriginal] = useState(true);
   const [topSidecar, setTopSidecar] = useState<Sidecar | null | undefined>(undefined), [bottomSidecar, setBottomSidecar] = useState<Sidecar | null | undefined>(undefined);
   const [bottomAvailability, setBottomAvailability] = useState<"checking" | "available" | "missing" | "error">("checking");
   const [pose, setPose] = useState<Pose>("rest"), [turntable, setTurntable] = useState(false);
@@ -99,8 +101,8 @@ export function TryOn({ textureFixture = false, fixtures = false, outfitId = nul
       setTopEnabled(topSupported); setBottomEnabled(bottomSupported);
       setOutfitSizes({ top: topSupported ? topItem.size.trim().toUpperCase() : "", bottom: bottomSupported ? bottomItem.size.trim().toUpperCase() : "" });
       const mainColor = (item: NonNullable<typeof topItem>) => item.colors.reduce((best, color) => color.share > best.share ? color : best).hex;
-      if (topSupported) { setTopColor(mainColor(topItem)); setTopTexture(topItem.texture ?? null); }
-      if (bottomSupported) { setBottomColor(mainColor(bottomItem)); setBottomTexture(bottomItem.texture ?? null); }
+      if (topSupported) { setTopColor(mainColor(topItem)); setTopTexture(topItem.texture ?? null); setTopOriginal(true); }
+      if (bottomSupported) { setBottomColor(mainColor(bottomItem)); setBottomTexture(bottomItem.texture ?? null); setBottomOriginal(true); }
       if (!topSupported || !bottomSupported) setMessage("Some pieces have no supported 3D template. Add tshirt-v5.2 for a top or pants-basic-v2 for a bottom to preview them.");
       else setMessage(`Showing ${outfit.name} from your wardrobe.`);
     }).catch(error => { if (active) setMessage(error instanceof Error ? error.message : "Could not load the outfit."); });
@@ -125,8 +127,8 @@ export function TryOn({ textureFixture = false, fixtures = false, outfitId = nul
   const onBottomReady = useCallback(() => setBottomReady(true), []);
   const onTopError = useCallback(() => { setTopReady(true); setMessage("This top could not be fitted to the selected avatar."); }, []);
   const onBottomError = useCallback(() => { setBottomReady(true); setMessage("These pants could not be fitted to the selected avatar."); }, []);
-  const top: OutfitItem | null = topEnabled && (topSizes.garment || activeFit || topSidecar !== undefined) ? { url: topSizes.garment?.url ?? activeFit?.shirt ?? TOP_URL, color: topColor, texture: topTexture, sidecar: topSizes.garment?.sidecar ?? (activeFit ? activeFit.shirtSidecar : topSidecar!) } : null;
-  const bottom: OutfitItem | null = bottomEnabled && (bottomSizes.garment || activeFit || (bottomAvailability === "available" && bottomSidecar !== undefined)) ? { url: bottomSizes.garment?.url ?? activeFit?.pants ?? BOTTOM_URL, color: bottomColor, texture: bottomTexture, sidecar: bottomSizes.garment?.sidecar ?? (activeFit ? activeFit.pantsSidecar : bottomSidecar!) } : null;
+  const top: OutfitItem | null = topEnabled && (topSizes.garment || activeFit || topSidecar !== undefined) ? { url: topSizes.garment?.url ?? activeFit?.shirt ?? TOP_URL, color: topColor, texture: topOriginal ? topTexture : null, sidecar: topSizes.garment?.sidecar ?? (activeFit ? activeFit.shirtSidecar : topSidecar!) } : null;
+  const bottom: OutfitItem | null = bottomEnabled && (bottomSizes.garment || activeFit || (bottomAvailability === "available" && bottomSidecar !== undefined)) ? { url: bottomSizes.garment?.url ?? activeFit?.pants ?? BOTTOM_URL, color: bottomColor, texture: bottomOriginal ? bottomTexture : null, sidecar: bottomSizes.garment?.sidecar ?? (activeFit ? activeFit.pantsSidecar : bottomSidecar!) } : null;
   const outfitReady = avatarReady && (!topEnabled || topReady) && (!bottomEnabled || (!activeFit && (bottomAvailability === "missing" || bottomAvailability === "error")) || bottomReady);
   const showTop = (enabled: boolean) => { if (enabled) setTopReady(false); setTopEnabled(enabled); };
   const showBottom = (enabled: boolean) => { if (enabled) setBottomReady(false); setBottomEnabled(enabled); };
@@ -163,10 +165,10 @@ export function TryOn({ textureFixture = false, fixtures = false, outfitId = nul
       <div className="try-panel-inner"><div className="try-panel-top"><Link href="/" className="try-back"><ArrowLeft size={15} /> BACK</Link><Link href="/wardrobe">WARDROBE</Link></div>
         <header className="try-heading"><span className="try-eyebrow">THE VIRTUAL FITTING ROOM</span><h1>Make yourself<br /><em>at home.</em></h1><p>Good style starts with a little exploration. Find a look that feels like you.</p>{textureFixture && <p role="status">Synthetic texture fixtures are active.</p>}{fixtures && <p role="status">Synthetic size fixtures are active for the neutral avatar. Fit values and heatmap are illustrative.</p>}</header>
         <div className="try-section-heading"><div><span className="try-eyebrow">THE EDIT</span><h2>Your outfit<span>.</span></h2></div><span className="try-section-label">01 / 03</span></div>
-        <OutfitSlot number="01" name="Top" description="The everyday T-shirt" enabled={topEnabled} onEnabled={showTop} color={topColor} onColor={value => { setTopColor(value); setTopTexture(null); }} available />
+        <OutfitSlot number="01" name="Top" description="The everyday T-shirt" enabled={topEnabled} onEnabled={showTop} color={topColor} onColor={value => { setTopColor(value); setTopOriginal(false); }} hasOriginal={!!topTexture} original={!!topTexture && topOriginal} onOriginal={() => setTopOriginal(true)} available />
         <FitPicker title="Top" options={topSizes.options} selected={topSizes.size} onSize={topSizes.setSize} />
         {outfitSizes.top && topSizes.resolved && !topSizes.options.some(option => option.size === outfitSizes.top) && <p className="try-hint">Saved top size {outfitSizes.top} is unavailable for this avatar; showing the available default.</p>}
-        <OutfitSlot number="02" name="Bottom" description="The essential pants" enabled={bottomEnabled} onEnabled={showBottom} color={bottomColor} onColor={value => { setBottomColor(value); setBottomTexture(null); }} available={!!activeFit || bottomAvailability === "available" || bottomAvailability === "checking"} />
+        <OutfitSlot number="02" name="Bottom" description="The essential pants" enabled={bottomEnabled} onEnabled={showBottom} color={bottomColor} onColor={value => { setBottomColor(value); setBottomOriginal(false); }} hasOriginal={!!bottomTexture} original={!!bottomTexture && bottomOriginal} onOriginal={() => setBottomOriginal(true)} available={!!activeFit || bottomAvailability === "available" || bottomAvailability === "checking"} />
         <FitPicker title="Bottom" options={bottomSizes.options} selected={bottomSizes.size} onSize={bottomSizes.setSize} />
         {outfitSizes.bottom && bottomSizes.resolved && !bottomSizes.options.some(option => option.size === outfitSizes.bottom) && <p className="try-hint">Saved bottom size {outfitSizes.bottom} is unavailable for this avatar; showing the available default.</p>}
         <label className="fit-heatmap"><input type="checkbox" checked={heatmap} onChange={event => setHeatmap(event.target.checked)} /> Fit heatmap <span>Red: tight · Green: good · Blue: loose</span></label>

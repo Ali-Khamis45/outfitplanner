@@ -55,9 +55,10 @@ try {
   assert.equal((await request(handler, "POST", { ...capture, alignment: [1, 2] })).code, 400);
   await mkdir(path.join(root, "wardrobe/textures"), { recursive: true });
   await writeFile(path.join(root, "wardrobe/textures/test-1.png"), png);
-  await writeFile(path.join(root, "wardrobe/textures/test-1.texture.json"), JSON.stringify({ version: 1, item: "test-1", fallback_hex: "#123456" }));
+  const metadata = { version: 1, item: "test-1", template: "tshirt-v5.2", views: ["front", "back"], coverage: 0.75, fallback_hex: "#123456", created_at: "2026-11-14" };
+  await writeFile(path.join(root, "wardrobe/textures/test-1.texture.json"), JSON.stringify(metadata));
   assert.deepEqual((await request(handler, "GET", null, { texture: "test-1.png" })).body, png);
-  assert.deepEqual((await request(handler, "GET", null, { texture: "test-1.png", metadata: "1" })).body, { fallback_hex: "#123456" });
+  assert.deepEqual((await request(handler, "GET", null, { texture: "test-1.png", metadata: "1" })).body, metadata);
   assert.equal((await request(handler, "GET", null, { texture: "../test-1.png" })).code, 404);
   assert.equal((await request(handler, "GET", null, { texture: "missing.png" })).code, 404);
   await mkdir(path.join(root, "garments/experiments"), { recursive: true });

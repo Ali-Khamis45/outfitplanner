@@ -15,3 +15,9 @@ Branch: `sprint-4-photo-web`, based on `39de031` (`sprint-5-wardrobe-web`).
 - After the web changes: typecheck, lint, build, and full `npm test` passed. Wardrobe tests cover the optional path, capture alignment persistence, texture access, invalid paths and local-only access.
 - Browser visual verification was blocked: the browser access host was unavailable, and the headless browser inspection did not reach a loaded 3D scene. The fixture's logo is placed using the torso UV mapping, but its upright front-chest appearance has **not** been verified. Capture alignment, texture alpha, heatmap transitions, and correctives also need an interactive browser pass with the producer's real output before treating the integration as complete.
 - No producer was implemented. Personal photos and generated fixture images remain in ignored outputs.
+
+## Browser follow-up
+
+- The compressor stripped UVs from assets without embedded textures, including externally textured garments. Compression now retains UVs and uses a new cache key.
+- A headless Chrome frame confirmed stripes on both garments and an upright F on the shirt front chest after correcting the fixture artwork. The optional `npm run test:texture-browser --workspace @virtual-wardrobe/web` samples chest pixels and exercises the flat-colour and Original selections. Generate fixtures and start the development server before running it.
+- Texture metadata responses now return the complete producer object. The capture UI and producer integration still require an interactive end-to-end check with actual photographs.

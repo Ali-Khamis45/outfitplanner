@@ -22,7 +22,7 @@ export function createWardrobeHandler(outputs = path.resolve(process.cwd(), "../
         if (path.dirname(image) !== directory || path.dirname(metadata) !== directory) return res.status(404).end();
         const info = JSON.parse(await readFile(metadata, "utf8"));
         if (info.version !== 1 || info.item !== name.slice(0, -4) || !/^#[0-9a-fA-F]{6}$/.test(info.fallback_hex)) return res.status(404).end();
-        if (req.query.metadata === "1") return res.status(200).json({ fallback_hex: info.fallback_hex });
+        if (req.query.metadata === "1") return res.status(200).json(info);
         res.setHeader("Content-Type", "image/png"); return res.status(200).send(await readFile(image));
       }
       if (req.method === "GET" && typeof req.query.photo === "string") {

@@ -15,9 +15,9 @@ function texture(shirt) {
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
     const offset = y * (size * 4 + 1) + 1 + x * 4, stripe = y % 128 < 52;
     let rgb = stripe ? [41, 63, 112] : [233, 227, 213];
-    if (shirt && x >= 570 && x < 658 && y >= 1350 && y < 1438) {
+    if (shirt && x >= 570 && x < 658 && y >= 1262 && y < 1526) {
       rgb = [232, 80, 53];
-      if ((x >= 590 && x < 599 && y >= 1370 && y < 1420) || (x >= 590 && x < 640 && y >= 1370 && y < 1379) || (x >= 590 && x < 625 && y >= 1393 && y < 1402)) rgb = [255, 255, 255];
+      if ((x >= 590 && x < 599 && y >= 1316 && y < 1478) || (x >= 590 && x < 640 && y >= 1451 && y < 1478) || (x >= 590 && x < 625 && y >= 1382 && y < 1409)) rgb = [255, 255, 255];
     }
     raw[offset] = rgb[0]; raw[offset + 1] = rgb[1]; raw[offset + 2] = rgb[2]; raw[offset + 3] = 255;
   }
