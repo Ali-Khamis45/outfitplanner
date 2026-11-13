@@ -1,6 +1,8 @@
 import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
+import { gzipSync } from "node:zlib";
 import type { NextApiRequest, NextApiResponse } from "next";
+import { compressGlb } from "../asset-compression/compress.mjs";
 
 type Asset = "body" | "shirt" | "pants" | "shirtSidecar" | "pantsSidecar";
 type Entries = Record<Asset, string | null>;
@@ -66,7 +68,19 @@ export function createPersonalFitHandler(outputsRoot = path.resolve(process.cwd(
       const file = await listedFile(outputsRoot, entry, asset);
       res.setHeader("Content-Type", asset.endsWith("Sidecar") ? "application/json" : "model/gltf-binary");
       if (req.method === "HEAD") return res.status(200).end();
-      return res.status(200).send(await readFile(file));
+      const bytes = await readFile(file);
+      if (asset.endsWith("Sidecar")) return res.status(200).send(bytes);
+      // Personal GLBs are compressed per request in memory, never written to a cache.
+      const compressed = Buffer.from(await compressGlb(bytes));
+      const accepts = req.headers["accept-encoding"] ?? "";
+      const gzip = accepts.split(",").map(value => value.trim()).find(value => /^gzip(?:\s*;|$)/i.test(value));
+      const quality = gzip?.match(/;\s*q=([\d.]+)/i);
+      res.setHeader("Vary", "Accept-Encoding");
+      if (gzip && (!quality || Number(quality[1]) > 0)) {
+        res.setHeader("Content-Encoding", "gzip");
+        return res.status(200).send(gzipSync(compressed));
+      }
+      return res.status(200).send(compressed);
     } catch { return res.status(404).end(); }
   };
 }

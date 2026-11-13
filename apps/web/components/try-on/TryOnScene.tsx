@@ -56,7 +56,7 @@ function TryOnCamera({ model, command, turntable, pose }: { model: ModelInfo | n
   return <OrbitControls ref={controls} makeDefault enableDamping dampingFactor={0.12} autoRotate={turntable} autoRotateSpeed={4} />;
 }
 
-function NeutralSkin({ rig }: { rig: LoadedRig }) {
+function WarmSkin({ rig }: { rig: LoadedRig }) {
   useEffect(() => {
     let root: Object3D | undefined = rig.rig.bones.values().next().value;
     if (!root) return;
@@ -114,7 +114,7 @@ export function TryOnScene({ stageRef, avatarUrl, pose, top, bottom, view, turnt
     <directionalLight position={[-3, 2, -3]} intensity={1.1} color="#d2dfd3" />
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.003, 0]} receiveShadow><circleGeometry args={[8, 64]} /><meshStandardMaterial color="#202321" roughness={1} /></mesh>
     <Suspense fallback={null}><AvatarModel url={avatarUrl} pose="rest" wireframe={false} inspection={false} skeleton={false} onReady={onReady} onRig={setRig} /></Suspense>
-    {rig && avatarUrl === "/api/demo-avatar" && <NeutralSkin rig={rig} />}
+    {rig && (avatarUrl === "/api/demo-avatar" || avatarUrl === "/api/personal-fit?asset=body") && <WarmSkin rig={rig} />}
     {rig && <PoseMotion rig={rig} pose={pose} />}
     {rig && top && <GarmentErrorBoundary key={`top|${top.url}|${rig.id}`} onError={onTopError}><Suspense fallback={null}><GarmentModel layer="upper" url={top.url} rig={rig} color={top.color} visible wireframe={false} inspection={false} onReady={onTopReady} sidecar={top.sidecar} correctives onWeights={ignoreWeights} /></Suspense></GarmentErrorBoundary>}
     {rig && bottom && <GarmentErrorBoundary key={`bottom|${bottom.url}|${rig.id}`} onError={onBottomError}><Suspense fallback={null}><GarmentModel layer="lower" url={bottom.url} rig={rig} color={bottom.color} visible wireframe={false} inspection={false} onReady={onBottomReady} sidecar={bottom.sidecar} correctives onWeights={ignoreWeights} /></Suspense></GarmentErrorBoundary>}
