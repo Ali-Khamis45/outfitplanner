@@ -73,6 +73,50 @@ class SwingAndWeightTests(unittest.TestCase):
         self.assertEqual([t for _, low, high in TARGETS for t in (low, high)], CONTRACT_NAMES)
 
 
+class SignedSwingTests(unittest.TestCase):
+    """Contract v2 §3b/§4 on the synthetic A-pose arm."""
+
+    def axis(self) -> list[float]:
+        from correctives import Z_AXIS, signed_axis
+
+        return signed_axis(arm_skeleton(), "l_uparm", "l_lowarm", Z_AXIS)
+
+    def test_signed_swing_is_positive_raising_and_negative_lowering(self) -> None:
+        from posing import signed_swing_deg
+
+        skeleton, axis = arm_skeleton(), self.axis()
+        self.assertEqual(signed_swing_deg(skeleton, skeleton.local, "l_uparm", "l_lowarm", axis), 0.0)
+        for degrees in (45, 90, -20):
+            local = pose_local(skeleton, [raise_arm("l", degrees)])
+            self.assertAlmostEqual(signed_swing_deg(skeleton, local, "l_uparm", "l_lowarm", axis), degrees, places=4)
+
+    def test_forward_swing_barely_changes_the_signed_measure(self) -> None:
+        from posing import signed_swing_deg
+
+        skeleton = arm_skeleton()
+        local = pose_local(skeleton, [raise_arm("l", -20), ("l_uparm", (1.0, 0.0, 0.0), 10.0)])
+        self.assertAlmostEqual(signed_swing_deg(skeleton, local, "l_uparm", "l_lowarm", self.axis()), -20.0, delta=0.5)
+
+    def test_reversed_ramp_and_version_rules(self) -> None:
+        skeleton = arm_skeleton()
+        entry = {"target": "corr_L_add20", "joint": "l_uparm", "child": "l_lowarm", "measure": "signed_swing_deg", "axis": self.axis(), "ramp": [0, -20]}
+        for degrees, expected in ((0, 0.0), (30, 0.0), (-10, 0.5), (-20, 1.0), (-30, 1.0)):
+            weights = corrective_weights({"version": 2, "correctives": [entry]}, skeleton, pose_local(skeleton, [raise_arm("l", degrees)]))
+            self.assertAlmostEqual(weights["corr_L_add20"], expected, places=3)
+        with self.assertRaises(ValueError):  # signed entries need a version 2 sidecar
+            corrective_weights({"version": 1, "correctives": [entry]}, skeleton, skeleton.local)
+        with self.assertRaises(ValueError):
+            corrective_weights({"version": 3, "correctives": []}, skeleton, skeleton.local)
+
+    def test_v1_spec_sidecars_are_unchanged(self) -> None:
+        from correctives import spec_sidecar
+        from pants import leg_corrective_specs
+
+        document = spec_sidecar(leg_corrective_specs())
+        self.assertEqual(document["version"], 1)
+        self.assertTrue(all(set(e) == {"target", "joint", "child", "measure", "ramp"} for e in document["correctives"]))
+
+
 class SkinningTests(unittest.TestCase):
     def test_dual_quaternions_equal_linear_blending_for_rigid_vertices(self) -> None:
         skeleton = arm_skeleton()
@@ -191,7 +235,10 @@ class GeneratedV51Tests(unittest.TestCase):
         self.assertEqual(list(v51.morphs), CONTRACT_NAMES + ["corr_L_hip90", "corr_R_hip90"])
         for name in CONTRACT_NAMES:  # shoulder targets unchanged
             np.testing.assert_array_equal(v51.morphs[name], v5.morphs[name])
-        self.assertEqual(v51.sidecar["correctives"], sidecar()["correctives"] + spec_sidecar(shirt_hip_specs())["correctives"])
+        from correctives import signed_shirt_sidecar
+
+        self.assertEqual(v51.sidecar, signed_shirt_sidecar(v51.skeleton, False))  # Sprint 2.2A: contract v2 sidecar
+        self.assertEqual([e["target"] for e in v51.sidecar["correctives"]], [e["target"] for e in sidecar()["correctives"] + spec_sidecar(shirt_hip_specs())["correctives"]])
         mine, base = accessor_bytes(V51_GARMENT), accessor_bytes(V2_GARMENT)
         for key in base:
             self.assertEqual(mine[key], base[key], key)
@@ -207,6 +254,41 @@ class GeneratedV51Tests(unittest.TestCase):
         step = corrective_weights(v51.sidecar, v51.skeleton, pose_local(v51.skeleton, LEG_POSES["step"]))
         self.assertGreater(step["corr_L_hip90"], 0.98)
         self.assertEqual(step["corr_R_hip90"], 0.0)
+
+
+V52_GARMENT = PROJECT / "outputs" / "garments" / "experiments" / "tshirt-v5.2-mhr-neutral.glb"
+
+
+@unittest.skipUnless(V52_GARMENT.is_file() and V51_GARMENT.is_file() and V2_GARMENT.is_file(), "generate the v5.2 shirt first")
+class GeneratedV52Tests(unittest.TestCase):
+    def test_v52_is_v51_plus_two_arm_down_targets(self) -> None:
+        from correctives import signed_shirt_sidecar
+        from evaluate_correctives import accessor_bytes
+
+        v51, v52 = load_asset(V51_GARMENT), load_asset(V52_GARMENT)
+        self.assertEqual(list(v52.morphs), list(v51.morphs) + ["corr_L_add20", "corr_R_add20"])
+        for name in v51.morphs:
+            np.testing.assert_array_equal(v52.morphs[name], v51.morphs[name])
+        self.assertEqual(v52.sidecar, signed_shirt_sidecar(v52.skeleton, True))
+        mine, base = accessor_bytes(V52_GARMENT), accessor_bytes(V2_GARMENT)
+        for key in base:
+            self.assertEqual(mine[key], base[key], key)
+
+    def test_arm_down_targets_follow_lowering_only(self) -> None:
+        v52 = load_asset(V52_GARMENT)
+        lowered = [("l_uparm", (0.0, 0.0, 1.0), -20.0), ("r_uparm", (0.0, 0.0, 1.0), 20.0)]
+        cases = {
+            "rest": ([], 0.0, 0.0),
+            "raise 90": ([raise_arm("l", 90), raise_arm("r", 90)], 0.0, 1.0),
+            "lowered 20": (lowered, 1.0, 0.0),
+            "lowered 20 + walk swing": (lowered + [("r_uparm", (1.0, 0.0, 0.0), -10.0), ("l_uparm", (1.0, 0.0, 0.0), 10.0)], 0.95, 0.0),
+        }
+        for label, (rotations, add, abd) in cases.items():
+            weights = corrective_weights(v52.sidecar, v52.skeleton, pose_local(v52.skeleton, rotations))
+            self.assertGreaterEqual(weights["corr_L_add20"], add - 0.01, label)  # -19.97 deg measured at a 20 deg lowering
+            if add == 0.0:
+                self.assertEqual(weights["corr_L_add20"], 0.0, label)
+            self.assertAlmostEqual(weights["corr_L_abd90"], abd, delta=0.01, msg=label)
 
 
 if __name__ == "__main__":

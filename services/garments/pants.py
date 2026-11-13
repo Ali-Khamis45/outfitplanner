@@ -401,7 +401,7 @@ def design_pants(body: RestBody, rules: PantsRules = PantsRules()) -> tuple[Oute
     return garment, marks
 
 
-def leg_corrective_specs(hip_ramp_start_deg: float = 20.0, hip_radii: tuple[float, float] = (0.18, 0.25), knee_radii: tuple[float, float] = (0.12, 0.17), anchor: float = 1.0, gate: str = "midline", knee_gate: str = "midline", influence_full_share: float = 0.1, hip_midline_cross_m: float = 0.0) -> tuple[Any, ...]:
+def leg_corrective_specs(hip_ramp_start_deg: float = 20.0, hip_radii: tuple[float, float] = (0.18, 0.25), knee_radii: tuple[float, float] = (0.12, 0.17), anchor: float = 1.0, gate: str = "midline", knee_gate: str = "midline", influence_full_share: float = 0.1, hip_midline_cross_m: float = 0.0, signed: bool = False) -> tuple[Any, ...]:
     """Hip-flexion and knee-flexion correctives per leg (corrective-morphs contract, swing-driven).
 
     Hip targets start their ramp at `hip_ramp_start_deg` so the 15-20 deg extension/abduction poses, which swing the
@@ -414,6 +414,12 @@ def leg_corrective_specs(hip_ramp_start_deg: float = 20.0, hip_radii: tuple[floa
     for side, tag in (("l", "L"), ("r", "R")):
         specs.append(CorrectiveSpec(f"corr_{tag}_hip90", f"{side}_upleg", f"{side}_lowleg", (hip_ramp_start_deg, 90.0), ((f"{side}_upleg", x, -90.0),), f"{side}_upleg", hip_radii[0], hip_radii[1], side, anchor, gate, influence_full_share, hip_midline_cross_m))
         specs.append(CorrectiveSpec(f"corr_{tag}_knee90", f"{side}_lowleg", f"{side}_foot", (0.0, 90.0), ((f"{side}_lowleg", x, 90.0),), f"{side}_lowleg", knee_radii[0], knee_radii[1], side, anchor, knee_gate, influence_full_share))
+    if signed:  # contract v2: hips measured as signed flexion (+X rotation is extension), knees as signed flexion
+        from dataclasses import replace as replace_spec
+
+        from correctives import NEG_X_AXIS, X_AXIS
+
+        specs = [replace_spec(spec, measure="signed_swing_deg", positive_rotation_axis=NEG_X_AXIS if "hip" in spec.target else X_AXIS) for spec in specs]
     return tuple(specs)
 
 
@@ -422,5 +428,5 @@ PANTS_2_1_FIELDS = ("gusset_lateral_m", "gusset_front_back_m", "gusset_cap_m", "
 # Sprint 2.1A pants v2: twist-folded crotch weights, diamond crotch gusset, turned-in cuffs; correctives with the
 # compressible (membrane) energy, triangle-based collision, larger regions and hip regions crossing the midline.
 PANTS_V2_RULES = PantsRules(merge_twist_weights=True, gusset_lateral_m=0.08, cuff_turn_in_m=0.04, hem_loop_smoothing_iterations=5)
-PANTS_V2_SPECS = {"anchor": 0.3, "knee_radii": (0.18, 0.26), "hip_radii": (0.22, 0.30), "hip_midline_cross_m": 0.07}
+PANTS_V2_SPECS = {"anchor": 0.3, "knee_radii": (0.18, 0.26), "hip_radii": (0.22, 0.30), "hip_midline_cross_m": 0.07, "signed": True}  # signed: contract v2 sidecar (Sprint 2.2A)
 PANTS_V2_CORRECTIVE_RULES = {"triangle_collision": True, "rest_edge_scale": 0.0}

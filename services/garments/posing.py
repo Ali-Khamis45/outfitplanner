@@ -88,15 +88,36 @@ def swing_deg(skeleton: Skeleton, local: np.ndarray, joint: str, child: str) -> 
     return 0.0 if swing < SWING_EPSILON_DEG else swing  # contract §3: round-off near rest counts as exactly 0
 
 
+def signed_swing_deg(skeleton: Skeleton, local: np.ndarray, joint: str, child: str, axis: Any) -> float:
+    """Contract v2 §3b: swing within the plane of the rest bone direction and `axis` (parent space), positive towards
+    the axis."""
+    j, c = skeleton.index(joint), skeleton.index(child)
+    d = skeleton.local[c][:3, 3]
+    rest = _rotation_part(skeleton.local[j]) @ d
+    now = _rotation_part(local[j]) @ d
+    rest, now = rest / np.linalg.norm(rest), now / np.linalg.norm(now)
+    a = np.asarray(axis, dtype=np.float64)
+    e = a - (a @ rest) * rest
+    norm = np.linalg.norm(e)
+    if norm < 1e-9:
+        raise ValueError(f"Corrective axis is parallel to the {joint} bone.")
+    angle = float(np.degrees(np.arctan2(now @ (e / norm), now @ rest)))
+    return 0.0 if abs(angle) < SWING_EPSILON_DEG else angle
+
+
 def corrective_weights(sidecar: dict[str, Any], skeleton: Skeleton, local: np.ndarray) -> dict[str, float]:
-    """Contract §4: weight = clamp((swing - ramp0) / (ramp1 - ramp0), 0, 1) per target."""
-    if sidecar.get("version") != 1:
+    """Contract §4: weight = clamp((s - ramp0) / (ramp1 - ramp0), 0, 1) per target; v2 adds signed_swing_deg."""
+    version = sidecar.get("version")
+    if version not in (1, 2):
         raise ValueError("Unsupported corrective sidecar version.")
     weights = {}
     for entry in sidecar["correctives"]:
-        if entry["measure"] != "swing_deg":
-            raise ValueError(f"Unsupported measure {entry['measure']!r}")
-        swing = swing_deg(skeleton, local, entry["joint"], entry["child"])
+        if entry["measure"] == "swing_deg":
+            swing = swing_deg(skeleton, local, entry["joint"], entry["child"])
+        elif entry["measure"] == "signed_swing_deg" and version == 2:
+            swing = signed_swing_deg(skeleton, local, entry["joint"], entry["child"], entry["axis"])
+        else:
+            raise ValueError(f"Unsupported measure {entry['measure']!r} in a version {version} sidecar")
         lo, hi = entry["ramp"]
         weights[entry["target"]] = float(np.clip((swing - lo) / (hi - lo), 0.0, 1.0))
     return weights

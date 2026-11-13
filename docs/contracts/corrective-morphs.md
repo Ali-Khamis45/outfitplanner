@@ -60,7 +60,7 @@ The sidecar is the source of truth: a consumer drives whatever targets it lists,
 | 2 | `corr_R_hip90` | `r_upleg` → `r_lowleg` | [20, 90] | `r_upleg` [1,0,0] −90 |
 | 3 | `corr_R_knee90` | `r_lowleg` → `r_foot` | [0, 90] | `r_lowleg` [1,0,0] +90 |
 
-Pants v2 (`pants-basic-v2-mhr-neutral.glb`, Sprint 2.1A) uses the same four names and ramps.
+Pants v2 (`pants-basic-v2-mhr-neutral.glb`, Sprint 2.1A) uses the same four names and ramps. Since Sprint 2.2A its sidecar is **version 2**: every entry is `signed_swing_deg` with the hip- or knee-flexion `axis` from §3b. Hip extension and abduction now give 0, and the ramps are unchanged. The 20° hip start remains a tuning choice: the target is solved at 90°, and from 0° it over-corrects at `squat`. The GLB is unchanged.
 
 The T-shirt **v5.1** (`tshirt-v5.1-mhr-neutral.glb`, Sprint 2.1A) has the four shoulder targets above, followed by two hem correctives (indices 4 and 5). They lift the front hem off the raised thigh:
 
@@ -69,7 +69,16 @@ The T-shirt **v5.1** (`tshirt-v5.1-mhr-neutral.glb`, Sprint 2.1A) has the four s
 | 4 | `corr_L_hip90` | `l_upleg` → `l_lowleg` | [20, 90] | `l_upleg` [1,0,0] −90 |
 | 5 | `corr_R_hip90` | `r_upleg` → `r_lowleg` | [20, 90] | `r_upleg` [1,0,0] −90 |
 
-`swing_deg` has no direction. The hip ramps therefore start at 20°, so hip extension (15°) and abduction (20°), which swing the thigh as much as a small flexion, leave the hip targets at 0. Each target is solved alone. In combined poses (for example `step` = hip 90 + knee 90) the weights simply add, as §4 says.
+Since Sprint 2.2A the v5.1 sidecar is **version 2**: the shoulder targets are `signed_swing_deg` with the abduction `axis` (ramps unchanged), and the hip targets are `signed_swing_deg` with the hip-flexion `axis` (ramp [20, 90]). The GLB is unchanged.
+
+The T-shirt **v5.2** (`tshirt-v5.2-mhr-neutral.glb`, Sprint 2.2A, version 2 sidecar) is v5.1 plus two arm-down targets for arms lowered towards the body (the /try-on Stand and Walk poses):
+
+| Index | Target | `joint` → `child` | `measure`, `axis` | `ramp` | Solved at |
+| --- | --- | --- | --- | --- | --- |
+| 6 | `corr_L_add20` | `l_uparm` → `l_lowarm` | `signed_swing_deg`, left abduction axis | [0, −20] | `l_uparm` [0,0,1] −20, also clearing the arm at ±10° about X |
+| 7 | `corr_R_add20` | `r_uparm` → `r_lowarm` | `signed_swing_deg`, right abduction axis | [0, −20] | `r_uparm` [0,0,1] +20, also clearing the arm at ±10° about X |
+
+In version 1 sidecars (v5, pants v1), `swing_deg` has no direction. The hip ramps therefore start at 20°, so hip extension (15°) and abduction (20°), which swing the thigh as much as a small flexion, leave the hip targets at 0. Each target is solved alone. In combined poses (for example `step` = hip 90 + knee 90) the weights simply add, as §4 says.
 
 ## 3. `swing_deg`
 

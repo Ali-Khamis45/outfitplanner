@@ -129,7 +129,7 @@ def _triangle_signed_distance(points: np.ndarray, body: np.ndarray, body_faces: 
     return signed, normals
 
 
-def _arap(rest: np.ndarray, start: np.ndarray, faces: np.ndarray, free: np.ndarray, body: np.ndarray, body_normals: np.ndarray, rules: CorrectiveRules, anchor: float, body_faces: np.ndarray | None = None) -> np.ndarray:
+def _arap(rest: np.ndarray, start: np.ndarray, faces: np.ndarray, free: np.ndarray, body: np.ndarray, body_normals: np.ndarray, rules: CorrectiveRules, anchor: float, body_faces: np.ndarray | None = None, extra_bodies: list[np.ndarray] | None = None) -> np.ndarray:
     edges = trimesh.Trimesh(rest, faces, process=False).edges_unique
     edges = edges[free[edges].any(axis=1)]
     n = len(rest)
@@ -142,6 +142,7 @@ def _arap(rest: np.ndarray, start: np.ndarray, faces: np.ndarray, free: np.ndarr
     coupling = adjacency[free_ids][:, fixed_ids]
     tree = cKDTree(body)
     vertex_faces = trimesh.Trimesh(body, body_faces, process=False).vertex_faces if rules.triangle_collision and body_faces is not None else None
+    extra = [(other, cKDTree(other)) for other in (extra_bodies or [])]  # Sprint 2.2A: also clear these posed bodies
     current = start.copy()
     dx = rest[edges[:, 0]] - rest[edges[:, 1]]
     for _ in range(rules.iterations):
@@ -163,8 +164,9 @@ def _arap(rest: np.ndarray, start: np.ndarray, faces: np.ndarray, free: np.ndarr
         b = rhs[free_ids] + coupling @ current[fixed_ids] + anchor * start[free_ids]
         current[free_ids] = solver.solve(b)
         if rules.triangle_collision and body_faces is not None:
-            signed, normals = _triangle_signed_distance(current[free_ids], body, body_faces, tree, vertex_faces)
-            current[free_ids] += normals * np.clip(rules.body_clearance_m - signed, 0.0, None)[:, None]
+            for posed_body, posed_tree in [(body, tree)] + extra:
+                signed, normals = _triangle_signed_distance(current[free_ids], posed_body, body_faces, posed_tree, vertex_faces)
+                current[free_ids] += normals * np.clip(rules.body_clearance_m - signed, 0.0, None)[:, None]
             continue
         # collision: push free vertices out of the posed body along the nearest body vertex normal
         _, nearest = tree.query(current[free_ids], workers=-1)
@@ -184,13 +186,14 @@ def _skinning_inputs(arrays: dict[str, Any], outer_vertices: np.ndarray) -> dict
     return {"source": source, "rest_all": np.asarray(arrays["position"], dtype=np.float64), "joints_all": joints_all, "weights_all": weights_all, "outer_joints": outer_joints, "outer_weights": outer_weights}
 
 
-def _solve_pose(data: dict[str, np.ndarray], outer_vertices: np.ndarray, outer_faces: np.ndarray, mask: np.ndarray, rotations: list[Any], skeleton: Skeleton, body: SkinnedAsset, rules: CorrectiveRules, anchor: float) -> np.ndarray:
+def _solve_pose(data: dict[str, np.ndarray], outer_vertices: np.ndarray, outer_faces: np.ndarray, mask: np.ndarray, rotations: list[Any], skeleton: Skeleton, body: SkinnedAsset, rules: CorrectiveRules, anchor: float, collision_poses: tuple[Any, ...] = ()) -> np.ndarray:
     """Bind-space delta for every GLB vertex that moves the garment to its solved shape at one key pose."""
     source, rest_all, joints_all, weights_all = data["source"], data["rest_all"], data["joints_all"], data["weights_all"]
     matrices = skin_matrices(skeleton, pose_local(skeleton, rotations))
     posed_body = skin(body.positions, body.joints, body.weights, skin_matrices(body.skeleton, pose_local(body.skeleton, rotations)))
     start = dual_quaternion_skin(outer_vertices, data["outer_joints"], data["outer_weights"], matrices)
-    solved = _arap(outer_vertices, start, outer_faces, mask > 0, posed_body, vertex_normals(posed_body, body.indices), rules, anchor, body.indices)
+    extra = [skin(body.positions, body.joints, body.weights, skin_matrices(body.skeleton, pose_local(body.skeleton, list(pose)))) for pose in collision_poses]
+    solved = _arap(outer_vertices, start, outer_faces, mask > 0, posed_body, vertex_normals(posed_body, body.indices), rules, anchor, body.indices, extra)
     # inner layer and rims: the rest offset from the welded outer vertex, carried by the same DQS rotation
     target = solved[source] + dual_quaternion_skin(rest_all, joints_all, weights_all, matrices) - start[source]
     skinned_all = skin(rest_all, joints_all, weights_all, matrices)
@@ -237,6 +240,13 @@ class CorrectiveSpec:
     gate: str = "midline"
     influence_full_share: float = 0.1  # share at which the influence gate reaches 1
     midline_cross_m: float = 0.0  # Sprint 2.1A: let a midline-gated region extend this far past the midline
+    # Contract v2: "signed_swing_deg" entries carry an axis: the world rotation axis whose positive rotation defines
+    # the positive direction, converted to the parent's space when the sidecar is written (signed_axis).
+    measure: str = "swing_deg"
+    positive_rotation_axis: tuple[float, float, float] | None = None
+    # Sprint 2.2A: further poses (rotation lists) whose posed body the solved shape must also clear, e.g. the walk arm
+    # swing around the key pose; the garment is solved at `rotations` only.
+    collision_poses: tuple[Any, ...] = ()
 
 
 def spec_region(rest: np.ndarray, pivot: np.ndarray, spec: CorrectiveSpec, midline_fade_m: float) -> np.ndarray:
@@ -247,8 +257,35 @@ def spec_region(rest: np.ndarray, pivot: np.ndarray, spec: CorrectiveSpec, midli
     return radial * _smoothstep(lateral / midline_fade_m)
 
 
-def spec_sidecar(specs: tuple[CorrectiveSpec, ...]) -> dict[str, Any]:
-    return {"version": 1, "correctives": [{"target": s.target, "joint": s.joint, "child": s.child, "measure": "swing_deg", "ramp": list(s.ramp)} for s in specs]}
+def signed_axis(skeleton: Skeleton, joint: str, child: str, rotation_axis: tuple[float, float, float]) -> list[float]:
+    """Contract v2 §3b producer convention: axis = omega x r_world (the bone tip's initial motion), in the parent's
+    rest frame, rounded to 4 decimals."""
+    world = world_from_local(skeleton, skeleton.local)
+    j = skeleton.index(joint)
+    d = skeleton.local[skeleton.index(child)][:3, 3]
+    rotation = world[j][:3, :3] / np.linalg.norm(world[j][:3, :3], axis=0, keepdims=True)
+    r_world = rotation @ d
+    tangent = np.cross(np.asarray(rotation_axis, dtype=np.float64), r_world / np.linalg.norm(r_world))
+    parent = world[skeleton.parents[j]][:3, :3]
+    parent = parent / np.linalg.norm(parent, axis=0, keepdims=True)
+    axis = parent.T @ (tangent / np.linalg.norm(tangent))
+    return [round(float(v), 4) + 0.0 for v in axis]
+
+
+def _entry(spec: CorrectiveSpec, skeleton: Skeleton | None) -> dict[str, Any]:
+    entry: dict[str, Any] = {"target": spec.target, "joint": spec.joint, "child": spec.child, "measure": spec.measure}
+    if spec.measure == "signed_swing_deg":
+        if skeleton is None or spec.positive_rotation_axis is None:
+            raise ValueError(f"{spec.target}: a signed entry needs the skeleton and positive_rotation_axis")
+        entry["axis"] = signed_axis(skeleton, spec.joint, spec.child, spec.positive_rotation_axis)
+    entry["ramp"] = list(spec.ramp)
+    return entry
+
+
+def spec_sidecar(specs: tuple[CorrectiveSpec, ...], skeleton: Skeleton | None = None) -> dict[str, Any]:
+    """Version 1 when every entry is swing_deg (unchanged bytes for earlier assets), version 2 otherwise."""
+    entries = [_entry(spec, skeleton) for spec in specs]
+    return {"version": 2 if any(spec.measure != "swing_deg" for spec in specs) else 1, "correctives": entries}
 
 
 def solve_specs(arrays: dict[str, Any], outer_vertices: np.ndarray, outer_faces: np.ndarray, skeleton: Skeleton, body: SkinnedAsset, specs: tuple[CorrectiveSpec, ...], rules: CorrectiveRules = CorrectiveRules()) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
@@ -267,7 +304,7 @@ def solve_specs(arrays: dict[str, Any], outer_vertices: np.ndarray, outer_faces:
                     subtree[k] = True
             share = (data["outer_weights"] * subtree[data["outer_joints"]]).sum(axis=1)
             mask = mask * _smoothstep(share / spec.influence_full_share)
-        morphs[spec.target] = _solve_pose(data, outer_vertices, outer_faces, mask, list(spec.rotations), skeleton, body, rules, spec.anchor)
+        morphs[spec.target] = _solve_pose(data, outer_vertices, outer_faces, mask, list(spec.rotations), skeleton, body, rules, spec.anchor, spec.collision_poses)
         report["targets"][spec.target] = {"region_vertices": int((mask > 0).sum()), "max_delta_m": float(np.linalg.norm(morphs[spec.target], axis=1).max())}
     return morphs, report
 
@@ -280,3 +317,45 @@ def shirt_hip_specs() -> tuple[CorrectiveSpec, ...]:
     pants' hip ramp (20 -> 90 deg, so hip extension and abduction leave them off)."""
     x = (1.0, 0.0, 0.0)
     return tuple(CorrectiveSpec(f"corr_{tag}_hip90", f"{side}_upleg", f"{side}_lowleg", (20.0, 90.0), ((f"{side}_upleg", x, -90.0),), f"{side}_upleg", 0.20, 0.30, side, 0.3) for side, tag in (("l", "L"), ("r", "R")))
+
+
+Z_AXIS = (0.0, 0.0, 1.0)
+NEG_Z_AXIS = (0.0, 0.0, -1.0)
+X_AXIS = (1.0, 0.0, 0.0)
+NEG_X_AXIS = (-1.0, 0.0, 0.0)
+
+
+def shoulder_signed_entries(skeleton: Skeleton) -> list[dict[str, Any]]:
+    """Contract v2 entries for the four shoulder targets: same ramps, measured as signed abduction."""
+    entries = []
+    for side, low, high in TARGETS:
+        axis = signed_axis(skeleton, f"{side}_uparm", f"{side}_lowarm", Z_AXIS if side == "l" else NEG_Z_AXIS)
+        for target, ramp in ((low, [0, 90]), (high, [90, 120])):
+            entries.append({"target": target, "joint": f"{side}_uparm", "child": f"{side}_lowarm", "measure": "signed_swing_deg", "axis": axis, "ramp": ramp})
+    return entries
+
+
+def shirt_hip_specs_signed(ramp_start_deg: float = 0.0) -> tuple[CorrectiveSpec, ...]:
+    """Sprint 2.2A: the v5.1 hem targets measured as signed hip flexion (extension and abduction no longer count)."""
+    return tuple(replace(spec, ramp=(ramp_start_deg, 90.0), measure="signed_swing_deg", positive_rotation_axis=NEG_X_AXIS) for spec in shirt_hip_specs())
+
+
+def shirt_add_specs() -> tuple[CorrectiveSpec, ...]:
+    """Sprint 2.2A arm-down (sleeve underside / side panel) correctives: solved with the arm lowered 20 deg towards the
+    body, clearing the arm also at a +/-10 deg walk swing; ramp [0, -20] on signed abduction (contract v2)."""
+    specs = []
+    for side, tag in (("l", "L"), ("r", "R")):
+        lower = (f"{side}_uparm", Z_AXIS, -20.0 if side == "l" else 20.0)
+        swings = tuple((lower, (f"{side}_uparm", X_AXIS, swing)) for swing in (10.0, -10.0))
+        specs.append(CorrectiveSpec(f"corr_{tag}_add20", f"{side}_uparm", f"{side}_lowarm", (0.0, -20.0), (lower,), f"{side}_uparm", 0.18, 0.30, side, 0.3,
+                                    measure="signed_swing_deg", positive_rotation_axis=Z_AXIS if side == "l" else NEG_Z_AXIS, collision_poses=swings))
+    return tuple(specs)
+
+
+def signed_shirt_sidecar(skeleton: Skeleton, with_adduction: bool) -> dict[str, Any]:
+    """Contract v2 sidecar for v5.1 / v5.2: signed shoulder targets, signed hip-flexion hem targets (ramp 20 -> 90), and
+    optionally the arm-down targets."""
+    entries = shoulder_signed_entries(skeleton) + spec_sidecar(shirt_hip_specs_signed(20.0), skeleton)["correctives"]
+    if with_adduction:
+        entries += spec_sidecar(shirt_add_specs(), skeleton)["correctives"]
+    return {"version": 2, "correctives": entries}

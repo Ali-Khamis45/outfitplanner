@@ -20,7 +20,7 @@ import trimesh
 
 from body import PROJECT, VIEWER, RestBody, evaluate_rest_body, load_model
 from garment_glb import read_glb, skinned_primitive, write_garment_glb
-from tshirt import BOUNDARY_KINDS, REGION_NAMES, V2_RULES, V4_RULES, V5_1_RULES, V5_RULES, BodySurface, FitRules, OuterGarment, assemble, design_tshirt, enforce_clearance, retarget, rules_record
+from tshirt import BOUNDARY_KINDS, REGION_NAMES, V2_RULES, V4_RULES, V5_1_RULES, V5_2_RULES, V5_RULES, BodySurface, FitRules, OuterGarment, assemble, design_tshirt, enforce_clearance, retarget, rules_record
 
 MATERIAL = {"name": "TShirt_Cotton_PBR", "baseColor": [0.85, 0.85, 0.88, 1.0], "metalness": 0.0, "roughness": 0.85}
 NEUTRAL_AVATAR = PROJECT / "outputs" / "avatars" / "mhr-neutral.glb"
@@ -32,6 +32,7 @@ RULESETS = {
     "v4": V4_RULES,  # Sprint 1.3 experiment: explicit underarm gusset panels
     "v5": V5_RULES,  # Sprint 1.4A: v2 + shoulder corrective morph targets (promotion candidate, not the default)
     "v5.1": V5_1_RULES,  # Sprint 2.1A: v5 + hip-flexion hem correctives
+    "v5.2": V5_2_RULES,  # Sprint 2.2A: v5.1 + arm-down correctives (signed sidecar, contract v2)
     # Ablations for the Sprint 1.1 deformation analysis: each change on its own.
     "v2-separation-only": FitRules(underarm_separation_m=0.007),
     "v2-weights-only": FitRules(weight_mode="region", weight_smoothing_iterations=4),
@@ -69,6 +70,8 @@ def metadata(body: RestBody, rules: FitRules, garment_id: str, revision: str, pe
             strategy += "; underarm separation below the axilla, region-aware armhole weight blend, smoothed clearance and retarget fields"
         if rules.hip_correctives:  # Sprint 2.1A only
             strategy += "; hip-flexion hem corrective morph targets (corr_L_hip90 / corr_R_hip90)"
+        if rules.adduction_correctives:  # Sprint 2.2A only
+            strategy += "; arm-down corrective morph targets (corr_L_add20 / corr_R_add20, signed measure)"
         if rules.shoulder_correctives:  # Sprint 1.4A only, so earlier revisions keep their bytes
             strategy += "; pose-driven shoulder corrective morph targets (DQS start, regional ARAP relaxation, body collision), see docs/contracts/corrective-morphs.md"
     info: dict[str, Any] = {
@@ -119,7 +122,10 @@ def write(directory: Path, body: RestBody, outer: OuterGarment, rules: FitRules,
             specs = correctives.shirt_hip_specs()
             hip_morphs, extra["hip_correctives"] = correctives.solve_specs(arrays, outer.vertices, outer.faces, avatar.skeleton, avatar, specs, correctives.SHIRT_HIP_RULES)
             morphs.update(hip_morphs)
-            document["correctives"] += correctives.spec_sidecar(specs)["correctives"]
+            if rules.adduction_correctives:  # Sprint 2.2A: appended after the hip targets
+                add_morphs, extra["adduction_correctives"] = correctives.solve_specs(arrays, outer.vertices, outer.faces, avatar.skeleton, avatar, correctives.shirt_add_specs(), correctives.SHIRT_HIP_RULES)
+                morphs.update(add_morphs)
+            document = correctives.signed_shirt_sidecar(avatar.skeleton, rules.adduction_correctives)  # contract v2
         new_file(glb.with_name(glb.stem + ".correctives.json")).write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
     write_garment_glb(glb, arrays, body, info, MATERIAL, morphs)
     report = {"garment": info, "topology": topology_report(arrays), "fit_report": {k: v for k, v in outer.report.items() if k != "rules"}, **extra}

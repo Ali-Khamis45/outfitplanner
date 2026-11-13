@@ -110,3 +110,7 @@ tools/collision/.venv/Scripts/python.exe services/garments/evaluate_arm_down.py 
 cd services/garments; ../../external/mhr-venv/Scripts/python.exe -m unittest discover -s tests
 # reproducibility: regenerate into an empty folder and compare SHA-256 (shirts v1|v2|v4|v5 and v3-close1 as in sprint-1.4a; pants --version v1)
 ```
+
+## Decision (Sprint 2.2A)
+
+Flip gate accepted. `walk`, `wide` and `l-hip-60` pass. The remaining `step` and `squat` flips are self-overlapping folds with nothing inside the body. They are recorded as a **known limitation, visual review only**, with no further work. The arm-down corrective and the signed measure are in [sprint-2.2a-report.md](sprint-2.2a-report.md).

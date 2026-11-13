@@ -153,8 +153,16 @@ class GeneratedPantsV2Tests(unittest.TestCase):
             width_v2 = np.ptp(edge_v2[:, [0, 2]], axis=0).sum()
             self.assertLess(width_v2, 0.85 * width_v1, kind)  # the hem opening is clearly narrower
 
-    def test_v2_sidecar_matches_v1_names_and_ramps(self) -> None:
-        self.assertEqual(self.pants.sidecar, load_asset(PANTS).sidecar)
+    def test_v2_sidecar_is_signed_with_v1_names_and_ramps(self) -> None:
+        v1 = load_asset(PANTS).sidecar
+        self.assertEqual(self.pants.sidecar["version"], 2)  # Sprint 2.2A: contract v2
+        for mine, old in zip(self.pants.sidecar["correctives"], v1["correctives"], strict=True):
+            self.assertEqual((mine["target"], mine["joint"], mine["child"], mine["ramp"]), (old["target"], old["joint"], old["child"], old["ramp"]))
+            self.assertEqual(mine["measure"], "signed_swing_deg")
+            self.assertEqual(len(mine["axis"]), 3)
+        skeleton = self.pants.skeleton
+        extension = corrective_weights(self.pants.sidecar, skeleton, pose_local(skeleton, [("r_upleg", (1.0, 0.0, 0.0), 30.0)]))
+        self.assertEqual(extension["corr_R_hip90"], 0.0)  # 30 deg extension no longer counts as flexion
 
 
 if __name__ == "__main__":

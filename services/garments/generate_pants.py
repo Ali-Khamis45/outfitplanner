@@ -81,7 +81,7 @@ def main() -> int:
     avatar = load_asset(NEUTRAL_AVATAR)
     specs = leg_corrective_specs(**version["specs"])
     morphs, corrective_report = correctives.solve_specs(arrays, garment.vertices, garment.faces, avatar.skeleton, avatar, specs, correctives.CorrectiveRules(**version["corrective_rules"]))
-    new_file(glb.with_name(glb.stem + ".correctives.json")).write_text(json.dumps(correctives.spec_sidecar(specs), indent=2) + "\n", encoding="utf-8")
+    new_file(glb.with_name(glb.stem + ".correctives.json")).write_text(json.dumps(correctives.spec_sidecar(specs, avatar.skeleton), indent=2) + "\n", encoding="utf-8")
     write_garment_glb(glb, arrays, neutral, info, MATERIAL, morphs)
     report = {"garment": info, "topology": topology_report(arrays), "fit_report": garment.report, "correctives": corrective_report, "neutral_avatar_match": match}
     new_file(glb.with_suffix(".json")).write_text(json.dumps(report, indent=2, default=float), encoding="utf-8")

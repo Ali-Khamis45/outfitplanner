@@ -83,13 +83,18 @@ def validate_morphs(document: dict[str, Any], blob: bytes, garment_path: Path, v
         largest[name] = float(np.linalg.norm(delta, axis=1).max())
     require(sidecar_path.is_file(), f"Missing corrective sidecar {sidecar_path.name}")
     sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
-    require(sidecar.get("version") == 1, "Unsupported corrective sidecar version")
+    version = sidecar.get("version")
+    require(version in (1, 2), "Unsupported corrective sidecar version")
     entries = sidecar.get("correctives", [])
     require(sorted(e.get("target") for e in entries) == sorted(names), "Sidecar targets differ from the GLB morph targets")
     for entry in entries:
-        require(entry.get("measure") == "swing_deg" and entry.get("joint") in joint_names and entry.get("child") in joint_names, f"Invalid sidecar entry {entry}")
+        measures = ("swing_deg", "signed_swing_deg") if version == 2 else ("swing_deg",)
+        require(entry.get("measure") in measures and entry.get("joint") in joint_names and entry.get("child") in joint_names, f"Invalid sidecar entry {entry}")
+        if entry["measure"] == "signed_swing_deg":
+            axis = np.asarray(entry.get("axis", []), dtype=np.float64)
+            require(axis.shape == (3,) and np.isfinite(axis).all() and np.linalg.norm(axis) > 1e-6, f"Signed entry needs a finite non-zero axis: {entry}")
         ramp = entry.get("ramp", [])
-        require(len(ramp) == 2 and ramp[1] > ramp[0], f"Invalid ramp in {entry}")
+        require(len(ramp) == 2 and (ramp[0] != ramp[1] if version == 2 else ramp[1] > ramp[0]), f"Invalid ramp in {entry}")
     return {"targets": names, "max_delta_m": largest, "sidecar": sidecar_path.name}
 
 
