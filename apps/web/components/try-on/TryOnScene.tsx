@@ -46,9 +46,9 @@ function TryOnCamera({ model, command, turntable, pose }: { model: ModelInfo | n
   useEffect(() => {
     if (!model || !controls.current) return;
     const center = new Vector3(...model.center), height = Math.max(model.size[1], 0.01);
-    // Fill roughly 82% vertically, reserving room for the bottom controls.
-    // Arms-out needs extra width on portrait screens.
-    const { distance, targetYOffset } = tryOnFraming(height, model.size[0], size.width, size.height, camera instanceof PerspectiveCamera ? camera.fov : 40, pose === "both-90");
+    // Stacked screens use the taller framing; desktop reserves room for the caption.
+    const stacked = window.matchMedia("(max-width: 800px), (max-height: 500px)").matches;
+    const { distance, targetYOffset } = tryOnFraming(height, model.size[0], size.width, size.height, camera instanceof PerspectiveCamera ? camera.fov : 40, pose === "both-90", stacked);
     center.y += targetYOffset;
     const directions: Record<CameraView, [number, number, number]> = { front: [0, 0, 1], back: [0, 0, -1], left: [-1, 0, 0], right: [1, 0, 0], reset: [0, 0, 1] };
     camera.position.copy(center).addScaledVector(new Vector3(...directions[command.view]), distance);

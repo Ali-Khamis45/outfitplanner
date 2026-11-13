@@ -9,6 +9,7 @@ import { applyMeshInspection } from "../lib/garment/inspection.ts";
 import { createCorrectiveDriver, parseSidecar } from "../lib/garment/correctives.ts";
 import { createSidecarLoader } from "../lib/garment/demoResources.ts";
 import { applyPose, captureBindPose, findPose } from "../lib/garment/poses.ts";
+import { tryOnPose } from "../lib/garment/poseTransition.ts";
 async function load(path) {
   const bytes = await readFile(new URL(path, import.meta.url));
   return await new Promise((resolve, reject) => new GLTFLoader().parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), "", resolve, reject));
@@ -35,7 +36,7 @@ if (existsSync(pantsFile)) {
   console.log("Neutral pants binds to the same avatar skeleton as the shirt");
 } else console.log("Neutral pants binding skipped: asset not generated");
 const rest = captureBindPose(rig.bones);
-for (const [shirtVersion, pantsVersion] of [["v5", "v1"], ["v5.1", "v2"]]) {
+for (const [shirtVersion, pantsVersion] of [["v5", "v1"], ["v5.1", "v2"], ["v5.2", "v2"]]) {
   const shirtPath = `../../../outputs/garments/experiments/tshirt-${shirtVersion}-mhr-neutral.glb`;
   const pantsPath = `../../../outputs/garments/pants-basic-${pantsVersion}-mhr-neutral.glb`;
   const shirtFile = new URL(shirtPath, import.meta.url), pantsAsset = new URL(pantsPath, import.meta.url);
@@ -61,12 +62,21 @@ for (const [shirtVersion, pantsVersion] of [["v5", "v1"], ["v5.1", "v2"]]) {
   const shirtWeights = driveShirt(true), pantsWeights = drivePants(true);
   assert.ok(pantsWeights.corr_L_hip90 > 0.95 && pantsWeights.corr_L_knee90 > 0.95);
   assert.equal(shirtWeights.corr_L_abd90, 0);
-  if (shirtVersion === "v5.1") assert.ok(shirtWeights.corr_L_hip90 > 0.95, "v5.1 hem corrective responds to step");
+  if (shirtVersion !== "v5") assert.ok(shirtWeights.corr_L_hip90 > 0.95, `${shirtVersion} hem corrective responds to step`);
   assert.ok(Object.values(drivePants(false)).every(weight => weight === 0));
   applyPose(rig.bones, rest, findPose("both-90"));
   assert.equal(driveShirt(true).corr_L_abd90.toFixed(2), "1.00");
   assert.ok(Object.values(drivePants(true)).every(weight => weight === 0));
   assert.ok(shirt.morphTargetInfluences.some(weight => weight > 0.99));
   assert.ok(pants.morphTargetInfluences.every(weight => weight === 0));
+  if (shirtVersion !== "v5") {
+    assert.equal(shirtSidecar.version, 2); assert.equal(pantsSidecar.version, 2);
+    applyPose(rig.bones, rest, tryOnPose("walk"));
+    const walking = driveShirt(true);
+    assert.equal(walking.corr_L_abd90, 0); assert.equal(walking.corr_R_abd90, 0);
+    if (shirtVersion === "v5.2") {
+      assert.ok(walking.corr_L_add20 > 0.95 && walking.corr_R_add20 > 0.95, `v5.2 adduction correctives engage on walk: ${JSON.stringify(walking)}`);
+    }
+  }
   console.log(`${shirtVersion} / pants ${pantsVersion} sidecars drive their real targets independently`);
 }

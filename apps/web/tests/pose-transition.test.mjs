@@ -16,9 +16,9 @@ const close = (expected, message) => { for (const [name, bone] of bones) assert.
 const rest = rotations();
 const worldPosition = name => { gltf.scene.updateMatrixWorld(true); return bones.get(name).getWorldPosition(new Vector3()); };
 const initialLeft = worldPosition("l_lowarm"), initialRight = worldPosition("r_lowarm");
-assert.deepEqual(TRY_ON_ARM_CONFIG, { adductionDeg: 15, walkSwingDeg: 10 });
-assert.deepEqual(tryOnPose("rest").rotations.map(({ joint, degrees }) => [joint, degrees]), [["l_uparm", -15], ["r_uparm", 15]]);
-assert.deepEqual(tryOnPose("walk").rotations.slice(-4).map(({ joint, degrees }) => [joint, degrees]), [["l_uparm", -15], ["r_uparm", 15], ["l_uparm", 10], ["r_uparm", -10]]);
+assert.deepEqual(TRY_ON_ARM_CONFIG, { adductionDeg: 20, walkSwingDeg: 10 });
+assert.deepEqual(tryOnPose("rest").rotations.map(({ joint, degrees }) => [joint, degrees]), [["l_uparm", -20], ["r_uparm", 20]]);
+assert.deepEqual(tryOnPose("walk").rotations.slice(-4).map(({ joint, degrees }) => [joint, degrees]), [["l_uparm", -20], ["r_uparm", 20], ["l_uparm", 10], ["r_uparm", -10]]);
 const walk = beginPoseTransition(bones, bind, "walk");
 close(rest, "creating a transition must not snap");
 assert.equal(advancePoseTransition(walk, 0.2), false);

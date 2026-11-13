@@ -1,10 +1,10 @@
 import { parseSidecar, type Sidecar } from "./correctives.ts";
 
-export const DEFAULT_DEMO_VARIANT = "v5.1";
+export const DEFAULT_DEMO_VARIANT = "v5.2";
 export const DEFAULT_PANTS_VARIANT = "pants-v2";
 export const pantsUrl = (variant: "pants" | "pants-v2") => `/api/demo-garment?variant=${variant}`;
 export function sidecarUrlForSelection(selection: { kind: string; url: string; variant?: string }): string | null {
-  return selection.kind === "demo" && (selection.variant === "v5" || selection.variant === "v5.1") ? selection.url : null;
+  return selection.kind === "demo" && (selection.variant === "v5" || selection.variant === "v5.1" || selection.variant === "v5.2") ? selection.url : null;
 }
 export function sidecarIsPending(url: string | null, loaded: { url: string } | null): boolean {
   return url !== null && loaded?.url !== url;
@@ -17,7 +17,7 @@ export function createSidecarCache(fetcher: typeof fetch = fetch) {
     get(url: string): Promise<Sidecar | null> {
       let pending = requests.get(url);
       if (!pending) {
-        pending = fetcher(`${url}&sidecar=1`).then(response => response.ok ? response.json() : null)
+        pending = fetcher(`${url}&sidecar=1`, { cache: "no-store" }).then(response => response.ok ? response.json() : null)
           .then(value => value ? parseSidecar(value) : null)
           .catch(error => { console.warn("Corrective sidecar unavailable:", error); return null; });
         requests.set(url, pending);

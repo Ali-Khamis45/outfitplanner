@@ -110,7 +110,7 @@ export function AvatarLab() {
         while (pantsStatusRef.current.state === "loading" && performance.now() < pantsDeadline) await new Promise(resolve => setTimeout(resolve, 100));
         if (pantsStatusRef.current.state !== "ready") skipped.push("pants (load failed)");
       } else skipped.push(pantsResponse.status === 404 ? "pants (not generated)" : "pants (unavailable)");
-      for (const variant of ["v1", "v2", "v4", "v5", "v5.1"] as const) {
+      for (const variant of ["v1", "v2", "v4", "v5", "v5.1", "v5.2"] as const) {
         const response = await fetch(`/api/demo-garment?variant=${variant}`, { method: "GET" });
         if (!response.ok) { skipped.push(variant); continue; }
         chooseGarment(demoGarment(variant));
