@@ -18,8 +18,12 @@ try {
   const evaluate = async expression => (await send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true })).result.value;
   const waitFor = async (expression, message) => { for (let i=0; i<100; i++) { if (await evaluate(expression)) return; await new Promise(r => setTimeout(r, 200)); } throw new Error(`Timed out: ${message}`); };
   const url = process.env.WARDROBE_TEST_URL ?? "http://localhost:3190/wardrobe";
-  await send("Page.enable"); await send("Runtime.enable"); await send("Network.enable"); await send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false }); await send("Page.navigate", { url });
+  await send("Page.enable"); await send("Runtime.enable"); await send("Network.enable");
+  await send("Page.addScriptToEvaluateOnNewDocument", { source: `window.__webglCanvases = 0; const seen = new WeakSet(), original = HTMLCanvasElement.prototype.getContext; HTMLCanvasElement.prototype.getContext = function(kind, ...args) { if ((kind === 'webgl' || kind === 'webgl2') && !seen.has(this)) { seen.add(this); window.__webglCanvases++; } return original.call(this, kind, ...args); };` });
+  await send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false }); await send("Page.navigate", { url });
   await waitFor("document.querySelectorAll('.wardrobe-card').length === 6", "six examples");
+  await waitFor("document.querySelectorAll('.wardrobe-card .wardrobe-image img').length === 6 && [...document.querySelectorAll('.wardrobe-card .wardrobe-image img')].every(e => e.complete && e.naturalWidth > 0)", "template thumbnails");
+  assert.equal(await evaluate("window.__webglCanvases"), 1, "one shared WebGL canvas generates the thumbnails");
   assert.ok(await evaluate("document.body.innerText.includes('Example')"));
   const shot = await send("Page.captureScreenshot", { format: "png" });
   const samplePhoto = path.join(profile, "sample.png"); await writeFile(samplePhoto, Buffer.from(shot.data, "base64"));
@@ -29,6 +33,14 @@ try {
   await evaluate(`(() => { const x = document.querySelector('.wardrobe-filters select'); x.value='top'; x.dispatchEvent(new Event('change', {bubbles:true})); })()`);
   await waitFor("document.querySelectorAll('.wardrobe-card').length === 3", "category filter");
   await evaluate(`(() => { const x = document.querySelector('.wardrobe-filters select'); x.value=''; x.dispatchEvent(new Event('change', {bubbles:true})); })()`);
+  await evaluate(`(() => { const selects=document.querySelectorAll('.wardrobe-outfits form select'); selects[0].value='example-1'; selects[0].dispatchEvent(new Event('change',{bubbles:true})); selects[1].value='example-3'; selects[1].dispatchEvent(new Event('change',{bubbles:true})); })()`);
+  await waitFor("!!document.querySelector('.wardrobe-outfits form .wardrobe-try')", "unsaved try-on action");
+  assert.equal(await evaluate("document.querySelector('.wardrobe-saved a') === null"), true, "try-on requires no saved outfit");
+  await evaluate("document.querySelector('.wardrobe-outfits form .wardrobe-try').click()");
+  await waitFor("location.pathname === '/try-on' && document.body.innerText.includes('Showing selected pieces from your wardrobe.')", "unsaved try-on handoff");
+  await send("Page.navigate", { url });
+  await waitFor("document.querySelectorAll('.wardrobe-card').length === 5 && document.querySelectorAll('.wardrobe-card .wardrobe-image img').length === 5", "cached thumbnails");
+  assert.equal(await evaluate("window.__webglCanvases"), 0, "cached thumbnails require no WebGL canvas");
   await evaluate("document.querySelector('.wardrobe-edit').click()");
   await waitFor("!!document.querySelector('[role=dialog]')", "item editor");
   await send("DOM.enable"); const documentNode = await send("DOM.getDocument");
@@ -51,5 +63,9 @@ try {
   assert.ok(requests.some(url => url.includes("slot=top") && url.includes("size=L") && url.includes("asset=glb")), "saved top size GLB requested");
   const displayed = await evaluate("[...document.querySelectorAll('.try-color-heading')].map(x => x.innerText)");
   assert.deepEqual(displayed, ["COLOUR\n#1F2A44", "COLOUR\nMOSS"], "outfit colours applied");
+  await send("Page.navigate", { url });
+  await waitFor("!!document.querySelector('.wardrobe-saved-actions button')", "saved outfit delete");
+  await evaluate("window.confirm = () => true; document.querySelector('.wardrobe-saved-actions button').click()");
+  await waitFor("!document.querySelector('.wardrobe-saved-actions button')", "delete saved outfit");
   console.log("Wardrobe grid, filter, edit, save outfit and try-on handoff passed"); socket.close();
 } finally { chrome.kill(); await new Promise(resolve => { if (chrome.exitCode !== null) resolve(); else { chrome.once("exit", resolve); setTimeout(resolve, 2000); } }); await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); }

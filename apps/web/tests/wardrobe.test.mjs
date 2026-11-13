@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createWardrobeHandler } from "../lib/wardrobeApi.ts";
+import { createThumbnailHandler } from "../lib/wardrobeThumbnailApi.ts";
 import { exampleWardrobe, parseWardrobe } from "../lib/wardrobe/schema.ts";
 const root = await mkdtemp(path.join(os.tmpdir(), "wardrobe-test-"));
 try {
@@ -42,5 +43,17 @@ try {
   const upload = await request(handler, "POST", { data: `data:image/png;base64,${png.toString("base64")}` }); assert.equal(upload.code, 201);
   const photo = upload.body.photo.split("/").pop(); const downloaded = await request(handler, "GET", null, { photo }); assert.equal(downloaded.code, 200); assert.deepEqual(downloaded.body, png);
   assert.equal((await request(handler, "GET", null, { photo: "../wardrobe.json" })).code, 404);
+  await mkdir(path.join(root, "garments/experiments"), { recursive: true });
+  const asset = path.join(root, "garments/experiments/tshirt-v5.2-mhr-neutral.glb"); await writeFile(asset, "first asset");
+  const thumbnails = createThumbnailHandler(root, "development"), thumbnailProduction = createThumbnailHandler(root, "production"), query = { template: "tshirt-v5.2", color: "1F2A44" };
+  assert.equal((await request(thumbnailProduction, "GET", null, query)).code, 404);
+  assert.equal((await request(thumbnails, "GET", null, query, { socket: { remoteAddress: "192.0.2.10" } })).code, 404);
+  assert.equal((await request(thumbnails, "GET", null, query)).code, 404);
+  assert.equal((await request(thumbnails, "POST", { data: `data:image/png;base64,${png.toString("base64")}` }, query)).code, 201);
+  assert.deepEqual((await request(thumbnails, "GET", null, query)).body, png);
+  assert.equal((await request(thumbnails, "GET", null, { ...query, color: "000000" })).code, 404);
+  assert.equal((await request(thumbnails, "GET", null, { ...query, template: "../secret" })).code, 404);
+  await writeFile(asset, "changed asset contents");
+  assert.equal((await request(thumbnails, "GET", null, query)).code, 404, "changed templates invalidate thumbnails");
   console.log("Wardrobe schema, storage, photos and localhost-only access passed");
 } finally { await rm(root, { recursive: true, force: true }); }

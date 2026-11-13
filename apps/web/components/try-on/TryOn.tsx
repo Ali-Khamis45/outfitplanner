@@ -66,7 +66,7 @@ function OutfitSlot({ number, name, description, enabled, onEnabled, color, onCo
   </section>;
 }
 
-export function TryOn({ fixtures = false, outfitId = null }: { fixtures?: boolean; outfitId?: string | null }) {
+export function TryOn({ fixtures = false, outfitId = null, topId = null, bottomId = null }: { fixtures?: boolean; outfitId?: string | null; topId?: string | null; bottomId?: string | null }) {
   const [topEnabled, setTopEnabled] = useState(true), [bottomEnabled, setBottomEnabled] = useState(true);
   const [topColor, setTopColor] = useState(colors[4].value), [bottomColor, setBottomColor] = useState(colors[1].value);
   const [topSidecar, setTopSidecar] = useState<Sidecar | null | undefined>(undefined), [bottomSidecar, setBottomSidecar] = useState<Sidecar | null | undefined>(undefined);
@@ -86,11 +86,11 @@ export function TryOn({ fixtures = false, outfitId = null }: { fixtures?: boolea
   const topSizes = useSizes(bodyId, "top", fixtures && bodyId === "neutral", outfitSizes.top), bottomSizes = useSizes(bodyId, "bottom", fixtures && bodyId === "neutral", outfitSizes.bottom);
   const [heatmap, setHeatmap] = useState(false);
   useEffect(() => {
-    if (!outfitId) return;
+    if (!outfitId && !(topId && bottomId)) return;
     let active = true;
     fetch("/api/wardrobe", { cache: "no-store" }).then(response => { if (!response.ok) throw new Error("This outfit is only available on the local development server."); return response.json(); }).then(value => {
       if (!active) return;
-      const wardrobe = parseWardrobe(value), outfit = wardrobe.outfits.find(item => item.id === outfitId);
+      const wardrobe = parseWardrobe(value), outfit = outfitId ? wardrobe.outfits.find(item => item.id === outfitId) : { name: "selected pieces", items: [topId!, bottomId!] };
       if (!outfit) throw new Error("Outfit not found in your wardrobe.");
       const items = outfit.items.map(id => wardrobe.items.find(item => item.id === id)).filter(item => item !== undefined);
       const topItem = items.find(item => item.category === "top"), bottomItem = items.find(item => item.category === "bottom");
@@ -104,7 +104,7 @@ export function TryOn({ fixtures = false, outfitId = null }: { fixtures?: boolea
       else setMessage(`Showing ${outfit.name} from your wardrobe.`);
     }).catch(error => { if (active) setMessage(error instanceof Error ? error.message : "Could not load the outfit."); });
     return () => { active = false; };
-  }, [outfitId]);
+  }, [outfitId, topId, bottomId]);
   const avatarUrl = activeFit?.body ?? (avatar === "personal" && personalSource === "file" && personal ? personal.url : NEUTRAL_URL);
   useEffect(() => {
     let active = true;
