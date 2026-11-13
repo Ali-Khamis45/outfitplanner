@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,7 +11,21 @@ const VARIANTS: Record<string, string> = {
   v3: "experiments/tshirt-v3-close1-mhr-neutral.glb",
   v4: "experiments/tshirt-v4-mhr-neutral.glb",
   v5: "experiments/tshirt-v5-mhr-neutral.glb",
+  "v5.1": "experiments/tshirt-v5.1-mhr-neutral.glb",
+  "v5.2": "experiments/tshirt-v5.2-mhr-neutral.glb",
+  pants: "pants-basic-v1-mhr-neutral.glb",
+  "pants-v2": "pants-basic-v2-mhr-neutral.glb",
 };
+export async function HEAD(request: Request) {
+  const variant = new URL(request.url).searchParams.get("variant") ?? "v1";
+  const file = Object.hasOwn(VARIANTS, variant) ? VARIANTS[variant] : null;
+  if (!file) return new Response(null, { status: 400 });
+  const sidecar = new URL(request.url).searchParams.get("sidecar") === "1";
+  try {
+    await stat(path.resolve(process.cwd(), "../../outputs/garments", sidecar ? file.replace(/\.glb$/, ".correctives.json") : file));
+    return new Response(null, { status: 200, headers: { "Cache-Control": "no-store" } });
+  } catch { return new Response(null, { status: 404 }); }
+}
 export async function GET(request: Request) {
   const variant = new URL(request.url).searchParams.get("variant") ?? "v1";
   const file = Object.hasOwn(VARIANTS, variant) ? VARIANTS[variant] : null;
@@ -21,7 +35,7 @@ export async function GET(request: Request) {
     const bytes = await readFile(path.resolve(process.cwd(), "../../outputs/garments", sidecar ? file.replace(/\.glb$/, ".correctives.json") : file));
     return new Response(new Uint8Array(bytes), { headers: { "Content-Type": sidecar ? "application/json" : "model/gltf-binary", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
   } catch (error) {
-    if (!sidecar) console.error("Unable to read the local demo garment:", error);
-    return Response.json({ error: "Demo garment not found. Run services/garments/generate_tshirt.py first." }, { status: 404 });
+    if (!sidecar && variant !== "pants" && variant !== "pants-v2") console.error("Unable to read the local demo garment:", error);
+    return Response.json({ error: variant === "pants" || variant === "pants-v2" ? "Pants not generated yet." : "Demo garment not found." }, { status: 404 });
   }
 }

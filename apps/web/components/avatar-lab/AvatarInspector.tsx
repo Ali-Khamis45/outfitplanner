@@ -18,7 +18,7 @@ export function LeftInspector({ source, onSelectSource, skeleton, wireframe, gar
       <Toggle label="Turntable" hint="Rotate 360° around the avatar" value={turntable} onChange={setTurntable} />
       <Toggle label="Skeleton" hint="Show joint hierarchy" value={skeleton} onChange={setSkeleton} />
       <Toggle label="Body wireframe" hint="Inspect body triangles" value={wireframe} onChange={setWireframe} />
-      <Toggle label="Garment wireframe" hint="Inspect shirt triangles independently" value={garmentWireframe} onChange={setGarmentWireframe} />
+      <Toggle label="Shirt wireframe" hint="Inspect shirt triangles independently" value={garmentWireframe} onChange={setGarmentWireframe} />
     </section>
     <ReconstructionPanel />
     <section className="side-section"><div className="section-title"><span className="section-icon">◫</span><h2>Display settings</h2></div><Toggle label="Floor grid" hint="Spatial reference" value={grid} onChange={setGrid} /></section>

@@ -18,7 +18,7 @@ export class GarmentErrorBoundary extends Component<{ children: ReactNode; onErr
   render() { return this.state.failed ? null : this.props.children; }
 }
 
-export function GarmentModel({ url, rig, color, visible, wireframe, inspection, onReady, sidecar, correctives, onWeights }: { url: string; rig: LoadedRig; color: string; visible: boolean; wireframe: boolean; inspection: boolean; onReady: (info: GarmentInfo) => void; sidecar: Sidecar | null; correctives: boolean; onWeights: (weights: Record<string, number>) => void }) {
+export function GarmentModel({ url, rig, color, visible, wireframe, inspection, onReady, sidecar, correctives, onWeights, layer }: { url: string; rig: LoadedRig; color: string; visible: boolean; wireframe: boolean; inspection: boolean; onReady: (info: GarmentInfo) => void; sidecar: Sidecar | null; correctives: boolean; onWeights: (weights: Record<string, number>) => void; layer: "upper" | "lower" }) {
   const gltf = useGLTF(url);
   const invalidate = useThree((state) => state.invalidate);
   const garment = useMemo(() => {
@@ -34,6 +34,11 @@ export function GarmentModel({ url, rig, color, visible, wireframe, inspection, 
     mesh.removeFromParent();
     mesh.material = material;
     mesh.frustumCulled = false;
+    // Bias near-coplanar shirt fragments toward the camera at the waist; preserve depth testing.
+    material.polygonOffset = layer === "upper";
+    material.polygonOffsetFactor = -2;
+    material.polygonOffsetUnits = -2;
+    mesh.renderOrder = layer === "upper" ? 2 : 1;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     const extras = (gltf.parser.json as { asset?: { extras?: { garment?: { garmentId?: string; bodyVariant?: string } } } }).asset?.extras?.garment;
@@ -42,9 +47,12 @@ export function GarmentModel({ url, rig, color, visible, wireframe, inspection, 
     return { mesh, material, info };
     // Colour is applied in an effect so changing it never rebuilds or rebinds the garment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gltf, rig]);
+  }, [gltf, rig, layer]);
   const drive = useMemo(() => createCorrectiveDriver(garment.mesh, rig.rig.bones, rig.bind, sidecar), [garment, rig, sidecar]);
+  // Initialise influences before the mesh's first rendered frame.
+  drive(correctives);
   useFrame(() => { const weights = drive(correctives); onWeights(weights); });
+  useEffect(() => { onWeights(drive(correctives)); }, [drive, correctives, onWeights]);
   useEffect(() => { invalidate(); }, [drive, correctives, invalidate]);
   useEffect(() => { onReady(garment.info); }, [garment, onReady]);
   useEffect(() => { garment.material.color.set(color); invalidate(); }, [garment, color, invalidate]);

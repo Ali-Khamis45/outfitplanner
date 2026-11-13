@@ -47,4 +47,28 @@ const badWarnings = [];
 const invalid = createCorrectiveDriver(mesh, bones, rest, {version:1, correctives:[{...sidecar.correctives[0], child:"not-a-child"}]}, message => badWarnings.push(message));
 assert.deepEqual(invalid(true), {}); assert.equal(mesh.morphTargetInfluences[0], 0); assert.equal(badWarnings.length, 1);
 
+// Version 2 measures a signed angle in the rest-direction/axis plane.
+const signedEntry = { target: "corr_L_abd90", joint: "arm", child: "tip", measure: "signed_swing_deg", axis: [-1, 0, 0], ramp: [0, 90] };
+const signed = parseSidecar({ version: 2, correctives: [signedEntry] });
+const signedDriver = createCorrectiveDriver(mesh, bones, rest, signed);
+for (const [degrees, expected] of [[0, 0], [45, 0.5], [90, 1], [-20, 0]]) {
+  arm.quaternion.setFromAxisAngle(new Vector3(0, 0, 1), MathUtils.degToRad(degrees));
+  assert.ok(Math.abs(signedDriver(true).corr_L_abd90 - expected) < 1e-6, `signed raising/lowering ${degrees}`);
+}
+const reverse = createCorrectiveDriver(mesh, bones, rest, parseSidecar({ version: 2, correctives: [{ ...signedEntry, ramp: [0, -20] }] }));
+for (const [degrees, expected] of [[0, 0], [-10, 0.5], [-20, 1], [45, 0], [-0.005, 0]]) {
+  arm.quaternion.setFromAxisAngle(new Vector3(0, 0, 1), MathUtils.degToRad(degrees));
+  assert.ok(Math.abs(reverse(true).corr_L_abd90 - expected) < 1e-6, `reverse ramp ${degrees}`);
+}
+arm.quaternion.setFromAxisAngle(new Vector3(1, 0, 0), MathUtils.degToRad(45));
+assert.equal(reverse(true).corr_L_abd90, 0, "out-of-plane swing should not activate this target");
+assert.throws(() => parseSidecar({ version: 1, correctives: [signedEntry] }), /Invalid/);
+assert.throws(() => parseSidecar({ version: 3, correctives: [] }), /Invalid/);
+assert.throws(() => parseSidecar({ version: 2, correctives: [{ ...signedEntry, measure: "unknown" }] }), /Invalid/);
+assert.throws(() => parseSidecar({ version: 2, correctives: [{ ...signedEntry, axis: [0, 0, 0] }] }), /Invalid/);
+assert.throws(() => parseSidecar({ version: 2, correctives: [{ ...signedEntry, ramp: [0, 0] }] }), /Invalid/);
+const parallelWarnings = [];
+const parallel = createCorrectiveDriver(mesh, bones, rest, parseSidecar({ version: 2, correctives: [{ ...signedEntry, axis: [0, 1, 0] }] }), message => parallelWarnings.push(message));
+assert.deepEqual(parallel(true), {}); assert.equal(mesh.morphTargetInfluences[0], 0); assert.match(parallelWarnings[0], /parallel/);
+
 console.log("Corrective driver fixture tests passed");
