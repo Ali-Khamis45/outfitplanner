@@ -67,14 +67,14 @@ function OutfitSlot({ number, name, description, enabled, onEnabled, color, onCo
   </section>;
 }
 
-export function TryOn({ textureFixture = false, fixtures = false, outfitId = null, topId = null, bottomId = null }: { textureFixture?: boolean; fixtures?: boolean; outfitId?: string | null; topId?: string | null; bottomId?: string | null }) {
+export function TryOn({ textureFixture = false, fixtures = false, outfitId = null, topId = null, bottomId = null, initialPose = null }: { initialPose?: string | null; textureFixture?: boolean; fixtures?: boolean; outfitId?: string | null; topId?: string | null; bottomId?: string | null }) {
   const [topEnabled, setTopEnabled] = useState(true), [bottomEnabled, setBottomEnabled] = useState(true);
   const [topColor, setTopColor] = useState(colors[4].value), [bottomColor, setBottomColor] = useState(colors[1].value);
   const [topTexture, setTopTexture] = useState<string | null>(textureFixture ? "fixture:/shirt.png" : null), [bottomTexture, setBottomTexture] = useState<string | null>(textureFixture ? "fixture:/pants.png" : null);
   const [topOriginal, setTopOriginal] = useState(true), [bottomOriginal, setBottomOriginal] = useState(true);
   const [topSidecar, setTopSidecar] = useState<Sidecar | null | undefined>(undefined), [bottomSidecar, setBottomSidecar] = useState<Sidecar | null | undefined>(undefined);
   const [bottomAvailability, setBottomAvailability] = useState<"checking" | "available" | "missing" | "error">("checking");
-  const [pose, setPose] = useState<Pose>("rest"), [turntable, setTurntable] = useState(false);
+  const [pose, setPose] = useState<Pose>(initialPose === "walk" || initialPose === "both-90" ? initialPose : "rest"), [turntable, setTurntable] = useState(false);
   const [view, setView] = useState<{ view: CameraView; id: number }>({ view: "front", id: 0 });
   const [personal, setPersonal] = useState<LocalGlb | null>(null), [avatar, setAvatar] = useState<"neutral" | "personal">("neutral");
   const [personalFit, setPersonalFit] = useState<PersonalFit | null>(null), [personalSource, setPersonalSource] = useState<"manifest" | "file">("manifest");
