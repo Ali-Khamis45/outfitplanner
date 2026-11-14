@@ -10,14 +10,17 @@ function chunk(name, data) {
   for (const byte of Buffer.concat([type, data])) { crc ^= byte; for (let i = 0; i < 8; i++) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1)); }
   checksum.writeUInt32BE((crc ^ 0xffffffff) >>> 0); return Buffer.concat([length, type, data, checksum]);
 }
+// UV layout v2: the torso occupies v=0..0.58; its front is centered at u=0.5.
+// Body up is +v, so the F is drawn upside down in image coordinates.
+// Stripes cover the whole atlas, including sleeves, legs, seat and gusset.
 function texture(shirt) {
   const size = 2048, raw = Buffer.alloc((size * 4 + 1) * size);
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
     const offset = y * (size * 4 + 1) + 1 + x * 4, stripe = y % 128 < 52;
     let rgb = stripe ? [41, 63, 112] : [233, 227, 213];
-    if (shirt && x >= 570 && x < 658 && y >= 1262 && y < 1526) {
+    if (shirt && x >= 980 && x < 1068 && y >= 570 && y < 760) {
       rgb = [232, 80, 53];
-      if ((x >= 590 && x < 599 && y >= 1316 && y < 1478) || (x >= 590 && x < 640 && y >= 1451 && y < 1478) || (x >= 590 && x < 625 && y >= 1382 && y < 1409)) rgb = [255, 255, 255];
+      if ((x >= 1000 && x < 1012 && y >= 600 && y < 730) || (x >= 1000 && x < 1050 && y >= 705 && y < 730) || (x >= 1000 && x < 1035 && y >= 650 && y < 675)) rgb = [255, 255, 255];
     }
     raw[offset] = rgb[0]; raw[offset + 1] = rgb[1]; raw[offset + 2] = rgb[2]; raw[offset + 3] = 255;
   }

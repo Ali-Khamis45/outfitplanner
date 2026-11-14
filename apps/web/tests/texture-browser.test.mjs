@@ -44,9 +44,9 @@ try {
   await send("Page.navigate", { url: `${process.env.TRY_ON_URL ?? "http://localhost:3000/try-on"}?texture-fixture=1` });
   await waitFor("!!document.querySelector('[aria-label=\"Top: Original\"]') && !document.body.innerText.includes('Preparing your fitting room')", "fixture scene");
   assert.equal(await evaluate("document.querySelector('[aria-label=\"Top: Original\"]').getAttribute('aria-pressed')"), "true");
-  async function sampleFrame() {
+  async function sampleFrame(points = [[397,270],[395,255],[395,290],[380,290]]) {
     const screenshot = await send("Page.captureScreenshot", { format: "png" });
-    return evaluate(`(async () => { const image = new Image(); image.src = 'data:image/png;base64,${screenshot.data}'; await image.decode(); const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height; const ctx = canvas.getContext('2d'); ctx.drawImage(image, 0, 0); return [[397,270],[388,262],[388,278],[381,278]].map(([x,y]) => Array.from(ctx.getImageData(x,y,1,1).data).slice(0,3)); })()`);
+    return evaluate(`(async () => { const image = new Image(); image.src = 'data:image/png;base64,${screenshot.data}'; await image.decode(); const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height; const ctx = canvas.getContext('2d'); ctx.drawImage(image, 0, 0); return ${JSON.stringify(points)}.map(([x,y]) => Array.from(ctx.getImageData(x,y,1,1).data).slice(0,3)); })()`);
   }
   const red = ([r,g,b]) => r > 150 && r > g * 1.5 && r > b * 1.6;
   const light = ([r,g,b]) => r > 150 && g > 150 && b > 150;
@@ -54,6 +54,17 @@ try {
   for (let i = 0; i < 40; i++) { pixels = await sampleFrame(); if (red(pixels[0])) break; await new Promise(resolve => setTimeout(resolve, 250)); }
   assert.ok(red(pixels[0]), `front chest logo should render red, got ${pixels[0]}`);
   assert.ok(light(pixels[1]) && red(pixels[2]) && light(pixels[3]), `logo F must be upright: ${JSON.stringify(pixels)}`);
+  const blue = ([r,g,b]) => b > r * 1.25 && b > g * 1.1;
+  const hem = await sampleFrame([[340,380], [340,410], [340,435]]);
+  assert.ok(blue(hem[0]) && light(hem[1]) && blue(hem[2]), `shirt hem stripes should remain spaced: ${JSON.stringify(hem)}`);
+  await evaluate("Array.from(document.querySelectorAll('.try-camera button')).find(b => b.textContent === 'Back').click()");
+  await new Promise(resolve => setTimeout(resolve, 1500));
+  const back = await sampleFrame(Array.from({ length: 21 * 23 }, (_, i) => [300 + (i % 21) * 8, 220 + Math.floor(i / 21) * 10]));
+  assert.ok(back.every(pixel => !red(pixel)), "back of shirt must not contain the red logo");
+  const seat = await sampleFrame([[340,460], [340,470], [340,490], [340,500], [380,480], [380,500]]);
+  assert.ok(seat.filter(blue).length >= 4 && seat.filter(light).length >= 2, `pants seat should be striped without a blank patch: ${JSON.stringify(seat)}`);
+  await evaluate("Array.from(document.querySelectorAll('.try-camera button')).find(b => b.textContent === 'Front').click()");
+  await new Promise(resolve => setTimeout(resolve, 1500));
   await evaluate("document.querySelector('[aria-label=\"Top: Ocean\"]').click()");
   await waitFor("document.querySelector('[aria-label=\"Top: Ocean\"]').getAttribute('aria-pressed') === 'true'", "flat swatch");
   await new Promise(resolve => setTimeout(resolve, 300));
@@ -61,7 +72,7 @@ try {
   await evaluate("document.querySelector('[aria-label=\"Top: Original\"]').click()");
   for (let i = 0; i < 40; i++) { pixels = await sampleFrame(); if (red(pixels[0])) break; await new Promise(resolve => setTimeout(resolve, 250)); }
   assert.ok(red(pixels[0]), "Original restores the texture");
-  console.log("Rendered chest pixel and upright logo; swatch and Original restore passed");
+  console.log("Upright front logo, clean back, striped seat and hem, swatch and Original restore passed");
 } finally {
   chrome.kill();
   await new Promise(resolve => { if (chrome.exitCode !== null) resolve(); else { chrome.once("exit", resolve); setTimeout(resolve, 2000); } });

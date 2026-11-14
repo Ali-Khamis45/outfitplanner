@@ -84,7 +84,7 @@ export function TryOn({ textureFixture = false, fixtures = false, outfitId = nul
   const selection = useRef(0);
   const stageRef = useRef<HTMLElement>(null);
   const activeFit = avatar === "personal" && personalSource === "manifest" ? personalFit : null;
-  const bodyId = avatar === "neutral" ? "neutral" : activeFit?.bodyId ?? null;
+  const bodyId = textureFixture ? null : avatar === "neutral" ? "neutral" : activeFit?.bodyId ?? null;
   const [outfitSizes, setOutfitSizes] = useState({ top: "", bottom: "" });
   const topSizes = useSizes(bodyId, "top", fixtures && bodyId === "neutral", outfitSizes.top), bottomSizes = useSizes(bodyId, "bottom", fixtures && bodyId === "neutral", outfitSizes.bottom);
   const [heatmap, setHeatmap] = useState(false);
