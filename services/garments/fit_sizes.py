@@ -25,23 +25,76 @@ PANTS_MIN_HIP_EASE_M = 0.02
 
 
 LAYER_CLEARANCE_M = 0.003  # shirt inner surface over the outer surface of the pants it layers over (rest)
+LAYER_SLOPE = 0.5  # largest change of the layering push per metre along the cloth (vertically and around): no folds
+LAYER_REACH_M = 0.15  # torso vertices up to this far above the push band may take part of the push (the slope fades it)
+LAYER_ROUNDS = 4
+_ANGLE_BINS, _HEIGHT_BIN_M = 144, 0.005
+
+
+def _lipschitz(values: np.ndarray, step_m: float, slope: float, circular: bool) -> np.ndarray:
+    """Smallest field >= values whose change between neighbouring bins is at most slope * step (max-plus envelope)."""
+    out = values.copy()
+    for _ in range(2 if circular else 1):  # two sweeps each way close a circular axis
+        for i in range(1, len(out)):
+            out[i] = np.maximum(out[i], out[i - 1] - slope * step_m)
+        for i in range(len(out) - 2, -1, -1):
+            out[i] = np.maximum(out[i], out[i + 1] - slope * step_m)
+        if circular:
+            out[0] = np.maximum(out[0], out[-1] - slope * step_m)
+            out[-1] = np.maximum(out[-1], out[0] - slope * step_m)
+    return out
 
 
 def push_over(garment: Any, envelope: Any, top_y: float, rules: Any) -> dict[str, Any]:
-    """Push the shirt's torso clear of the pants envelope below top_y (smoothed, as the body clearance pass)."""
-    import trimesh
-    from tshirt import REGION_TORSO, enforce_clearance
+    """Push the shirt's torso clear of the pants envelope below top_y, without folding it.
 
-    mesh = trimesh.Trimesh(garment.vertices, garment.faces, process=False)
-    fixed = (garment.region != REGION_TORSO) | (garment.vertices[:, 1] > top_y)
-    report = enforce_clearance(mesh, envelope, replace(rules, min_clearance_m=LAYER_CLEARANCE_M, clearance_passes=8), fixed)
-    garment.vertices = np.array(mesh.vertices)
-    # enforce_clearance's summary covers every vertex, including the fixed ones far above the pants (meaningless signed
-    # distances there); report the pushed band itself
-    signed, _, _ = envelope.query(garment.vertices[~fixed])
-    report.update({"min_outer_clearance_m": float(signed.min()) if len(signed) else None,
-                   "inner_violations": int((signed - rules.thickness_m < LAYER_CLEARANCE_M - 1e-4).sum()), "band_vertices": int((~fixed).sum())})
-    return report
+    The push is horizontal (radial from the band's axis) and its magnitude is a field over (angle, height): every bin
+    takes the largest push its vertices need, and the field is then raised to its LAYER_SLOPE envelope around and
+    along the body, so the cloth tilts by at most atan(LAYER_SLOPE) and above the band it fades out over
+    push / LAYER_SLOPE. Moving each vertex along its own nearest pants normal instead (the body clearance pass) pleated
+    the cloth just under the waistband rim, where those normals turn from radial to upwards within millimetres; ARAP then
+    flipped the pleat's triangles in UV. Repeated LAYER_ROUNDS times, since the envelope's normals are not radial."""
+    from tshirt import REGION_TORSO
+
+    vertices = np.array(garment.vertices, dtype=np.float64)
+    torso = garment.region == REGION_TORSO
+    band = torso & (vertices[:, 1] <= top_y)
+    reach = torso & (vertices[:, 1] <= top_y + LAYER_REACH_M)
+    required = LAYER_CLEARANCE_M + rules.thickness_m
+    centre = vertices[band].mean(axis=0)
+    radius = float(np.median(np.hypot(vertices[band, 0] - centre[0], vertices[band, 2] - centre[2]))) if band.any() else 0.2
+    low = float(vertices[reach, 1].min()) if reach.any() else 0.0
+    heights = int(np.ceil((top_y + LAYER_REACH_M - low) / _HEIGHT_BIN_M)) + 1
+    total = np.zeros(len(vertices))
+    rounds = []
+    for _ in range(LAYER_ROUNDS):
+        rel = vertices[reach] - centre
+        direction = np.column_stack([rel[:, 0], np.zeros(len(rel)), rel[:, 2]])
+        direction /= np.maximum(np.linalg.norm(direction, axis=1), 1e-9)[:, None]
+        angle = np.floor((np.arctan2(rel[:, 0], rel[:, 2]) + np.pi) / (2 * np.pi) * _ANGLE_BINS).astype(int) % _ANGLE_BINS
+        height = np.clip(np.floor((vertices[reach, 1] - low) / _HEIGHT_BIN_M).astype(int), 0, heights - 1)
+        signed, normals, _ = envelope.query(vertices[reach])
+        in_band = vertices[reach, 1] <= top_y
+        # horizontal push that clears the deficit along the envelope normal (normals near-vertical count at most 3x)
+        along = np.maximum(np.einsum("ij,ij->i", normals, direction), 1 / 3)
+        need = np.where(in_band, np.clip(required - signed, 0.0, None) / along, 0.0)
+        rounds.append({"vertices_short": int((need > 1e-5).sum()), "max_need_m": float(need.max()) if len(need) else 0.0})
+        if not (need > 1e-5).any():
+            break
+        field = np.zeros((_ANGLE_BINS, heights))
+        np.maximum.at(field, (angle, height), need)
+        for row in range(heights):
+            field[:, row] = _lipschitz(field[:, row], 2 * np.pi * radius / _ANGLE_BINS, LAYER_SLOPE, circular=True)
+        for column in range(_ANGLE_BINS):
+            field[column] = _lipschitz(field[column], _HEIGHT_BIN_M, LAYER_SLOPE, circular=False)
+        push = field[angle, height]
+        vertices[reach] += direction * push[:, None]
+        total[np.flatnonzero(reach)] += push
+    garment.vertices = vertices
+    signed, _, _ = envelope.query(vertices[band])
+    return {"vertices_pushed": int((total > 1e-6).sum()), "max_push_m": float(total.max()), "band_vertices": int(band.sum()),
+            "reach_vertices": int(reach.sum()), "min_outer_clearance_m": float(signed.min()) if band.any() else None,
+            "inner_violations": int((signed - rules.thickness_m < LAYER_CLEARANCE_M - 1e-4).sum()), "rounds": rounds}
 
 
 ARM_FADE_START_M = 0.03  # below the armpit, the torso panel's upper-arm weight share fades out between these depths

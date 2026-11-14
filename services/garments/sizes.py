@@ -282,16 +282,19 @@ class GarmentEnvelope:
             mesh = trimesh.Trimesh(vertices, faces, process=False)
             sampled, face_index = trimesh.sample.sample_surface(mesh, samples_per_mesh, seed=seed)
             sampled = np.asarray(sampled)
-            self.parts.append((cKDTree(sampled), sampled, np.asarray(mesh.face_normals)[face_index]))
+            self.parts.append((cKDTree(sampled), sampled, np.asarray(mesh.face_normals)[face_index], float(np.asarray(vertices)[:, 1].max())))
 
     def query(self, points: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Signed distance to the union of the garments (positive outside all of them) and the normal of the garment
         that decides it. Each garment is queried on its own: with one tree over nested garments (S inside XL), a point
-        inside XL but just outside S took S's nearest sample and read as clear."""
+        inside XL but just outside S took S's nearest sample and read as clear. A garment only judges points below its own
+        top edge: above a lower waistband nothing can be inside it, but its rim's outward faces would read a point above
+        and radially inside the rim as deep inside (-85 mm for shirt L neutral over pants M), pushing the shirt far out."""
         signed, normals = None, None
-        for tree, samples, sample_normals in self.parts:
+        for tree, samples, sample_normals, top_y in self.parts:
             _, index = tree.query(points, workers=-1)
             distance = np.einsum("ij,ij->i", points - samples[index], sample_normals[index])
+            distance = np.where(points[:, 1] > top_y, np.inf, distance)
             if signed is None:
                 signed, normals = distance, sample_normals[index].copy()
             else:
