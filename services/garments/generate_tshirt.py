@@ -108,6 +108,10 @@ def topology_report(arrays: dict[str, Any]) -> dict[str, Any]:
 
 def write(directory: Path, body: RestBody, outer: OuterGarment, rules: FitRules, name: str, garment_id: str, revision: str, personal: bool, source_variant: str | None, extra: dict[str, Any], avatar_path: Path = NEUTRAL_AVATAR, original: tuple[Path, Path] | None = None) -> dict[str, Any]:
     arrays = assemble(outer, rules.thickness_m)
+    if rules.adduction_correctives:  # v5.2 and later: UV layout v2 (only TEXCOORD_0 changes; docs/contracts/garment-texture.md)
+        from uv_layout import relayout
+
+        arrays["uv"], extra["uv_layout"] = relayout(arrays, "tshirt")
     glb = new_file(directory / f"{name}.glb")
     info = metadata(body, rules, garment_id, revision, personal, source_variant)
     morphs = None

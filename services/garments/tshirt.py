@@ -75,9 +75,11 @@ class FitRules:
     shoulder_correctives: bool = False  # Sprint 1.4A: pose-driven shoulder corrective morph targets (correctives.py)
     hip_correctives: bool = False  # Sprint 2.1A: hip-flexion correctives that lift the hem off the raised thigh
     adduction_correctives: bool = False  # Sprint 2.2A: arm-down correctives (arms lowered up to 20 deg, walk swing)
+    # Sprint 3A size grading: ease at the body's natural waist (None = the original hem-to-chest profile)
+    ease_waist_m: float | None = None
 
 
-SPRINT_1_1_FIELDS = ("underarm_separation_m", "underarm_length_m", "weight_mode", "weight_band_m", "clearance_smoothing_iterations", "retarget_smoothing_iterations", "discontinuity_ratio", "discontinuity_radius_m", "discontinuity_iterations", "gusset_close_voxels", "gusset_radius_m", "discontinuity_spatial_radius_m", "underarm_panel_radius_m", "underarm_panel_target_stretch", "shoulder_correctives", "hip_correctives", "adduction_correctives")
+SPRINT_1_1_FIELDS = ("underarm_separation_m", "underarm_length_m", "weight_mode", "weight_band_m", "clearance_smoothing_iterations", "retarget_smoothing_iterations", "discontinuity_ratio", "discontinuity_radius_m", "discontinuity_iterations", "gusset_close_voxels", "gusset_radius_m", "discontinuity_spatial_radius_m", "underarm_panel_radius_m", "underarm_panel_target_stretch", "shoulder_correctives", "hip_correctives", "adduction_correctives", "ease_waist_m")
 
 
 def rules_record(rules: FitRules) -> dict[str, Any]:
@@ -159,12 +161,21 @@ def landmarks(body: RestBody, rules: FitRules) -> dict[str, Any]:
         shoulder, elbow = body.joint(f"{side}_uparm"), body.joint(f"{side}_lowarm")
         direction = (elbow - shoulder) / np.linalg.norm(elbow - shoulder)
         sleeves[side] = {"shoulder": shoulder, "direction": direction, "end": shoulder + rules.sleeve_length_ratio * (elbow - shoulder), "length": float(np.linalg.norm(elbow - shoulder)), "axilla": axilla(body, LEFT_ARM if side == "l" else RIGHT_ARM)}
-    return {"hem_y": hip_y - rules.hem_below_hip_m, "hang_y": float(body.joint("c_spine3")[1]) - rules.hang_start_below_spine3_m, "shoulder_y": float((sleeves["l"]["shoulder"][1] + sleeves["r"]["shoulder"][1]) / 2), "neck": neck, "top_y": float(neck[1]) + rules.top_above_neck_m, "sleeves": sleeves}
+    marks = {"hem_y": hip_y - rules.hem_below_hip_m, "hang_y": float(body.joint("c_spine3")[1]) - rules.hang_start_below_spine3_m, "shoulder_y": float((sleeves["l"]["shoulder"][1] + sleeves["r"]["shoulder"][1]) / 2), "neck": neck, "top_y": float(neck[1]) + rules.top_above_neck_m, "sleeves": sleeves}
+    if rules.ease_waist_m is not None:  # Sprint 3A: the natural waist as an extra ease control level
+        from measure import body_measurements
+
+        marks["waist_y"] = body_measurements(body)["waist_y"]
+    return marks
 
 
 def ease_profile(y: np.ndarray, marks: dict[str, Any], rules: FitRules) -> np.ndarray:
     heights = [marks["hem_y"], marks["hang_y"], marks["shoulder_y"]]
-    return np.interp(y, heights, [rules.ease_hem_m, rules.ease_chest_m, rules.ease_shoulder_m])
+    values = [rules.ease_hem_m, rules.ease_chest_m, rules.ease_shoulder_m]
+    if rules.ease_waist_m is not None and marks["hem_y"] < marks.get("waist_y", -1.0) < marks["hang_y"]:
+        heights.insert(1, marks["waist_y"])
+        values.insert(1, rules.ease_waist_m)
+    return np.interp(y, heights, values)
 
 
 def garment_fields(body: RestBody, surface: BodySurface, rules: FitRules, marks: dict[str, Any]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -620,6 +631,11 @@ def transfer_weights(mesh: trimesh.Trimesh, body: RestBody, rules: FitRules, lab
     else:
         raise ValueError(f"Unknown weight mode: {rules.weight_mode}")
     dense[:, ~allowed] = 0.0
+    orphan = dense.sum(axis=1) <= 1e-12
+    if orphan.any():  # Sprint 3A: vertices that projected only onto excluded skin (e.g. a raised collar onto the head)
+        _, nearest = cKDTree(points[~orphan]).query(points[orphan], workers=-1)  # take the nearest weighted vertex's
+        dense[orphan] = dense[np.flatnonzero(~orphan)[nearest]]
+        report["orphan_vertices_reweighted"] = int(orphan.sum())
     dense /= np.clip(dense.sum(axis=1, keepdims=True), 1e-12, None)
     dense = diffuse(dense, mean_operator(mesh), rules.weight_smoothing_iterations)
     order = np.argsort(dense, axis=1)[:, -4:][:, ::-1]

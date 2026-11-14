@@ -68,6 +68,10 @@ def metadata(body: RestBody, rules: PantsRules, version: str = "v1", personal: b
 def write(directory: Path, body: RestBody, garment: Any, rules: PantsRules, version: str, name: str, avatar_path: Path, personal: bool, extra: dict[str, Any]) -> dict[str, Any]:
     """Assemble, solve the leg correctives against `avatar_path`, and write the GLB, sidecar and report."""
     arrays = assemble(garment, rules.fit.thickness_m)
+    if version != "v1":  # pants v2: UV layout v2 (only TEXCOORD_0 changes; docs/contracts/garment-texture.md)
+        from uv_layout import relayout
+
+        arrays["uv"], extra["uv_layout"] = relayout(arrays, "pants")
     glb = new_file(directory / f"{name}.glb")
     info = metadata(body, rules, version, personal)
     avatar = load_asset(avatar_path)

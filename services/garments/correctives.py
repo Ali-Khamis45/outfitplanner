@@ -98,6 +98,9 @@ def dual_quaternion_skin(positions: np.ndarray, joints: np.ndarray, weights: np.
     sign = np.where(np.einsum("vki,vi->vk", q, pivot) < 0, -1.0, 1.0)  # shortest path: same hemisphere as the main joint
     b0, be = np.einsum("vk,vki->vi", weights * sign, q), np.einsum("vk,vki->vi", weights * sign, d)
     norm = np.linalg.norm(b0, axis=1, keepdims=True)
+    unweighted = norm[:, 0] < 1e-12  # vertices no face uses carry no weights: keep them at rest (identity)
+    if unweighted.any():
+        b0[unweighted], be[unweighted], norm[unweighted] = [0.0, 0.0, 0.0, 1.0], 0.0, 1.0
     b0, be = b0 / norm, be / norm
     translation = 2 * _qmul(be, b0 * np.array([-1.0, -1.0, -1.0, 1.0]))[:, :3]
     return np.einsum("vij,vj->vi", Rotation.from_quat(b0).as_matrix(), positions) + translation
