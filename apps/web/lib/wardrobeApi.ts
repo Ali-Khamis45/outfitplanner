@@ -3,13 +3,14 @@ import { mkdir, readFile, realpath, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { NextApiRequest, NextApiResponse } from "next";
 import { localRequest } from "./personalFit.ts";
-import { exampleWardrobe, parseWardrobe } from "./wardrobe/schema.ts";
+import { parseWardrobe } from "./wardrobe/schema.ts";
+import { loadWardrobe, serializeWardrobeWrite, wardrobeVersion, writeWardrobe } from "./wardrobe/storage.ts";
 
 export function createWardrobeHandler(outputs = path.resolve(process.cwd(), "../../outputs"), environment = process.env.NODE_ENV) {
   return async (req: NextApiRequest, res: NextApiResponse) => {
     res.setHeader("Cache-Control", "no-store, private"); res.setHeader("X-Content-Type-Options", "nosniff");
     if (environment !== "development" || !localRequest(req)) return res.status(404).end();
-    const root = path.join(outputs, "wardrobe"), photos = path.join(root, "photos"), file = path.join(root, "wardrobe.json");
+    const root = path.join(outputs, "wardrobe"), photos = path.join(root, "photos");
     try {
       const checkedRoot = async () => { const outputRoot = await realpath(/*turbopackIgnore: true*/ outputs), actual = await realpath(root); if (path.dirname(actual) !== outputRoot) throw new Error("Wardrobe directory is outside outputs."); return actual; };
       const checkedPhotos = async () => { const actualRoot = await checkedRoot(), actual = await realpath(photos); if (path.dirname(actual) !== actualRoot) throw new Error("Photo directory is outside wardrobe."); return actual; };
@@ -35,8 +36,9 @@ export function createWardrobeHandler(outputs = path.resolve(process.cwd(), "../
         return res.status(200).send(await readFile(resolved));
       }
       if (req.method === "GET") {
-        try { const actualRoot = await checkedRoot(), actualFile = await realpath(file); if (path.dirname(actualFile) !== actualRoot) throw new Error("Wardrobe file is outside wardrobe."); return res.status(200).json(parseWardrobe(JSON.parse(await readFile(actualFile, "utf8")))); }
-        catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return res.status(200).json(exampleWardrobe()); throw error; }
+        const wardrobe = await loadWardrobe(outputs);
+        res.setHeader("X-Wardrobe-Version", wardrobeVersion(wardrobe));
+        return res.status(200).json(wardrobe);
       }
       if ((req.method !== "PUT" && req.method !== "POST") || !/^application\/json(?:;|$)/i.test(req.headers["content-type"] ?? "")) return res.status(404).end();
       if (req.method === "POST") {
@@ -68,10 +70,14 @@ export function createWardrobeHandler(outputs = path.resolve(process.cwd(), "../
       }
       let wardrobe;
       try { wardrobe = parseWardrobe(req.body); } catch { return res.status(400).json({ error: "The wardrobe contains invalid fields. Check values and try again." }); }
-      await mkdir(root, { recursive: true });
-      const actualRoot = await checkedRoot(), temporary = path.join(actualRoot, `.${randomUUID()}.tmp`);
-      await writeFile(temporary, `${JSON.stringify(wardrobe, null, 2)}\n`, { flag: "wx" });
-      await rename(temporary, path.join(actualRoot, "wardrobe.json"));
+      const saved = await serializeWardrobeWrite(async () => {
+        const current = await loadWardrobe(outputs);
+        if (req.headers["if-match"] && req.headers["if-match"] !== wardrobeVersion(current)) return false;
+        await writeWardrobe(outputs, wardrobe);
+        return true;
+      });
+      if (!saved) return res.status(409).json({ error: "Wardrobe changed since it was loaded. Reload before saving your changes." });
+      res.setHeader("X-Wardrobe-Version", wardrobeVersion(wardrobe));
       return res.status(200).json(wardrobe);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT" && req.method === "GET" && (req.query.texture || req.query.photo)) return res.status(404).end();

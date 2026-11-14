@@ -2,7 +2,7 @@
 /* Local authenticated photos and blob previews must bypass the Next image optimizer. */
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { CATEGORIES, PATTERNS, SEASONS, type Category, type Wardrobe, type WardrobeItem } from "../../lib/wardrobe/schema";
 import { PhotoCapture, saveCaptures, type Captures } from "./PhotoCapture";
 import { TemplateThumbnail } from "./TemplateThumbnail";
@@ -25,17 +25,18 @@ async function photoSuggestions(file: File): Promise<string[]> {
 async function asDataUrl(file: File): Promise<string> { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(new Error("Could not read photo.")); reader.readAsDataURL(file); }); }
 
 export function WardrobePage() {
+  const version = useRef<string | null>(null);
   const [data, setData] = useState<Wardrobe | null>(null), [error, setError] = useState(""), [saving, setSaving] = useState(false);
   const [search, setSearch] = useState(""), [category, setCategory] = useState(""), [season, setSeason] = useState(""), [occasion, setOccasion] = useState(""), [color, setColor] = useState("");
   const [editing, setEditing] = useState<WardrobeItem | null>(null), [imageFile, setImageFile] = useState<File | null>(null), [suggestions, setSuggestions] = useState<string[]>([]), [preview, setPreview] = useState("");
   const [captures, setCaptures] = useState<Captures>({});
   const [occasionText, setOccasionText] = useState("");
   const [top, setTop] = useState(""), [bottom, setBottom] = useState(""), [outfitName, setOutfitName] = useState(""), [outfitOccasion, setOutfitOccasion] = useState("");
-  useEffect(() => { let active = true; fetch("/api/wardrobe", { cache: "no-store" }).then(r => { if (!r.ok) throw new Error("The local wardrobe is available only on localhost in development."); return r.json(); }).then(value => { if (active) setData(value); }).catch(e => { if (active) setError(e.message); }); return () => { active = false; }; }, []);
+  useEffect(() => { let active = true; fetch("/api/wardrobe", { cache: "no-store" }).then(r => { if (!r.ok) throw new Error("The local wardrobe is available only on localhost in development."); version.current = r.headers.get("X-Wardrobe-Version"); return r.json(); }).then(value => { if (active) setData(value); }).catch(e => { if (active) setError(e.message); }); return () => { active = false; }; }, []);
   const options = (fn: (item: WardrobeItem) => string[]) => [...new Set((data?.items ?? []).flatMap(fn))].sort();
   const seasons = options(item => item.seasons), occasions = options(item => item.occasions), colors = options(item => item.colors.map(c => c.name));
   const filtered = useMemo(() => (data?.items ?? []).filter(item => (!category || item.category === category) && (!season || item.seasons.includes(season)) && (!occasion || item.occasions.includes(occasion)) && (!color || item.colors.some(c => c.name === color)) && `${item.name} ${item.type} ${item.material} ${item.notes}`.toLowerCase().includes(search.toLowerCase().trim())), [data, search, category, season, occasion, color]);
-  async function persist(next: Wardrobe) { setSaving(true); setError(""); try { const response = await fetch("/api/wardrobe", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(next) }); if (!response.ok) throw new Error((await response.json()).error || "Could not save wardrobe."); setData(await response.json()); return true; } catch (e) { setError(e instanceof Error ? e.message : "Could not save wardrobe."); return false; } finally { setSaving(false); } }
+  async function persist(next: Wardrobe) { setSaving(true); setError(""); try { if (!version.current) throw new Error("Wardrobe version unavailable. Reload before saving."); const response = await fetch("/api/wardrobe", { method: "PUT", headers: { "Content-Type": "application/json", "If-Match": version.current }, body: JSON.stringify(next) }); if (!response.ok) throw new Error((await response.json()).error || "Could not save wardrobe."); version.current = response.headers.get("X-Wardrobe-Version"); setData(await response.json()); return true; } catch (e) { setError(e instanceof Error ? e.message : "Could not save wardrobe."); return false; } finally { setSaving(false); } }
   async function saveItem(event: FormEvent) {
     event.preventDefault(); if (!editing || !data) return;
     let item = { ...editing, occasions: list(occasionText) };

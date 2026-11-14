@@ -1,7 +1,8 @@
-﻿import assert from "node:assert/strict";
+import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { createWardrobeHandler } from "../lib/wardrobeApi.ts";
 import { createStylistHandler } from "../lib/stylist/api.ts";
 import { filterWardrobe } from "../lib/stylist/core.ts";
 import { createWeather } from "../lib/stylist/weather.ts";
@@ -25,6 +26,11 @@ try {
   assert.equal((await request("log_worn", {}, { headers: { host: "localhost:3000", origin: "http://evil.example", "content-type": "application/json" } })).code, 404);
   const all = (await request("get_wardrobe")).body; assert.equal(all.length, 6); assert.ok(!("photo" in all[0]) && !("share" in all[0].colours[0]));
   let result = await request("get_wardrobe", { filter: { category: "top", seasons: ["summer"], occasions: ["WORK"], formality_min: 2, formality_max: 2, warmth_max: 1, colour: "#1f2a44" } }); assert.deepEqual(result.body.map(i => i.id), ["example-1"]);
+  const flat = await request("get_wardrobe", { category: "top", seasons: ["summer"] });
+  assert.deepEqual(flat.body, (await request("get_wardrobe", { filter: { category: "top", seasons: ["summer"] } })).body);
+  assert.equal((await request("get_wardrobe", { filter: { category: "top" }, category: "bottom" })).code, 400);
+  assert.equal((await request("get_wardrobe", { category: "not-a-category" })).code, 400);
+  assert.equal((await request("get_wardrobe", { nonsense: true })).code, 400);
   const recent = filterWardrobe(wardrobe, { not_worn_days: 5 }, Date.parse("2026-11-14T12:00:00Z"));
   assert.ok(!recent.some(i => i.id === "example-1")); assert.equal(recent.length, 5);
   assert.equal(filterWardrobe(wardrobe, { not_worn_days: 3 }, Date.parse("2026-11-14T12:00:00Z")).length, 6);
@@ -46,5 +52,23 @@ try {
   assert.equal((await request("log_worn", { outfit_or_item_ids: ["example-1", "missing"], date: "2026-11-14" })).code, 400);
   assert.equal((await request("log_worn", { outfit_or_item_ids: ["example-1"], date: "2026-02-30" })).code, 400);
   assert.deepEqual(JSON.parse(await readFile(path.join(root, "wardrobe/wardrobe.json"), "utf8")), saved);
-  console.log("Stylist routes, filters, weather cache, fit, avatar URL and validated writes passed");
+  const editor = createWardrobeHandler(root, "development");
+  async function editorRequest(method, body, version) {
+    const req = { method, body, query: {}, headers: { host: "localhost:3000", "content-type": "application/json", ...(version ? { "if-match": version } : {}) }, socket: { remoteAddress: "127.0.0.1" } };
+    const res = { code: 0, headers: {}, body: null, setHeader(k, v) { this.headers[k] = v; }, status(code) { this.code = code; return this; }, end() { return this; }, json(value) { this.body = value; return this; } };
+    await editor(req, res); return res;
+  }
+  // Both orders matter: an editor snapshot cannot silently undo a wear event.
+  for (const logFirst of [false, true]) {
+    const snapshot = await editorRequest("GET"); const edited = structuredClone(snapshot.body); edited.items[1].name = `Edited ${logFirst}`;
+    const editorWrite = () => editorRequest("PUT", edited, snapshot.headers["X-Wardrobe-Version"]);
+    const logWrite = () => request("log_worn", { outfit_or_item_ids: ["example-1"], date: "2026-11-15" });
+    const pending = logFirst ? [logWrite(), editorWrite()] : [editorWrite(), logWrite()];
+    const results = await Promise.all(pending), editorResult = results[logFirst ? 1 : 0], logResult = results[logFirst ? 0 : 1];
+    assert.equal(logResult.code, 200); assert.equal(editorResult.code, logFirst ? 409 : 200);
+    const persisted = await editorRequest("GET");
+    assert.equal(persisted.body.items[0].times_worn, snapshot.body.items[0].times_worn + 1);
+    assert.equal(persisted.body.items[1].name, logFirst ? snapshot.body.items[1].name : edited.items[1].name);
+  }
+  console.log("Stylist routes, filters, weather cache, fit, avatar URL, and concurrent wardrobe writes passed");
 } finally { await rm(root, { recursive: true, force: true }); }

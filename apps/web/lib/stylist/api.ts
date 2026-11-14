@@ -1,4 +1,4 @@
-﻿import path from "node:path";
+import path from "node:path";
 import type { NextApiRequest, NextApiResponse } from "next";
 import { localRequest } from "../personalFit.ts";
 import { avatarUrl, filterWardrobe, getFit, InputError, loadWardrobe, logWorn, object } from "./core.ts";
@@ -9,10 +9,14 @@ export function createStylistHandler(outputs = path.resolve(process.cwd(), "../.
     res.setHeader("Cache-Control", "no-store, private"); res.setHeader("X-Content-Type-Options", "nosniff");
     if (environment !== "development" || !localRequest(req) || req.method !== "POST" || !/^application\/json(?:;|$)/i.test(req.headers["content-type"] ?? "")) return res.status(404).end();
     try {
-      const args = object(req.body, req.query.tool === "get_wardrobe" ? ["filter"] : req.query.tool === "get_weather" ? ["date", "city"] : req.query.tool === "get_fit" ? ["item_id", "body"] : req.query.tool === "show_on_avatar" ? ["item_ids", "pose"] : req.query.tool === "log_worn" ? ["outfit_or_item_ids", "date"] : []);
+      const args = object(req.body, req.query.tool === "get_wardrobe" ? ["filter", "category", "seasons", "occasions", "formality_min", "formality_max", "warmth_min", "warmth_max", "colour", "not_worn_days"] : req.query.tool === "get_weather" ? ["date", "city"] : req.query.tool === "get_fit" ? ["item_id", "body"] : req.query.tool === "show_on_avatar" ? ["item_ids", "pose"] : req.query.tool === "log_worn" ? ["outfit_or_item_ids", "date"] : []);
       let result;
       switch (req.query.tool) {
-        case "get_wardrobe": result = filterWardrobe(await loadWardrobe(outputs), args.filter); break;
+        case "get_wardrobe": {
+          const { filter, ...flat } = args;
+          if (filter !== undefined && Object.keys(flat).length) throw new InputError("Use either a nested filter or flat parameters, not both.");
+          result = filterWardrobe(await loadWardrobe(outputs), filter === undefined ? flat : filter); break;
+        }
         case "get_weather": result = await weather(args); break;
         case "get_fit": result = await getFit(outputs, await loadWardrobe(outputs), args); break;
         case "show_on_avatar": result = avatarUrl(await loadWardrobe(outputs), args); break;
