@@ -7,6 +7,12 @@ triangles (personal bodies), re-solve the corrective morphs for this size, and w
 outputs/garments/sizes/<garment>-<size>-<bodyId>.glb (+ _EASE_MM), .correctives.json and .fit.json. Personal bodies
 come from outputs/garments/personal/manifest.json. If outputs/avatars/measurements.json exists, the personal body is
 calibrated to it first (calibrate.py); otherwise calibration is skipped and reported. Nothing is overwritten.
+
+Resumable: each size's GLB, sidecar and report entry (outputs/garment-tests/sizes/<name>.json) are written as soon as
+the size is built. On a later run, a size whose three files exist and validate (GLB parses, carries _EASE_MM for every
+vertex and the sidecar's targets, entry has the fit regions) is skipped and its entry reused; .fit.json (which needs
+every size for the recommendation) is written once all four sizes exist, and verified if it already exists. Long runs
+should be launched detached from the terminal session (see docs/sprint-3/sprint-3a-report.md) and followed by their log.
 """
 from __future__ import annotations
 
@@ -35,6 +41,7 @@ MEASUREMENTS = AVATAR_DIR / "measurements.json"
 RECONSTRUCTION = PROJECT / "outputs" / "sam3d-person-front-sprint03-run2" / "reconstruction.npz"
 GARMENT_TAGS = {"tshirt": "tshirt-v5.2", "pants": "pants-v2"}
 CRASH_LOG = PROJECT / "outputs" / "garment-tests" / "sizes-crash.log"  # faulthandler + per-stage peak memory
+ENTRIES_DIR = PROJECT / "outputs" / "garment-tests" / "sizes"  # per-size report entries (resume)
 
 
 class _MemoryCounters(ctypes.Structure):
@@ -179,6 +186,34 @@ def solve_arm_down(arrays: dict[str, Any], garment: Any, avatar: Any, morphs: di
     return best[2], {"chosen_body_clearance_m": best[1], "worst_depth_m": best[0], "tried": tried}
 
 
+def resume_entry(out_dir: Path, entries_dir: Path, name: str, regions: tuple[str, ...]) -> dict[str, Any] | None:
+    """The report entry of a size already on disk, if its GLB, sidecar and entry exist and validate; else None.
+    A partial set (a kill between two writes) raises, so nothing half-written is silently reused."""
+    from garment_glb import read_glb
+
+    glb, sidecar_path, entry_path = out_dir / f"{name}.glb", out_dir / f"{name}.correctives.json", entries_dir / f"{name}.json"
+    present = [path.is_file() for path in (glb, sidecar_path, entry_path)]
+    if not any(present):
+        return None
+    if not all(present):
+        raise SystemExit(f"{name}: partial outputs ({glb.name}: {present[0]}, {sidecar_path.name}: {present[1]}, entry: {present[2]}); remove them to rebuild")
+    document, blob = read_glb(glb)
+    primitive = document["meshes"][0]["primitives"][0]
+    if "_EASE_MM" not in primitive["attributes"]:
+        raise SystemExit(f"{name}: GLB has no _EASE_MM; remove its outputs to rebuild")
+    if document["accessors"][primitive["attributes"]["_EASE_MM"]]["count"] != document["accessors"][primitive["attributes"]["POSITION"]]["count"]:
+        raise SystemExit(f"{name}: _EASE_MM count differs from POSITION; remove its outputs to rebuild")
+    sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
+    targets = primitive.get("extras", {}).get("targetNames", [])
+    if sorted(sidecar.get("targets", {})) != sorted(targets):
+        raise SystemExit(f"{name}: sidecar targets {sorted(sidecar.get('targets', {}))} differ from the GLB's {sorted(targets)}; remove its outputs to rebuild")
+    entry = json.loads(entry_path.read_text(encoding="utf-8"))
+    if set(entry.get("regions", {})) != set(regions) or "levels" not in entry:
+        raise SystemExit(f"{name}: report entry is incomplete; remove its outputs to rebuild")
+    entry["resumed"] = True
+    return entry
+
+
 def pants_envelope_from_disk(out_dir: Path, body_id: str) -> list[tuple[np.ndarray, np.ndarray]]:
     """Outer layers of the pants sizes already written for this body (when the shirts are regenerated alone)."""
     meshes = []
@@ -259,6 +294,7 @@ def main() -> int:
     parser.add_argument("--garments", nargs="+", default=["tshirt", "pants"], choices=["tshirt", "pants"])
     parser.add_argument("--sizes", nargs="+", default=["S", "M", "L", "XL"], choices=["S", "M", "L", "XL"])
     parser.add_argument("--out-dir", type=Path, default=SIZES_DIR)
+    parser.add_argument("--entries-dir", type=Path, default=ENTRIES_DIR, help="per-size report entries, written as each size finishes (resume)")
     parser.add_argument("--report", type=Path, default=PROJECT / "outputs" / "garment-tests" / "sizes-sprint-3a.json")
     args = parser.parse_args()
     CRASH_LOG.parent.mkdir(parents=True, exist_ok=True)
@@ -294,31 +330,49 @@ def main() -> int:
         if "pants" not in args.garments:  # shirts regenerated alone: layer them over the pants sizes already written
             envelope_meshes += pants_envelope_from_disk(args.out_dir, body_id)
         for garment in sorted(args.garments, key=lambda g: g != "pants"):  # pants first: the shirts clear them
-            built = {}
+            region_names = ("chest", "waist", "hips", "shoulders", "length") if garment == "tshirt" else ("waist", "hips", "length")
+            entries: dict[str, dict[str, Any]] = {}
             for size in args.sizes:
-                stage_log(crash_log, f"begin {body_id} {garment} {size}")
-                if garment == "pants":
-                    built[size] = build_pants(body, body_id, avatar_path, pants[size], surface)
-                else:
-                    from sizes import GarmentEnvelope
-
-                    envelope = GarmentEnvelope(envelope_meshes)
-                    top = float(max(vertices[:, 1].max() for vertices, _ in envelope_meshes))
-                    built[size] = build_shirt(body, body_id, avatar_path, shirt[size], surface, envelope, top)
-                print(f"{body_id} {garment} {size}: {built[size]['seconds']} s {json.dumps(built[size]['regions'])}", flush=True)
-                built[size]["memory"] = stage_log(crash_log, f"done {body_id} {garment} {size} ({built[size]['seconds']} s)")
-            girth_regions = ("chest", "waist", "hips") if garment == "tshirt" else ("waist", "hips")
-            chosen = recommend({s: built[s]["regions"] for s in built}, girth_regions) if set(built) == set(SIZES) else None
-            for size, item in built.items():
                 name = f"{GARMENT_TAGS[garment]}-{size}-{body_id}"  # strings: "v5.2" would confuse Path.with_suffix
-                glb = new_file(args.out_dir / f"{name}.glb")
-                write_garment_glb(glb, item["arrays"], body, item["info"], item["material"], item["morphs"], {"_EASE_MM": item["ease"]})
-                new_file(args.out_dir / f"{name}.correctives.json").write_text(json.dumps(item["sidecar"], indent=2) + "\n", encoding="utf-8")
-                fit_json = {"version": 1, "garment": GARMENT_TAGS[garment], "size": size, "body": body_id, "regions": item["regions"], "recommended": size == chosen}
-                new_file(args.out_dir / f"{name}.fit.json").write_text(json.dumps(fit_json, indent=2) + "\n", encoding="utf-8")
-                body_report["garments"].setdefault(garment, {})[size] = {"regions": item["regions"], "recommended": size == chosen, "levels": item["fit"]["levels"], "fit": item["fit"], "ease_mm_range": [float(item["ease"].min()), float(item["ease"].max())], "seconds": item["seconds"], "memory": item["memory"]}
+                entry = resume_entry(args.out_dir, args.entries_dir, name, region_names)
+                if entry is not None:
+                    stage_log(crash_log, f"resume {body_id} {garment} {size} (outputs validated, build skipped)")
+                else:
+                    stage_log(crash_log, f"begin {body_id} {garment} {size}")
+                    if garment == "pants":
+                        item = build_pants(body, body_id, avatar_path, pants[size], surface)
+                    else:
+                        from sizes import GarmentEnvelope
+
+                        envelope = GarmentEnvelope(envelope_meshes)
+                        top = float(max(vertices[:, 1].max() for vertices, _ in envelope_meshes))
+                        item = build_shirt(body, body_id, avatar_path, shirt[size], surface, envelope, top)
+                    print(f"{body_id} {garment} {size}: {item['seconds']} s {json.dumps(item['regions'])}", flush=True)
+                    memory = stage_log(crash_log, f"done {body_id} {garment} {size} ({item['seconds']} s)")
+                    # written at once, so a killed run keeps every finished size (fit.json follows, once all sizes exist)
+                    glb = new_file(args.out_dir / f"{name}.glb")
+                    write_garment_glb(glb, item["arrays"], body, item["info"], item["material"], item["morphs"], {"_EASE_MM": item["ease"]})
+                    new_file(args.out_dir / f"{name}.correctives.json").write_text(json.dumps(item["sidecar"], indent=2) + "\n", encoding="utf-8")
+                    entry = {"regions": item["regions"], "levels": item["fit"]["levels"], "fit": item["fit"], "ease_mm_range": [float(item["ease"].min()), float(item["ease"].max())], "seconds": item["seconds"], "memory": memory}
+                    args.entries_dir.mkdir(parents=True, exist_ok=True)
+                    new_file(args.entries_dir / f"{name}.json").write_text(json.dumps(entry, indent=2, default=lambda o: o.tolist() if hasattr(o, "tolist") else float(o)), encoding="utf-8")
+                    del item  # the arrays and morphs of a written size are not kept in memory
+                entries[size] = entry
                 if garment == "pants":
-                    envelope_meshes.append(outer_layer(item["arrays"]))
+                    asset = load_asset(args.out_dir / f"{name}.glb")
+                    envelope_meshes.append(outward_faces(asset.positions, asset.indices))
+            girth_regions = ("chest", "waist", "hips") if garment == "tshirt" else ("waist", "hips")
+            chosen = recommend({s: entries[s]["regions"] for s in entries}, girth_regions) if set(entries) == set(SIZES) else None
+            for size, entry in entries.items():
+                name = f"{GARMENT_TAGS[garment]}-{size}-{body_id}"
+                fit_json = {"version": 1, "garment": GARMENT_TAGS[garment], "size": size, "body": body_id, "regions": entry["regions"], "recommended": size == chosen}
+                fit_path = args.out_dir / f"{name}.fit.json"
+                if fit_path.is_file():
+                    if json.loads(fit_path.read_text(encoding="utf-8")) != fit_json:
+                        raise SystemExit(f"{fit_path} exists and differs from this run's fit data; remove it to rewrite")
+                else:
+                    fit_path.write_text(json.dumps(fit_json, indent=2) + "\n", encoding="utf-8")
+                body_report["garments"].setdefault(garment, {})[size] = {**entry, "recommended": size == chosen}
             body_report["garments"][garment]["recommended"] = chosen
         report["bodies"][body_id] = body_report
     args.report.parent.mkdir(parents=True, exist_ok=True)
