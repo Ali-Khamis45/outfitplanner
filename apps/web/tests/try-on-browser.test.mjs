@@ -41,7 +41,7 @@ try {
     throw new Error(`Timed out: ${label}`);
   }
   await send("Page.enable"); await send("Runtime.enable"); await send("Network.enable");
-  if (process.env.TEST_FIT_SIZES === "1") await send("Page.addScriptToEvaluateOnNewDocument", { source: `
+  if (process.env.TEST_FIT_SIZES === "1" || process.env.TEST_PERSONAL_SIZE_SWITCH === "1") await send("Page.addScriptToEvaluateOnNewDocument", { source: `
     window.__fitShaders = []; window.__easeDraws = [];
     for (const p of [WebGLRenderingContext.prototype, WebGL2RenderingContext.prototype]) {
       const source = p.shaderSource, compile = p.compileShader, data = p.bufferData, pointer = p.vertexAttribPointer, location = p.getAttribLocation, draw = p.drawElements;
@@ -53,6 +53,28 @@ try {
       p.vertexAttribPointer = function(index, ...args) { bindings.set(this, { ...(bindings.get(this) || {}), [index]: this.getParameter(this.ARRAY_BUFFER_BINDING) }); return pointer.call(this, index, ...args); };
       p.drawElements = function(...args) { const program = this.getParameter(this.CURRENT_PROGRAM), index = locations.get(program), buffer = bindings.get(this)?.[index], values = buffers.get(buffer); if (index !== undefined && values) { const signature = JSON.stringify(values); if (!window.__easeDraws.includes(signature)) window.__easeDraws.push(signature); } return draw.call(this, ...args); };
     }` });
+  if (process.env.TEST_PERSONAL_SIZE_SWITCH === "1" || process.env.TEST_PERSONAL_SIZE_FALLBACK === "1") await send("Page.addScriptToEvaluateOnNewDocument", { source: `
+    window.__personalFixtureRequests = [];
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = async (input, init) => {
+      const url = new URL(typeof input === 'string' ? input : input.url, location.href);
+      if (url.pathname === '/api/personal-fit') {
+        window.__personalFixtureRequests.push(url.searchParams.get('asset') || 'manifest');
+        if (!url.searchParams.has('asset')) return Response.json({body:'/api/personal-fit?asset=body',shirt:'/api/personal-fit?asset=shirt',pants:'/api/personal-fit?asset=pants',shirtSidecar:null,pantsSidecar:null,bodyId:'fixture_personal'});
+        if (url.searchParams.get('asset') === 'body') return originalFetch('/api/demo-avatar', init);
+        if (url.searchParams.get('asset') === 'shirt') return originalFetch('/api/demo-garment?variant=v5.2', init);
+        if (url.searchParams.get('asset') === 'pants') return originalFetch('/api/demo-garment?variant=pants-v2', init);
+      }
+      if (url.pathname === '/api/size-garment' && url.searchParams.get('body') === 'fixture_personal') {
+        await new Promise(resolve => setTimeout(resolve, 600));
+        if (${JSON.stringify(process.env.TEST_PERSONAL_SIZE_FALLBACK === '1')}) return Response.json([]);
+        const slot = url.searchParams.get('slot');
+        const response = await originalFetch('/api/size-garment?body=neutral&slot=' + slot + '&fixtures=1', init);
+        const options = await response.json();
+        return Response.json(options.map(option => ({...option, fit:{...option.fit,body:'fixture_personal'}, glb:option.glb + '&test-personal=1', sidecar:option.sidecar + '&test-personal=1'})));
+      }
+      return originalFetch(input, init);
+    };` });
   await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
   await send("Page.navigate", { url: process.env.TRY_ON_URL ?? "http://localhost:3000/try-on" });
   await waitFor("!!document.querySelector('.try-stage-loading') && getComputedStyle(document.querySelector('.try-viewport')).position === 'absolute'", "styled loading indicator");
@@ -86,6 +108,30 @@ try {
     assert.ok(requests.some(url => url.includes("size=S") && url.includes("asset=glb")), "selected size GLB requested");
     console.log("Recommended sizes, size selection, fit summary and heatmap shader passed");
   }
+  if (process.env.TEST_PERSONAL_SIZE_SWITCH === "1") {
+    await waitFor("document.querySelector('[aria-label=\"Top fit\"] button[aria-pressed=\"true\"]')?.textContent === 'M' && document.querySelector('[aria-label=\"Bottom fit\"] button[aria-pressed=\"true\"]')?.textContent === 'M'", "neutral fixture sizes");
+    await evaluate("document.querySelector('.fit-heatmap input').click()");
+    await waitFor("window.__easeDraws.length >= 2", "neutral heatmap draws");
+    await evaluate("window.__easeDraws = []; [...document.querySelectorAll('button')].find(e => e.textContent.includes('My avatar')).click()");
+    await waitFor("!!document.querySelector('.try-avatar-options button.selected')?.textContent.includes('My avatar') && !document.querySelector('.try-stage-loading') && window.__easeDraws.length >= 2", "personal size heatmaps without toggling");
+    assert.ok(await evaluate("document.querySelector('.fit-heatmap input').checked"), "heatmap stays enabled across avatars");
+    assert.ok(!(await evaluate("document.body.innerText.includes('could not be fitted')")), "personal fixture garments bind");
+    assert.deepEqual(await evaluate("window.__personalFixtureRequests.filter(asset => asset === 'shirt' || asset === 'pants')"), [], "base personal GLBs must not be requested when sizes exist");
+    for (const slot of ["top", "bottom"]) assert.ok(requests.some(url => url.includes(`slot=${slot}`) && url.includes('size=M') && url.includes('asset=glb') && url.includes('test-personal=1')), `${slot} personal size must load`);
+    const personalEase = await evaluate("window.__easeDraws.slice()");
+    await evaluate("document.querySelector('[aria-label=\"Top fit\"] button[aria-label=\"S\"]').click()");
+    await waitFor("document.querySelector('[aria-label=\"Top fit\"] button[aria-label=\"S\"]').getAttribute('aria-pressed') === 'true' && window.__easeDraws.length > " + personalEase.length, "personal size change retains heatmap");
+    assert.ok(requests.some(url => url.includes('size=S') && url.includes('asset=glb') && url.includes('test-personal=1')), "changed personal size GLB requested");
+    assert.deepEqual(await evaluate("window.__personalFixtureRequests.filter(asset => asset === 'shirt' || asset === 'pants')"), [], "changing size must not request base personal GLBs");
+    console.log("Heatmap survives avatar and size changes; size fits skip base personal GLBs");
+  }
+  if (process.env.TEST_PERSONAL_SIZE_FALLBACK === "1") {
+    await evaluate("[...document.querySelectorAll('button')].find(e => e.textContent.includes('My avatar')).click()");
+    await waitFor("!!document.querySelector('.try-avatar-options button.selected')?.textContent.includes('My avatar') && !document.querySelector('.try-stage-loading')", "personal base fallback");
+    assert.deepEqual((await evaluate("window.__personalFixtureRequests.filter(asset => asset === 'shirt' || asset === 'pants')")).sort(), ["pants", "shirt"]);
+    assert.ok(!(await evaluate("document.body.innerText.includes('could not be fitted')")), "base personal garments must bind");
+    console.log("Personal base garments load when size fits are unavailable");
+  }
   if (process.env.TEST_PERSONAL_FALLBACK === "1") {
     await evaluate("[...document.querySelectorAll('button')].find(e => e.textContent.includes('My avatar')).click()");
     await waitFor("document.body.innerText.includes('No personal fit found') && !!document.querySelector('#try-avatar-file')", "personal fallback");
@@ -94,12 +140,19 @@ try {
   if (process.env.TEST_PERSONAL_FIT === "1") {
     await evaluate("[...document.querySelectorAll('button')].find(e => e.textContent.includes('My avatar')).click()");
     await waitFor("!!document.querySelector('.try-avatar-options button.selected')?.textContent.includes('My avatar') && !document.querySelector('.try-stage-loading')", "personal fit");
-    for (const asset of ["body", "shirt", "pants", "shirtSidecar", "pantsSidecar"]) assert.ok(requests.some(url => url.includes(`asset=${asset}`)), `${asset} was not loaded`);
+    assert.ok(requests.some(url => url.includes("/api/personal-fit?asset=body")), "personal body was not loaded");
+    for (const [slot, asset] of [["top", "shirt"], ["bottom", "pants"]]) {
+      const hasSizes = await evaluate(`!!document.querySelector('[aria-label="${slot === "top" ? "Top" : "Bottom"} fit"] button[aria-pressed="true"]')`);
+      if (hasSizes) {
+        assert.ok(requests.some(url => url.includes("asset=glb") && url.includes(`slot=${slot}`)), `${slot} size garment was not loaded`);
+        assert.ok(!requests.some(url => new URL(url).pathname === "/api/personal-fit" && new URL(url).searchParams.get("asset") === asset), `${slot} base garment should not be loaded`);
+      } else assert.ok(requests.some(url => url.includes(`/api/personal-fit?asset=${asset}`)), `${asset} base garment was not loaded`);
+    }
     assert.ok(!(await evaluate("document.body.innerText.includes('could not be fitted')")), "personal garments must bind");
-    console.log("Manifest body, shirt, pants and sidecars loaded together");
+    console.log("Personal body and selected size or base garments loaded together");
   }
   for (const variant of ["v5.2", "pants-v2"]) assert.ok(requests.some(url => url.includes(`variant=${variant}&sidecar=1`)), `${variant} sidecar not requested`);
-  if (process.env.TEST_REAL_CLAMPED !== "1") {
+  if (process.env.TEST_REAL_CLAMPED !== "1" && process.env.TEST_PERSONAL_SIZE_SWITCH !== "1" && process.env.TEST_PERSONAL_SIZE_FALLBACK !== "1") {
   await evaluate("window.__tryOnTestCanvas = document.querySelector('canvas'); true");
   const sizes = [[390, 844], [1024, 844], [1440, 900], [390, 844], [844, 390]];
   for (const [index, [width, height]] of sizes.entries()) {
