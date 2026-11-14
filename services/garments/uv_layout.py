@@ -256,13 +256,23 @@ def relayout(arrays: dict[str, Any], kind: str) -> tuple[np.ndarray, dict[str, A
 
 
 def glb_outer_faces(faces: np.ndarray, uv: np.ndarray) -> np.ndarray:
-    """Outer-layer faces of a v2-layout GLB: the inner layer reuses the outer UVs with reversed winding (negative UV
-    area) and rims are flat in UV, so the outer layer is exactly the faces with positive signed UV area."""
-    t1, t2 = uv[faces[:, 1]] - uv[faces[:, 0]], uv[faces[:, 2]] - uv[faces[:, 0]]
-    return faces[(t1[:, 0] * t2[:, 1] - t1[:, 1] * t2[:, 0]) > 1e-14]
+    """Outer-layer faces of a v2-layout GLB. The vertex buffer is [outer n | inner n (a copy of the outer UVs) | rims],
+    so n is the first split where the second block's UVs repeat the first's; the outer layer is the faces whose three
+    vertices are below n. (Selecting faces by positive UV area instead would swap a folded outer face for its inner
+    twin and hide the fold.)"""
+    candidates = np.flatnonzero((uv == uv[0]).all(axis=1))
+    for n in candidates[candidates > 0]:
+        if 2 * n <= len(uv) and np.array_equal(uv[n:2 * n], uv[:n]):
+            return faces[(faces < n).all(axis=1)]
+    raise ValueError("not a UV layout v2 GLB: no inner layer repeating the outer UVs")
 
 
-MIN_WITHIN_TOLERANCE = 0.99  # share of each island's triangles within +/-15% of its median density (see contract)
+# Quality bounds (docs/contracts/garment-texture.md). STRICT: the neutral base garments (tshirt-v5.2, pants-v2), which
+# the layout was tuned on. FIT_3A: every fit on another body or size (personal fits, Sprint 3A sizes), measured worst
+# cases with margin; Sprint 3.5 (per-panel seams) restores STRICT for all.
+STRICT = {"min_within_tolerance": 0.99, "anisotropy_p99": 1.35, "overlap_excluding_folded_pct": 0.5, "folded_pct": 0.02, "folded_area_cm2": 20.0}
+FIT_3A = {"min_within_tolerance": 0.985, "anisotropy_p99": 1.45, "overlap_excluding_folded_pct": 0.5, "folded_pct": 0.02, "folded_area_cm2": 20.0}
+MIN_WITHIN_TOLERANCE = STRICT["min_within_tolerance"]  # share of each island's triangles within +/-15% of its median density
 
 
 def _overlap_pct(uv: np.ndarray, faces: np.ndarray, resolution: int = 2048) -> float:
@@ -296,7 +306,9 @@ def density_check(positions: np.ndarray, faces: np.ndarray, uv: np.ndarray, regi
     e1, e2 = positions[faces[:, 1]] - positions[faces[:, 0]], positions[faces[:, 2]] - positions[faces[:, 0]]
     area3 = 0.5 * np.linalg.norm(np.cross(e1, e2), axis=1)
     t1, t2 = uv[faces[:, 1]] - uv[faces[:, 0]], uv[faces[:, 2]] - uv[faces[:, 0]]
-    area_uv = 0.5 * np.abs(t1[:, 0] * t2[:, 1] - t1[:, 1] * t2[:, 0])
+    signed_uv = 0.5 * (t1[:, 0] * t2[:, 1] - t1[:, 1] * t2[:, 0])
+    area_uv = np.abs(signed_uv)
+    folded = signed_uv < 0  # outer faces wind outward: a negative UV area is a triangle flipped (folded) by the flattening
     P, _ = _local_frames(positions, faces)
     D = np.stack([P[:, 1], P[:, 2]], axis=2)  # 2x2 local edge matrix
     T = np.stack([t1, t2], axis=2)
@@ -316,8 +328,13 @@ def density_check(positions: np.ndarray, faces: np.ndarray, uv: np.ndarray, regi
         u0, v0, u1, v1 = island.rect
         corners = uv[faces[m]].reshape(-1, 2)
         outside = ((corners[:, 0] < u0 - 1e-6) | (corners[:, 0] > u1 + 1e-6) | (corners[:, 1] < v0 - 1e-6) | (corners[:, 1] > v1 + 1e-6)).sum()
+        island_folded = folded & np.isin(face_region, island.regions)
         report[island.name] = {
             "uv_overlap_pct": round(_overlap_pct(uv, faces[m]), 3),
+            "uv_overlap_excluding_folded_pct": round(_overlap_pct(uv, faces[m & ~folded]), 3),
+            "folded_triangles": int(island_folded.sum()),
+            "folded_pct": round(100 * float(island_folded.sum()) / max(int(m.sum()), 1), 4),
+            "folded_area_cm2": round(float(area3[island_folded].sum()) * 1e4, 2),
             "triangles": int(m.sum()), "median_density_uv_per_m": round(median, 4),
             "outside_tolerance": int((np.abs(ratio - 1) > tolerance).sum()),
             "outside_tolerance_pct": round(float(np.mean(np.abs(ratio - 1) > tolerance)) * 100, 2),

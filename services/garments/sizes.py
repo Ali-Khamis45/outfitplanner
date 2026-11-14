@@ -277,19 +277,28 @@ class GarmentEnvelope:
         import trimesh
         from scipy.spatial import cKDTree
 
-        points, normals = [], []
+        self.parts = []
         for vertices, faces in meshes:
             mesh = trimesh.Trimesh(vertices, faces, process=False)
             sampled, face_index = trimesh.sample.sample_surface(mesh, samples_per_mesh, seed=seed)
-            points.append(np.asarray(sampled))
-            normals.append(np.asarray(mesh.face_normals)[face_index])
-        self.points, self.normals = np.concatenate(points), np.concatenate(normals)
-        self.tree = cKDTree(self.points)
+            sampled = np.asarray(sampled)
+            self.parts.append((cKDTree(sampled), sampled, np.asarray(mesh.face_normals)[face_index]))
 
     def query(self, points: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        _, index = self.tree.query(points, workers=-1)
-        offset = points - self.points[index]
-        return np.einsum("ij,ij->i", offset, self.normals[index]), self.normals[index], np.zeros(len(points), dtype=np.int32)
+        """Signed distance to the union of the garments (positive outside all of them) and the normal of the garment
+        that decides it. Each garment is queried on its own: with one tree over nested garments (S inside XL), a point
+        inside XL but just outside S took S's nearest sample and read as clear."""
+        signed, normals = None, None
+        for tree, samples, sample_normals in self.parts:
+            _, index = tree.query(points, workers=-1)
+            distance = np.einsum("ij,ij->i", points - samples[index], sample_normals[index])
+            if signed is None:
+                signed, normals = distance, sample_normals[index].copy()
+            else:
+                closer = distance < signed
+                signed = np.where(closer, distance, signed)
+                normals[closer] = sample_normals[index][closer]
+        return signed, normals, np.zeros(len(points), dtype=np.int32)
 
 
 def clamp_ease(value: float) -> float:

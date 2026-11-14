@@ -36,6 +36,11 @@ def push_over(garment: Any, envelope: Any, top_y: float, rules: Any) -> dict[str
     fixed = (garment.region != REGION_TORSO) | (garment.vertices[:, 1] > top_y)
     report = enforce_clearance(mesh, envelope, replace(rules, min_clearance_m=LAYER_CLEARANCE_M, clearance_passes=8), fixed)
     garment.vertices = np.array(mesh.vertices)
+    # enforce_clearance's summary covers every vertex, including the fixed ones far above the pants (meaningless signed
+    # distances there); report the pushed band itself
+    signed, _, _ = envelope.query(garment.vertices[~fixed])
+    report.update({"min_outer_clearance_m": float(signed.min()) if len(signed) else None,
+                   "inner_violations": int((signed - rules.thickness_m < LAYER_CLEARANCE_M - 1e-4).sum()), "band_vertices": int((~fixed).sum())})
     return report
 
 
