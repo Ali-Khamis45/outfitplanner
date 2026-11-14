@@ -12,7 +12,8 @@ Resumable: each size's GLB, sidecar and report entry (outputs/garment-tests/size
 the size is built. On a later run, a size whose three files exist and validate (GLB parses, carries _EASE_MM for every
 vertex and the sidecar's targets, entry has the fit regions) is skipped and its entry reused; .fit.json (which needs
 every size for the recommendation) is written once all four sizes exist, and verified if it already exists. Long runs
-should be launched detached from the terminal session (see docs/sprint-3/sprint-3a-report.md) and followed by their log.
+should be launched detached from the terminal session with tools/launch_detached.ps1 (README, "Long-running jobs")
+and followed by their log.
 """
 from __future__ import annotations
 
