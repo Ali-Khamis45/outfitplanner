@@ -54,7 +54,7 @@ A heatmap therefore shows the size as specified (for example S shoulders tight),
 - **`length.delta_mm`** (integer) is `hem_target_y − hem_y`. Positive means the garment is longer than the body's target, negative means shorter.
 - **`status`** is `tight`, `good` or `loose`, per §5. For `length`, `tight` means too short and `loose` means too long.
 - **`clamped`** (optional, only ever `true`) marks a region whose **drawn geometry was held wider than the size spec**:
-  - a girth region whose drawn girth exceeds the spec by more than 5 mm (the fitting tolerance), i.e. held at the minimum-ease floor;
+  - a girth region whose drawn girth exceeds the spec by more than 5 mm (the fitting tolerance): held at the minimum-ease floor, or, for shirt `hips`, pushed out over the pants waistbands by the layering pass (§7). The second applies to every shirt size, because one shirt GLB clears the loosest waistband;
   - `shoulders`, when the size's shoulder or sleeve ease was held at the base shirt's size (the sleeves have no region of their own, so their clamp is reported here).
 
   The region's `ease_mm` and `status` are **always computed from the size spec**, never from the clamped mesh. `shoulders` subtracts the held width (2 × the shoulder hold). An absent field means the mesh follows the spec.
