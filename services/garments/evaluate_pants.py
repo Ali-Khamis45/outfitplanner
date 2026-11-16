@@ -119,7 +119,23 @@ def shirt_layering(pants: SkinnedAsset, shirt: SkinnedAsset, body: SkinnedAsset)
     shirt_cell, shirt_radius = cells(shirt.positions[shirt_band])
     common = np.intersect1d(pants_cell, shirt_cell)
     gap = np.array([shirt_radius[shirt_cell == c].min() - pants_radius[pants_cell == c].max() for c in common])
+    # Layer order, local (Sprint 3A): every shirt vertex of the overlap band within 3 cm of the pants must lie on the
+    # outer side of the nearest pants outer-surface triangle (signed distance > 0). Unlike the angle x height cells
+    # above (which compare extremes inside 5 deg x 1 cm and misfire on sloped surfaces such as the seat), this is exact
+    # per vertex; a tucked-in shirt fails it.
+    centre_xz = np.array([centre[0], 0.0, centre[2]])
+    radial = pants_mesh.triangles_center - centre_xz
+    radial[:, 1] = 0.0
+    outer = np.einsum("ij,ij->i", pants_mesh.face_normals, radial) > 0
+    outer_mesh = trimesh.Trimesh(pants_mesh.vertices, pants_mesh.faces[outer], process=False)
+    band_points = shirt.positions[shirt_band]
+    closest, distance, face = trimesh.proximity.closest_point(outer_mesh, band_points)
+    near = distance < 0.03
+    signed = np.einsum("ij,ij->i", band_points - closest, outer_mesh.face_normals[face])
+    under = near & (signed < 0)
     return {
+        "shirt_vertices_under_pants": int(under.sum()), "shirt_vertices_near_pants": int(near.sum()),
+        "min_shirt_to_pants_signed_mm": round(float(signed[near].min()) * 1000, 2) if near.any() else None,
         "shirt_hem_y": round(hem_y, 4), "waistband_top_y": round(waist_top_y, 4), "overlap_m": round(waist_top_y - hem_y, 4),
         "pants_vertices_inside_shirt_shell": int(pants_in_shirt.sum()), "shirt_vertices_inside_pants_shell": int(shirt_in_pants.sum()),
         "max_depth_mm": round(float(max(pants_depth.max(initial=0.0), shirt_depth.max(initial=0.0))) * 1000, 2),

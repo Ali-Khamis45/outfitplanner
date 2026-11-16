@@ -272,6 +272,10 @@ class GeneratedV52Tests(unittest.TestCase):
         self.assertEqual(v52.sidecar, signed_shirt_sidecar(v52.skeleton, True))
         mine, base = accessor_bytes(V52_GARMENT), accessor_bytes(V2_GARMENT)
         for key in base:
+            if key == "TEXCOORD_0":  # Sprint 3A: v5.2 carries UV layout v2 (docs/contracts/garment-texture.md)
+                self.assertNotEqual(mine[key], base[key], key)
+                self.assertEqual(len(mine[key]), len(base[key]), key)
+                continue
             self.assertEqual(mine[key], base[key], key)
 
     def test_arm_down_targets_follow_lowering_only(self) -> None:

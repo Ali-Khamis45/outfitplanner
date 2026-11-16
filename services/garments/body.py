@@ -86,6 +86,13 @@ def evaluate_rest_body(model: Any, variant: BodyVariant, reconstruction: Path | 
     translated rigidly (vertices and all joint positions together), so shape, proportions and the bone hierarchy
     are unchanged and the inverse bind matrices are recomputed consistently from the moved skeleton."""
     identity, parameters = rest_parameters(model, variant, reconstruction)
+    return evaluate_body_from_parameters(model, variant, identity, parameters, floor_align)
+
+
+def evaluate_body_from_parameters(model: Any, variant: BodyVariant, identity: np.ndarray, parameters: np.ndarray, floor_align: bool = False) -> RestBody:
+    """evaluate_rest_body for explicit identity (45) and model parameters (204); Sprint 3A calibration varies them."""
+    identity = np.asarray(identity, dtype=np.float32)
+    parameters = np.asarray(parameters, dtype=np.float32)
     with torch.inference_mode():
         vertices, skeleton = model(torch.from_numpy(identity[None]), torch.from_numpy(parameters[None]), torch.zeros(1, 72))
     skeleton_state = skeleton[0].numpy().astype(np.float64)

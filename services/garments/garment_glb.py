@@ -32,7 +32,7 @@ def _official_exporter() -> Any:
     return exporters
 
 
-def write_garment_glb(path: Path, arrays: dict[str, np.ndarray], body: "RestBody", metadata: dict[str, Any], material: dict[str, Any], morphs: dict[str, np.ndarray] | None = None) -> None:
+def write_garment_glb(path: Path, arrays: dict[str, np.ndarray], body: "RestBody", metadata: dict[str, Any], material: dict[str, Any], morphs: dict[str, np.ndarray] | None = None, extra_attributes: dict[str, np.ndarray] | None = None) -> None:
     """`morphs` (name -> per-vertex POSITION deltas, in order) adds glTF morph targets; without it the bytes are unchanged."""
     exporters = _official_exporter()
     rig = exporters._validated_rig(
@@ -48,6 +48,10 @@ def write_garment_glb(path: Path, arrays: dict[str, np.ndarray], body: "RestBody
         "WEIGHTS_0": builder.add_accessor(rig.joint_weights.astype("<f4"), component_type=FLOAT, accessor_type="VEC4", target=ARRAY_BUFFER),
         "_REGION": builder.add_accessor(arrays["region"].astype("<f4"), component_type=FLOAT, accessor_type="SCALAR", target=ARRAY_BUFFER),
     }
+    for name, values in (extra_attributes or {}).items():  # Sprint 3A: e.g. _EASE_MM (float scalar per vertex)
+        if not name.startswith("_"):
+            raise ValueError(f"Custom vertex attributes must start with '_': {name}")
+        attributes[name] = builder.add_accessor(np.asarray(values).astype("<f4"), component_type=FLOAT, accessor_type="SCALAR", target=ARRAY_BUFFER)
     indices = builder.add_accessor(arrays["faces"].reshape(-1).astype("<u4"), component_type=UNSIGNED_INT, accessor_type="SCALAR", target=ELEMENT_ARRAY_BUFFER)
     inverse_binds = builder.add_accessor(rig.inverse_bind_matrices.astype("<f4"), component_type=FLOAT, accessor_type="MAT4", matrix_column_major=True)
     targets = [{"POSITION": builder.add_accessor(delta.astype("<f4"), component_type=FLOAT, accessor_type="VEC3", target=ARRAY_BUFFER, include_bounds=True)} for delta in (morphs or {}).values()]
