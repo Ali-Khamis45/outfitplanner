@@ -54,25 +54,25 @@ Body at rest: chest 108.7 cm, waist 92.7 cm, hips 109.5 cm, shoulder width 41.7 
 
 ### personal-scaled (the primary personal body)
 
-The personal body's own measurements are personal data and are not recorded here. They are in the local, git-ignored `outputs/garment-tests/sizes-sprint-3a.json`.
+The personal body's own measurements are personal data and are not recorded here. For the same reason, the tables below give each region's status only, without `ease_mm` (an ease and its size spec together give the body girth). The full numbers are in the local, git-ignored `outputs/garment-tests/sizes-sprint-3a.json`.
 
-**T-shirt v5.2**: recommended **M**. Values are `ease_mm` (`delta_mm` for length) and status.
+**T-shirt v5.2**: recommended **M**. Status only.
 
 | Size | chest | waist | hips | shoulders | length |
 | --- | --- | --- | --- | --- | --- |
-| S | +56 tight (c) | +224 good (c) | -14 tight (c) | +4 good (c) | -35 good |
-| **M** ✓ | +156 good | +324 good | +69 good (c) | +37 good | -10 good |
-| L | +256 loose | +424 loose | +160 good (c) | +40 loose | +16 good |
-| XL | +356 loose | +524 loose | +260 loose (c) | +40 good | +41 loose |
+| S | tight (clamped) | good (clamped) | tight (clamped) | good (clamped) | good |
+| **M** ✓ | good | good | good (clamped) | good | good |
+| L | loose | loose | good (clamped) | loose | good |
+| XL | loose | loose | loose (clamped) | good | loose |
 
-**Pants v2**: recommended **M**. Values are `ease_mm` (`delta_mm` for length) and status.
+**Pants v2**: recommended **M**. Status only.
 
 | Size | waist | hips | length |
 | --- | --- | --- | --- |
-| S | -103 tight (c) | -46 tight (c) | +58 loose |
-| **M** ✓ | +19 good (c) | +54 good (c) | +58 loose |
-| L | +153 loose | +154 loose | +58 loose |
-| XL | +316 loose | +254 loose | +58 loose |
+| S | tight (clamped) | tight (clamped) | loose |
+| **M** ✓ | good (clamped) | good (clamped) | loose |
+| L | loose | loose | loose |
+| XL | loose | loose | loose |
 
 
 ### Clamped regions per size
