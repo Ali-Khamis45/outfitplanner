@@ -34,6 +34,9 @@ if (![avatarPath, shirtPath, sidecarPath].every(existsSync)) {
     assert.equal((await readdir(cache)).filter(file => file.endsWith(".glb")).length, 2, "different source hashes have separate cache entries");
     const originalBody = await load(baseAvatar), compressedBody = await load(packedAvatar);
     const originalShirt = await load(baseShirt), compressedShirt = await load(packedShirt);
+    const originalUv = originalShirt.geometry.getAttribute("uv"), compressedUv = compressedShirt.geometry.getAttribute("uv");
+    assert.ok(originalUv && compressedUv, "compression must preserve UVs for externally textured garments");
+    assert.equal(compressedUv.count, compressedShirt.geometry.getAttribute("position").count);
     assert.deepEqual(Object.keys(compressedShirt.morphTargetDictionary), Object.keys(originalShirt.morphTargetDictionary));
     assert.deepEqual(compressedBody.skeleton.bones.map(bone => bone.name), originalBody.skeleton.bones.map(bone => bone.name));
     assert.deepEqual(compressedShirt.skeleton.bones.map(bone => bone.name), originalShirt.skeleton.bones.map(bone => bone.name));

@@ -13,6 +13,7 @@ import type { Sidecar } from "../../lib/garment/correctives";
 import { createSidecarLoader, DEFAULT_PANTS_VARIANT, pantsUrl, sidecarIsPending, sidecarUrlForSelection } from "../../lib/garment/demoResources";
 import type { PoseName } from "../../lib/garment/poses";
 import type { AssetStatus, AvatarSource, CameraView, GarmentInfo, GarmentSource, GarmentStatus, ModelInfo, RenderStats } from "./types";
+import { FitPicker, MeasurementsForm, useSizes } from "../FitControls";
 
 class SceneErrorBoundary extends Component<{ children: ReactNode; onError: () => void; source: AvatarSource }, { failed: boolean }> {
   state = { failed: false };
@@ -28,6 +29,8 @@ class SceneErrorBoundary extends Component<{ children: ReactNode; onError: () =>
 export function AvatarLab() {
   const [wireframe, setWireframe] = useState(false), [garmentWireframe, setGarmentWireframe] = useState(false), [skeleton, setSkeleton] = useState(false), [grid, setGrid] = useState(true), [turntable, setTurntable] = useState(false);
   const [source, setSource] = useState<AvatarSource>(NEUTRAL_SOURCE);
+  const topSizes = useSizes(source.kind === "neutral" ? "neutral" : null, "top"), bottomSizes = useSizes(source.kind === "neutral" ? "neutral" : null, "bottom");
+  const [heatmap, setHeatmap] = useState(false), [useFitSizes, setUseFitSizes] = useState(true);
   const [status, setStatus] = useState<AssetStatus>("loading");
   const [model, setModel] = useState<ModelInfo | null>(null);
   const [garmentEnabled, setGarmentEnabled] = useState(true), [garmentVisible, setGarmentVisible] = useState(true), [garmentColor, setGarmentColor] = useState("#3f78c8");
@@ -79,6 +82,8 @@ export function AvatarLab() {
   const onGarmentReady = useCallback((info: GarmentInfo) => setGarmentStatus({ state: "ready", info }), []);
   const onGarmentError = useCallback((message: string) => setGarmentStatus({ state: "error", message }), []);
   const garmentLayer = useMemo(() => (garmentEnabled && garmentSource.url && !sidecarPending ? { sidecar, correctives, onWeights, url: garmentSource.url, color: garmentColor, visible: garmentVisible, onReady: onGarmentReady, onError: onGarmentError } : null), [garmentEnabled, garmentSource.url, sidecarPending, sidecar, correctives, onWeights, garmentColor, garmentVisible, onGarmentReady, onGarmentError]);
+  const displayedGarment = garmentLayer && useFitSizes && topSizes.garment ? { ...garmentLayer, ...topSizes.garment } : garmentLayer;
+  const displayedPants = pantsLayer && useFitSizes && bottomSizes.garment ? { ...pantsLayer, ...bottomSizes.garment } : pantsLayer;
   const personal = source.kind === "personal";
   const [stats, setStats] = useState<RenderStats>({ fps: null, low: null, frameMs: null, calls: 0, triangles: 0 });
   const [command, setCommand] = useState<{ view: CameraView; id: number }>({ view: "reset", id: 0 });
@@ -94,6 +99,7 @@ export function AvatarLab() {
     const picker = (window as unknown as { showDirectoryPicker?: () => Promise<Directory> }).showDirectoryPicker;
     if (!picker) { setNotice("Directory capture requires a browser with File System Access support."); return; }
     if (personal) { setNotice("Switch to the neutral avatar for the demo capture matrix."); return; }
+    setUseFitSizes(false);
     try {
       const root = await picker();
       const now = new Date();
@@ -165,10 +171,11 @@ export function AvatarLab() {
     <div className="lab-body"><LeftInspector source={source} onSelectSource={selectSource} skeleton={skeleton} wireframe={wireframe} garmentWireframe={garmentWireframe} grid={grid} turntable={turntable} setSkeleton={setSkeleton} setWireframe={setWireframe} setGarmentWireframe={setGarmentWireframe} setGrid={setGrid} setTurntable={setTurntable} status={status}>
       <GarmentPanel enabled={garmentEnabled} setEnabled={enableGarment} source={garmentSource} onSource={chooseGarment} visible={garmentVisible} setVisible={setGarmentVisible} color={garmentColor} setColor={setGarmentColor} pose={pose} setPose={setPose} status={garmentStatus} correctives={correctives} setCorrectives={setCorrectives} weights={weights} avatarReady={status === "ready"} />
       <PantsPanel variant={pantsVariant} setVariant={choosePants} enabled={pantsEnabled} setEnabled={enablePants} visible={pantsVisible} setVisible={setPantsVisible} color={pantsColor} setColor={setPantsColor} wireframe={pantsWireframe} setWireframe={setPantsWireframe} correctives={pantsCorrectives} setCorrectives={setPantsCorrectives} weights={pantsWeights} status={pantsStatus} avatarReady={status === "ready"} />
+      <div className="lab-fit-controls"><label><input type="checkbox" checked={useFitSizes} onChange={event => setUseFitSizes(event.target.checked)} /> Use size fits</label><FitPicker title="Top" options={topSizes.options} selected={topSizes.size} onSize={topSizes.setSize} /><FitPicker title="Bottom" options={bottomSizes.options} selected={bottomSizes.size} onSize={bottomSizes.setSize} /><label className="fit-heatmap"><input type="checkbox" checked={heatmap} onChange={event => setHeatmap(event.target.checked)} /> Fit heatmap <span>Red: tight · Green: good · Blue: loose</span></label><MeasurementsForm /></div>
     </LeftInspector>
       <section className="workspace" aria-label="3D avatar studio"><div className="workspace-heading"><div><div className="overline">AVATAR RECONSTRUCTION <span>/</span> VIEWER</div><h1>Avatar studio<span>.</span></h1><p>Inspect the geometry behind the silhouette.</p></div><div className="workspace-id"><span>ACTIVE AVATAR</span><strong>{personal ? "PERSONAL / LOCAL" : "NEUTRAL / MHR"}</strong>{personal && <small title={source.fileName}>{source.fileName}</small>}</div></div>
         <div className="stage" ref={stage}><div className="stage-caption"><span className="status-dot" /> <span>3D VIEWPORT</span><span className="stage-caption-secondary"> / {personal ? "PERSONAL RECONSTRUCTION" : "MHR NEUTRAL"}</span></div><span className="stage-top-right">PERSPECTIVE <span>·</span> METERS</span>
-          <SceneErrorBoundary key={source.url} source={source} onError={onError}><Suspense fallback={null}><AvatarScene url={source.url} pose={pose} garment={garmentLayer} pants={pantsLayer} pantsWireframe={pantsWireframe} turntable={turntable} wireframe={wireframe} garmentWireframe={garmentWireframe} skeleton={skeleton} grid={grid} model={model} command={command} onReady={onReady} onStats={onStats} onError={onError} /></Suspense></SceneErrorBoundary>
+          <SceneErrorBoundary key={source.url} source={source} onError={onError}><Suspense fallback={null}><AvatarScene url={source.url} pose={pose} garment={displayedGarment} pants={displayedPants} pantsWireframe={pantsWireframe} heatmap={heatmap} turntable={turntable} wireframe={wireframe} garmentWireframe={garmentWireframe} skeleton={skeleton} grid={grid} model={model} command={command} onReady={onReady} onStats={onStats} onError={onError} /></Suspense></SceneErrorBoundary>
           {status === "loading" && <div className="scene-message" role="status"><span className="loader" />Loading {personal ? "personal avatar" : "MHR geometry"}…</div>}
           <div className="stage-bottom-left"><span className="axis-x">X</span><span className="axis-y">Y</span><span className="axis-z">Z</span><span>DRAG TO ORBIT <i>·</i> SCROLL TO ZOOM</span></div>
           <SceneControls view={command.view} setView={setView} grid={grid} setGrid={setGrid} fullscreen={fullscreen} screenshot={screenshot} ready={status === "ready"} />

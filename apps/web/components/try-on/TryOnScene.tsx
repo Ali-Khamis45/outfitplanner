@@ -12,7 +12,7 @@ import { AvatarModel, type LoadedRig } from "../avatar-lab/AvatarModel";
 import { GarmentErrorBoundary, GarmentModel } from "../avatar-lab/GarmentModel";
 import type { CameraView, ModelInfo } from "../avatar-lab/types";
 
-export interface OutfitItem { url: string; color: string; sidecar: Sidecar | null }
+export interface OutfitItem { url: string; color: string; texture?: string | null; sidecar: Sidecar | null }
 const ignoreWeights = () => {};
 
 function updateCameraAspect(camera: Object3D, width: number, height: number) {
@@ -97,9 +97,9 @@ function FpsLogger() {
   return null;
 }
 
-export function TryOnScene({ stageRef, avatarUrl, pose, top, bottom, view, turntable, onAvatarReady, onTopReady, onBottomReady, onTopError, onBottomError }: {
+export function TryOnScene({ stageRef, avatarUrl, pose, top, bottom, heatmap, view, turntable, onAvatarReady, onTopReady, onBottomReady, onTopError, onBottomError }: {
   stageRef: RefObject<HTMLElement | null>;
-  avatarUrl: string; pose: PoseName; top: OutfitItem | null; bottom: OutfitItem | null;
+  avatarUrl: string; pose: PoseName; top: OutfitItem | null; bottom: OutfitItem | null; heatmap: boolean;
   view: { view: CameraView; id: number }; turntable: boolean; onAvatarReady: () => void;
   onTopReady: () => void; onBottomReady: () => void;
   onTopError: (message: string) => void; onBottomError: (message: string) => void;
@@ -116,8 +116,8 @@ export function TryOnScene({ stageRef, avatarUrl, pose, top, bottom, view, turnt
     <Suspense fallback={null}><AvatarModel url={avatarUrl} pose="rest" wireframe={false} inspection={false} skeleton={false} onReady={onReady} onRig={setRig} /></Suspense>
     {rig && (avatarUrl === "/api/demo-avatar" || avatarUrl === "/api/personal-fit?asset=body") && <WarmSkin rig={rig} />}
     {rig && <PoseMotion rig={rig} pose={pose} />}
-    {rig && top && <GarmentErrorBoundary key={`top|${top.url}|${rig.id}`} onError={onTopError}><Suspense fallback={null}><GarmentModel layer="upper" url={top.url} rig={rig} color={top.color} visible wireframe={false} inspection={false} onReady={onTopReady} sidecar={top.sidecar} correctives onWeights={ignoreWeights} /></Suspense></GarmentErrorBoundary>}
-    {rig && bottom && <GarmentErrorBoundary key={`bottom|${bottom.url}|${rig.id}`} onError={onBottomError}><Suspense fallback={null}><GarmentModel layer="lower" url={bottom.url} rig={rig} color={bottom.color} visible wireframe={false} inspection={false} onReady={onBottomReady} sidecar={bottom.sidecar} correctives onWeights={ignoreWeights} /></Suspense></GarmentErrorBoundary>}
+    {rig && top && <GarmentErrorBoundary key={`top|${top.url}|${rig.id}`} onError={onTopError}><Suspense fallback={null}><GarmentModel layer="upper" url={top.url} rig={rig} color={top.color} texture={top.texture} visible wireframe={false} inspection={false} onReady={onTopReady} sidecar={top.sidecar} correctives onWeights={ignoreWeights} heatmap={heatmap} /></Suspense></GarmentErrorBoundary>}
+    {rig && bottom && <GarmentErrorBoundary key={`bottom|${bottom.url}|${rig.id}`} onError={onBottomError}><Suspense fallback={null}><GarmentModel layer="lower" url={bottom.url} rig={rig} color={bottom.color} texture={bottom.texture} visible wireframe={false} inspection={false} onReady={onBottomReady} sidecar={bottom.sidecar} correctives onWeights={ignoreWeights} heatmap={heatmap} /></Suspense></GarmentErrorBoundary>}
     <StageResize stageRef={stageRef} /><TryOnCamera model={model} command={view} turntable={turntable} pose={pose} /><FpsLogger />
   </Canvas>;
 }

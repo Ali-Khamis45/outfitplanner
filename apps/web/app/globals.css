@@ -1,3 +1,28 @@
 @import "tailwindcss";
 
 body { font-family: Arial, Helvetica, sans-serif; }
+/* Shared fit controls for try-on and the engineering lab. */
+.fit-picker, .measurements { margin: 18px 0 24px; font-size: 13px; }
+.fit-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; text-transform: uppercase; letter-spacing: .08em; font-size: 11px; }
+.fit-badge { color: #376f54; background: #dcebdd; padding: 4px 8px; border-radius: 20px; text-transform: none; letter-spacing: 0; }
+.fit-sizes { display: flex; gap: 7px; margin: 10px 0; }
+.fit-sizes button, .measurement-actions button { border: 1px solid currentColor; background: transparent; color: inherit; padding: 8px 12px; cursor: pointer; }
+.fit-sizes button[aria-pressed="true"] { background: #283f34; color: #fff; border-color: #283f34; }
+.fit-recommended-dot { display: inline-block; width: 6px; height: 6px; margin-left: 5px; border-radius: 50%; background: currentColor; vertical-align: middle; }
+.fit-sizes button:disabled, .measurement-actions button:disabled { opacity: .35; cursor: not-allowed; }
+.fit-summary { padding: 12px; background: rgba(128, 150, 128, .12); }
+.fit-summary p, .fit-unavailable, .measurements p { margin: 5px 0; line-height: 1.4; }
+.fit-estimate-note { color: #566553; font-size: 11px; }
+.fit-summary .fit-clamped-warning { margin: 0 0 10px; font-weight: 700; }
+.fit-unavailable { opacity: .7; }
+.fit-heatmap { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; margin: 15px 0; }
+.fit-heatmap span { display: block; flex-basis: 100%; font-size: 11px; opacity: .7; }
+.measurements h3 { font-size: 16px; margin: 0 0 6px; }
+.measurement-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 12px 0; }
+.measurement-grid label { display: grid; gap: 4px; text-transform: capitalize; }
+.measurement-grid input { width: 100%; min-width: 0; background: transparent; color: inherit; border: 1px solid currentColor; padding: 8px; }
+.measurement-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.measurement-field { display: grid; align-content: start; gap: 4px; }
+.measurement-hint { font-size: 11px; line-height: 1.4; opacity: .75; }
+.measurement-error { font-size: 12px; line-height: 1.4; color: #b42318; }
+.lab-fit-controls { padding: 16px; }

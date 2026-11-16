@@ -1,14 +1,20 @@
 "use client";
 import { useGLTF } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
-import { Component, useEffect, useMemo, type ReactNode } from "react";
+import { Component, useEffect, useLayoutEffect, useMemo, type ReactNode } from "react";
 import { MeshStandardMaterial, SkinnedMesh } from "three";
 import { clone } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { createCorrectiveDriver, type Sidecar } from "../../lib/garment/correctives";
 import { bindGarment } from "../../lib/garment/binding";
 import { applyMeshInspection } from "../../lib/garment/inspection";
+import { loadGarmentTexture } from "../../lib/garment/texture";
+import { configureHeatmap } from "../../lib/garment/heatmap";
 import type { LoadedRig } from "./AvatarModel";
 import type { GarmentInfo } from "./types";
+
+function setTexture(material: MeshStandardMaterial, texture: import("three").Texture | null, color: string) {
+  material.map = texture; material.color.set(texture ? "#ffffff" : color); material.needsUpdate = true;
+}
 
 /** Keeps a garment failure (e.g. a skeleton mismatch) from taking down the avatar scene. */
 export class GarmentErrorBoundary extends Component<{ children: ReactNode; onError: (message: string) => void }, { failed: boolean }> {
@@ -18,7 +24,7 @@ export class GarmentErrorBoundary extends Component<{ children: ReactNode; onErr
   render() { return this.state.failed ? null : this.props.children; }
 }
 
-export function GarmentModel({ url, rig, color, visible, wireframe, inspection, onReady, sidecar, correctives, onWeights, layer }: { url: string; rig: LoadedRig; color: string; visible: boolean; wireframe: boolean; inspection: boolean; onReady: (info: GarmentInfo) => void; sidecar: Sidecar | null; correctives: boolean; onWeights: (weights: Record<string, number>) => void; layer: "upper" | "lower" }) {
+export function GarmentModel({ url, rig, color, visible, wireframe, inspection, onReady, sidecar, correctives, onWeights, layer, heatmap = false, texture = null }: { url: string; rig: LoadedRig; color: string; visible: boolean; wireframe: boolean; inspection: boolean; onReady: (info: GarmentInfo) => void; sidecar: Sidecar | null; correctives: boolean; onWeights: (weights: Record<string, number>) => void; layer: "upper" | "lower"; heatmap?: boolean; texture?: string | null }) {
   const gltf = useGLTF(url);
   const invalidate = useThree((state) => state.invalidate);
   const garment = useMemo(() => {
@@ -43,6 +49,8 @@ export function GarmentModel({ url, rig, color, visible, wireframe, inspection, 
     mesh.receiveShadow = true;
     const extras = (gltf.parser.json as { asset?: { extras?: { garment?: { garmentId?: string; bodyVariant?: string } } } }).asset?.extras?.garment;
     const geometry = mesh.geometry;
+    // Configure before the new mesh can render with a previously enabled heatmap.
+    configureHeatmap(material, geometry, heatmap);
     const info: GarmentInfo = { garmentId: extras?.garmentId ?? mesh.name, bodyVariant: extras?.bodyVariant ?? "unknown", vertices: geometry.getAttribute("position").count, triangles: (geometry.index?.count ?? 0) / 3, joints: binding.joints, maxInverseBindDelta: binding.maxInverseBindDelta };
     return { mesh, material, info };
     // Colour is applied in an effect so changing it never rebuilds or rebinds the garment.
@@ -55,7 +63,13 @@ export function GarmentModel({ url, rig, color, visible, wireframe, inspection, 
   useEffect(() => { onWeights(drive(correctives)); }, [drive, correctives, onWeights]);
   useEffect(() => { invalidate(); }, [drive, correctives, invalidate]);
   useEffect(() => { onReady(garment.info); }, [garment, onReady]);
-  useEffect(() => { garment.material.color.set(color); invalidate(); }, [garment, color, invalidate]);
+  useEffect(() => {
+    let active = true; let loaded: import("three").Texture | null = null;
+    setTexture(garment.material, null, color); invalidate();
+    if (texture && !heatmap) void loadGarmentTexture(texture).then(map => { if (!active) { map.dispose(); return; } loaded = map; setTexture(garment.material, map, color); invalidate(); }).catch(() => {});
+    return () => { active = false; if (loaded) { setTexture(garment.material, null, color); loaded.dispose(); } };
+  }, [garment, color, texture, heatmap, invalidate]);
+  useLayoutEffect(() => { configureHeatmap(garment.material, garment.mesh.geometry, heatmap); invalidate(); }, [garment, heatmap, invalidate]);
   useEffect(() => { applyMeshInspection(garment.mesh, wireframe, inspection); invalidate(); }, [garment, wireframe, inspection, invalidate]);
   useEffect(() => { invalidate(); }, [visible, invalidate]);
   useEffect(() => () => { garment.material.dispose(); }, [garment]); // geometry belongs to the loader cache

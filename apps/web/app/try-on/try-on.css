@@ -77,3 +77,5 @@
 @media (max-width: 800px), (max-height: 500px) { .try-page { display: block; } .try-stage { position: relative; height: 60vh; min-height: 0; } .try-panel-inner { width: min(100% - 48px, 560px); } .try-panel-top { padding-top: 28px; } .try-heading { padding: 44px 0 40px; } .try-stage-caption, .try-stage-bottom { display: none; } }
 @media (max-height: 500px) and (min-width: 600px) and (min-aspect-ratio: 3/2) { .try-camera { left: auto; right: 12px; transform: none; } }
 @media (max-width: 420px) { .try-stage-bottom p { font-size: 24px; } .try-camera button { padding: 9px; } .try-swatches { gap: 5px; } }
+
+.try-original span { background: repeating-linear-gradient(135deg, #e9e3d5 0 4px, #536b80 4px 8px); }

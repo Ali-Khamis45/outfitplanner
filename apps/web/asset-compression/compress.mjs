@@ -9,7 +9,7 @@ import { meshopt } from "@gltf-transform/functions";
 import { MeshoptDecoder, MeshoptEncoder } from "meshoptimizer";
 
 // Include the transform settings in the key so updates cannot reuse older encodings.
-const FORMAT = "meshopt-v2-high";
+const FORMAT = "meshopt-v3-uv-high";
 const inFlight = new Map();
 
 export async function compressGlb(input) {
@@ -18,13 +18,8 @@ export async function compressGlb(input) {
   const document = await io.readBinary(new Uint8Array(input));
   const nodes = document.getRoot().listNodes().filter(node => node.getMesh() && node.getSkin()?.getInverseBindMatrices());
   const originals = nodes.map(node => node.getSkin().getInverseBindMatrices().getElement(0, []));
-  // The demo assets have no textures; omit their unused UVs but retain region,
-  // skin, and morph attributes. Textured files keep their UV coordinates.
-  if (document.getRoot().listTextures().length === 0) {
-    for (const mesh of document.getRoot().listMeshes()) for (const primitive of mesh.listPrimitives()) {
-      for (const semantic of primitive.listSemantics()) if (semantic.startsWith("TEXCOORD_")) primitive.setAttribute(semantic, null);
-    }
-  }
+  // Garments may receive an external albedo after loading, even when the GLB
+  // itself has no embedded texture. Preserve their UVs through compression.
   await document.transform(meshopt({ encoder: MeshoptEncoder, level: "high", quantizePosition: 14, quantizeNormal: 8, quantizeWeight: 12 }));
   nodes.forEach((node, index) => {
     const updated = node.getSkin().getInverseBindMatrices().getElement(0, []);

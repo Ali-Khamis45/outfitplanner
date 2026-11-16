@@ -54,3 +54,7 @@ A second launch with the same `-Name` is refused while the first is still runnin
 - `samples/input`, `outputs`, `external`: local-only inputs, generated artifacts, and upstream repositories.
 
 Read [environment setup](docs/setup/environment.md), [audit](docs/setup/environment-audit.md), and [licenses](docs/architecture/research-licenses.md) before starting experiments. Never commit personal photos, credentials, model assets, or private avatars; review staged files even with `.gitignore` in place.
+
+### Development size fixtures
+
+From `apps/web`, run `npm run fixtures:build` once, then `npm run dev` and open `/try-on?fixtures=1`. This uses neutral demo garment GLBs and sidecars from `outputs/` to generate synthetic S/M/L/XL fit maps and `_EASE_MM` attributes under `.codex-garment-check/sprint3-fixtures/`. These values and the heatmap are illustrative, not measured fit. Fixture mode is unavailable in production; personal size assets retain the local-only development restriction.

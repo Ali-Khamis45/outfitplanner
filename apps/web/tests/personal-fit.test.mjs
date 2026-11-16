@@ -34,7 +34,7 @@ try {
   };
   const found = await request("development");
   assert.equal(found.code, 200);
-  assert.deepEqual(found.body, { body: "/api/personal-fit?asset=body", shirt: "/api/personal-fit?asset=shirt", pants: "/api/personal-fit?asset=pants", shirtSidecar: "/api/personal-fit?asset=shirtSidecar", pantsSidecar: "/api/personal-fit?asset=pantsSidecar" });
+  assert.deepEqual(found.body, { body: "/api/personal-fit?asset=body", shirt: "/api/personal-fit?asset=shirt", pants: "/api/personal-fit?asset=pants", shirtSidecar: "/api/personal-fit?asset=shirtSidecar", pantsSidecar: "/api/personal-fit?asset=pantsSidecar", bodyId: "test" });
   for (const [asset, name] of [["body", "body.glb"], ["shirt", "shirt.glb"], ["pants", "pants.glb"], ["shirtSidecar", "shirt.json"], ["pantsSidecar", "pants.json"]]) {
     const result = await request("development", { query: { asset } });
     assert.equal(result.code, 200); assert.equal(result.headers["Cache-Control"], "no-store, private");

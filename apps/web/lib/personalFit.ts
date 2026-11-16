@@ -9,7 +9,7 @@ type Entries = Record<Asset, string | null>;
 const assets: Asset[] = ["body", "shirt", "pants", "shirtSidecar", "pantsSidecar"];
 const loopback = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
 
-function localRequest(req: NextApiRequest): boolean {
+export function localRequest(req: NextApiRequest): boolean {
   if (!loopback.has(req.socket.remoteAddress ?? "")) return false;
   // Next adds these headers itself; reject forwarded chains or hosts that differ
   // from the actual socket and Host rather than trusting proxy-supplied values.
@@ -53,13 +53,14 @@ export function createPersonalFitHandler(outputsRoot = path.resolve(process.cwd(
     if (environment !== "development" || !localRequest(req) || (req.method !== "GET" && req.method !== "HEAD")) return res.status(404).end();
     try {
       const personalRoot = path.join(outputsRoot, "garments", "personal");
-      const entries = manifestEntries(JSON.parse(await readFile(path.join(personalRoot, "manifest.json"), "utf8")));
+      const manifest = JSON.parse(await readFile(path.join(personalRoot, "manifest.json"), "utf8"));
+      const entries = manifestEntries(manifest);
       if (!entries) return res.status(404).end();
       const requested = req.query.asset;
       if (requested === undefined) {
         // Ensure the three core files actually exist before advertising a fit.
         await Promise.all(assets.map(name => listedFile(outputsRoot, entries[name]!, name)));
-        const urls = Object.fromEntries(assets.map(name => [name, entries[name] ? `/api/personal-fit?asset=${name}` : null]));
+        const urls = { ...Object.fromEntries(assets.map(name => [name, entries[name] ? `/api/personal-fit?asset=${name}` : null])), bodyId: typeof manifest.primary?.id === "string" && /^[a-zA-Z0-9_-]+$/.test(manifest.primary.id) ? manifest.primary.id : null };
         return res.status(200).json(urls);
       }
       if (typeof requested !== "string" || !assets.includes(requested as Asset)) return res.status(404).end();
