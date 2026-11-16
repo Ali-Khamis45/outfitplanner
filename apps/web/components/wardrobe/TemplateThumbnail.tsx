@@ -64,7 +64,7 @@ function thumbnail(template: string, color: string, texture?: string | null): Pr
   return result;
 }
 
-export function TemplateThumbnail({ item }: { item: WardrobeItem }) {
+export function TemplateThumbnail({ item }: { item: Pick<WardrobeItem, "template" | "colors" | "texture" | "category"> }) {
   const template = item.template ?? "", color = item.colors.reduce((best, entry) => entry.share > best.share ? entry : best).hex;
   const [result, setResult] = useState<{ key: string; url: string | null } | null>(null);
   const key = `${template}:${color.toLowerCase()}:${item.texture ?? ""}`;
