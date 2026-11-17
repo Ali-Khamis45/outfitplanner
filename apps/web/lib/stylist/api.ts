@@ -4,14 +4,14 @@ import { localRequest } from "../personalFit.ts";
 import { avatarUrl, filterWardrobe, getFit, InputError, loadWardrobe, logWorn, object } from "./core.ts";
 import { createWeather } from "./weather.ts";
 
-export function createToolExecutor(outputs = localOutputs(), weather = createWeather()) {
+export function createToolExecutor(outputs = localOutputs(), weather = createWeather(), clock: () => number = Date.now) {
   return async (tool: string, input: unknown) => {
     const args = object(input, tool === "get_wardrobe" ? ["filter", "category", "seasons", "occasions", "formality_min", "formality_max", "warmth_min", "warmth_max", "colour", "not_worn_days"] : tool === "get_weather" ? ["date", "city"] : tool === "get_fit" ? ["item_id", "body"] : tool === "show_on_avatar" ? ["item_ids", "pose"] : tool === "log_worn" ? ["outfit_or_item_ids", "date"] : []);
     switch (tool) {
       case "get_wardrobe": {
         const { filter, ...flat } = args;
         if (filter !== undefined && Object.keys(flat).length) throw new InputError("Use either a nested filter or flat parameters, not both.");
-        return filterWardrobe(await loadWardrobe(outputs), filter === undefined ? flat : filter);
+        return filterWardrobe(await loadWardrobe(outputs), filter === undefined ? flat : filter, clock());
       }
       case "get_weather": return weather(args);
       case "get_fit": return getFit(outputs, await loadWardrobe(outputs), args);
