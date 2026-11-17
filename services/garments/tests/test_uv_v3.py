@@ -23,8 +23,17 @@ from uv_layout import PANEL_LAYOUTS, STRICT, glb_outer_faces, panel_check  # noq
 PROJECT = Path(__file__).resolve().parents[3]
 GARMENTS = PROJECT / "outputs" / "garments"
 
-# Measured maximum over the candidate GLBs (Sprint 3.5) + 0.5 deg. Filled from the measurement in the 3.5 report.
-UP_ANGLE_LIMIT_DEG: dict[tuple[str, str], float] = {}
+# Measured maximum over the 18 candidate GLBs when layout v3 was introduced (Sprint 3.5 report) + 0.5 deg.
+UP_ANGLE_LIMIT_DEG: dict[tuple[str, str], float] = {
+    ("tshirt", "front"): 7.81 + 0.5,  # S personal (the most pushed-out hem)
+    ("tshirt", "back"): 8.82 + 0.5,  # S personal; 2.36 on the neutral base garment
+    ("tshirt", "sleeve_left"): 9.91 + 0.5,  # XL personal
+    ("tshirt", "sleeve_right"): 7.96 + 0.5,  # XL personal
+    ("pants", "left_front"): 7.30 + 0.5,
+    ("pants", "left_back"): 4.48 + 0.5,
+    ("pants", "right_front"): 7.25 + 0.5,
+    ("pants", "right_back"): 4.55 + 0.5,
+}
 UP_ANGLE_EXEMPT = {("pants", "gusset")}
 
 
@@ -62,11 +71,24 @@ class UVLayoutV3Tests(unittest.TestCase):
             self.assertTrue((uv >= 0).all() and (uv <= 1).all(), path.name)
 
     def test_the_back_chevron_is_gone(self) -> None:
-        """The 3A back chevron (torso 12.4 deg) came from one tube cut at the centre back; the v5.3 back is one panel."""
+        """The 3A chevron came from the torso being one tube cut at the centre back: the two cut edges met there with
+        opposite tilts (12.4 deg on the neutral torso). In v5.3 no seam runs down the middle of the back: the back panel
+        has no seam copies (split vertices at the same position) near x = 0, and on the neutral base garment it reads
+        under 3 deg."""
         for path, kind in v3_glbs():
-            if kind == "tshirt":
+            if kind != "tshirt":
+                continue
+            data = skinned_primitive(*read_glb(path))
+            uv = data["TEXCOORD_0"].astype(np.float64)
+            outer = glb_outer_faces(data["indices"], uv)
+            back = np.unique(outer[np.rint(data["_PANEL"][outer[:, 0]]).astype(int) == 1])
+            positions = data["POSITION"].astype(np.float64)[back]
+            unique, counts = np.unique(positions, axis=0, return_counts=True)
+            copies = unique[counts > 1]  # one position, several vertices: a seam inside the back panel
+            self.assertEqual(int((np.abs(copies[:, 0]) < 0.02).sum()), 0, f"{path.name}: seam copies down the middle of the back")
+            if path.name == "tshirt-v5.3-mhr-neutral.glb":
                 report, _ = check(path, kind)
-                self.assertLess(report["back"]["up_angle_mean_deg"], 4.0, path.name)
+                self.assertLess(report["back"]["up_angle_mean_deg"], 3.0, path.name)
 
     def test_seams_split_vertices_only(self) -> None:
         """A v5.3 GLB has the same triangles and shape as the v5.2 garment it is cut from: only the vertex split

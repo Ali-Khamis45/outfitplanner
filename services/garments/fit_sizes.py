@@ -28,6 +28,7 @@ LAYER_CLEARANCE_M = 0.003  # shirt inner surface over the outer surface of the p
 LAYER_SLOPE = 0.5  # largest change of the layering push per metre along the cloth (vertically and around): no folds
 LAYER_REACH_M = 0.15  # torso vertices up to this far above the push band may take part of the push (the slope fades it)
 LAYER_ROUNDS = 4
+LAYER_SMOOTH_ROUNDS = 6  # the blur can leave small deficits, which further rounds clear
 _ANGLE_BINS, _HEIGHT_BIN_M = 144, 0.005
 
 
@@ -46,6 +47,7 @@ def _lipschitz(values: np.ndarray, step_m: float, slope: float, circular: bool) 
 
 
 LAYER_FALLOFF_M = 0.05  # Sprint 3.5: smooth (smoothstep) falloff of the push, at least this tall
+LAYER_SMOOTH_SIGMA_M = 0.015  # Sprint 3.5: vertical Gaussian blur of the push field (removes the kinks of the bump envelope)
 LAYER_SMOOTH_REACH_M = 0.20  # the smooth falloff of a ~60 mm push needs 18 cm; the reach must not cut it short
 
 
@@ -85,7 +87,7 @@ def push_over(garment: Any, envelope: Any, top_y: float, rules: Any, falloff_m: 
     heights = int(np.ceil((top_y + reach_m - low) / _HEIGHT_BIN_M)) + 1
     total = np.zeros(len(vertices))
     rounds = []
-    for _ in range(LAYER_ROUNDS):
+    for _ in range(LAYER_ROUNDS if falloff_m is None else LAYER_SMOOTH_ROUNDS):
         rel = vertices[reach] - centre
         direction = np.column_stack([rel[:, 0], np.zeros(len(rel)), rel[:, 2]])
         direction /= np.maximum(np.linalg.norm(direction, axis=1), 1e-9)[:, None]
@@ -106,8 +108,11 @@ def push_over(garment: Any, envelope: Any, top_y: float, rules: Any, falloff_m: 
         for column in range(_ANGLE_BINS):
             if falloff_m is None:  # Sprint 3A: linear (slope-limited) rise, with a kink where the push starts
                 field[column] = _lipschitz(field[column], _HEIGHT_BIN_M, LAYER_SLOPE, circular=False)
-            else:  # Sprint 3.5: smooth falloff, no kink (the hem ledge)
-                field[column] = _smooth_envelope(field[column], _HEIGHT_BIN_M, falloff_m)
+            else:  # Sprint 3.5: smooth falloff, no kink (the hem ledge); the blur smooths where the bumps cross, and the
+                # next round re-pushes any spot the blur left short of clearance (with its own smooth bump)
+                from scipy.ndimage import gaussian_filter1d
+
+                field[column] = gaussian_filter1d(_smooth_envelope(field[column], _HEIGHT_BIN_M, falloff_m), LAYER_SMOOTH_SIGMA_M / _HEIGHT_BIN_M, mode="nearest")
         push = field[angle, height]
         vertices[reach] += direction * push[:, None]
         total[np.flatnonzero(reach)] += push

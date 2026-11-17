@@ -377,19 +377,26 @@ def folded_mask(signed_uv: np.ndarray, area3: np.ndarray, density: float) -> np.
 GUSSET_PANEL = "gusset"
 
 
-def panel_up(kind: str, name: str, V: np.ndarray) -> np.ndarray:
+def panel_up(kind: str, name: str, V: np.ndarray, F: np.ndarray | None = None) -> np.ndarray:
     """Garment up of a panel (unit, world): +Y, except sleeves (the sleeve axis towards the shoulder) and the gusset (its
-    length, front to back: it runs under the crotch, where +Y has no direction on the cloth)."""
+    length, front to back: it runs under the crotch, where +Y has no direction on the cloth). V, F: the panel's own
+    vertices and faces (F indexes V)."""
     if name == GUSSET_PANEL:
         axis = np.linalg.svd(V - V.mean(axis=0), full_matrices=False)[2][0]
         return axis * (1.0 if axis[2] >= 0 else -1.0)
     if kind == "tshirt" and name.startswith("sleeve"):
-        # from the cuff end (the outermost fifth of the sleeve) to the armhole end (the innermost fifth): along the arm
-        # however wide the sleeve is (a principal axis turns round the arm on wide, short sleeves)
+        # a sleeve is a tube: its axis is the direction its surface normals are perpendicular to (the smallest
+        # eigenvector of the area-weighted normal covariance), whatever the tube's proportions; it points from the cuff
+        # end (outermost fifth) to the armhole end (innermost fifth)
+        if F is None:
+            raise ValueError("a sleeve's up axis needs its faces")
+        normal = np.cross(V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]])
+        area = np.linalg.norm(normal, axis=1)
+        unit = normal / np.maximum(area, 1e-16)[:, None]
+        axis = np.linalg.eigh((unit * area[:, None]).T @ unit)[1][:, 0]
         reach = np.abs(V[:, 0])
         inner, outer = V[reach <= np.quantile(reach, 0.2)].mean(axis=0), V[reach >= np.quantile(reach, 0.8)].mean(axis=0)
-        axis = inner - outer
-        return axis / np.linalg.norm(axis)
+        return axis if axis @ (inner - outer) >= 0 else -axis
     return np.array([0.0, 1.0, 0.0])
 
 
@@ -509,7 +516,7 @@ def relayout_panels(arrays: dict[str, Any], kind: str) -> tuple[np.ndarray, dict
         flat = _arap(V, local, P, _lscm(V, local, P, area), 150)
         if _signed_uv_area(flat, local).sum() < 0:  # faces wind outward: the outside must not be mirrored
             flat = flat * np.array([-1.0, 1.0])
-        up = panel_up(kind, island.name, V)
+        up = panel_up(kind, island.name, V, local)
         theta, defined, area3 = mapped_up(V, local, flat, up)
         # axial mean of the mapped up lines: rotating the UVs by it (counter-clockwise turns angle theta into
         # theta - rotation) is the best upright rotation in the area-weighted sense
@@ -565,7 +572,10 @@ def panel_check(positions: np.ndarray, faces: np.ndarray, uv: np.ndarray, panel:
         with np.errstate(all="ignore"):
             sv = np.linalg.svd(T @ np.linalg.pinv(D), compute_uv=False)
         anisotropy = sv[ok, 0] / np.maximum(sv[ok, 1], 1e-12)
-        up = panel_up(kind, island.name, V[np.unique(F)])
+        used = np.unique(F)
+        remap = np.full(len(V), -1)
+        remap[used] = np.arange(len(used))
+        up = panel_up(kind, island.name, V[used], remap[F])
         theta, defined, _ = mapped_up(V, F, uv, up)
         line = np.degrees(np.arctan2(np.abs(np.sin(theta)), np.abs(np.cos(theta))))
         weight = area3 * defined
