@@ -343,3 +343,233 @@ def density_check(positions: np.ndarray, faces: np.ndarray, uv: np.ndarray, regi
             "uv_corners_outside_island": int(outside),
         }
     return report
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# UV layout v3 (Sprint 3.5): one island per pattern panel, for tshirt-v5.3 and pants-v3 (docs/contracts/garment-texture.md)
+# ---------------------------------------------------------------------------------------------------------------------
+
+PANEL_LAYOUTS: dict[str, dict[str, Any]] = {
+    "tshirt": {"density": 0.45, "islands": (  # Island.regions = (panel index in panels.SHIRT_PANELS,)
+        Island("front", (0,), (0.0, 0.0, 0.49, 0.49)),
+        Island("back", (1,), (0.51, 0.0, 1.0, 0.49)),
+        Island("sleeve_left", (2,), (0.0, 0.51, 0.49, 1.0)),
+        Island("sleeve_right", (3,), (0.51, 0.51, 1.0, 1.0)),
+    )},
+    "pants": {"density": 0.45, "islands": (  # panels.PANTS_PANELS
+        Island("left_front", (0,), (0.0, 0.0, 0.245, 0.48)),
+        Island("left_back", (1,), (0.255, 0.0, 0.5, 0.48)),
+        Island("right_front", (2,), (0.5, 0.0, 0.745, 0.48)),
+        Island("right_back", (3,), (0.755, 0.0, 1.0, 0.48)),
+        Island("gusset", (4,), (0.0, 0.5, 0.2, 0.7)),
+    )},
+}
+UP_DEFINED = 0.5  # garment up within 60 deg of the cloth's plane: the up angle is measured there (and only there)
+SNAP_EDGE_M = 0.0005  # vertices closer than this along an edge (degenerate slivers) share one UV
+GUSSET_PANEL = "gusset"
+
+
+def panel_up(kind: str, name: str, V: np.ndarray) -> np.ndarray:
+    """Garment up of a panel (unit, world): +Y, except sleeves (the sleeve axis towards the shoulder) and the gusset (its
+    length, front to back: it runs under the crotch, where +Y has no direction on the cloth)."""
+    if (kind == "tshirt" and name.startswith("sleeve")) or name == GUSSET_PANEL:
+        axis = np.linalg.svd(V - V.mean(axis=0), full_matrices=False)[2][0]
+        if name == GUSSET_PANEL:
+            return axis * (1.0 if axis[2] >= 0 else -1.0)
+        if axis[1] - np.sign(V[:, 0].mean()) * axis[0] < 0:
+            axis = -axis
+        return axis / np.linalg.norm(axis)
+    return np.array([0.0, 1.0, 0.0])
+
+
+def mapped_up(V: np.ndarray, F: np.ndarray, uv: np.ndarray, up: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Per triangle: the signed angle (rad) of garment up mapped into UV, from +v; whether up is defined there; 3D area."""
+    e1, e2 = V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]]
+    area = 0.5 * np.linalg.norm(np.cross(e1, e2), axis=1)
+    x = e1 / np.maximum(np.linalg.norm(e1, axis=1), 1e-12)[:, None]
+    y = np.cross(np.cross(e1, e2), x)
+    y /= np.maximum(np.linalg.norm(y, axis=1), 1e-12)[:, None]
+    local = np.column_stack([x @ up, y @ up])
+    length = np.linalg.norm(local, axis=1)
+    local /= np.maximum(length, 1e-12)[:, None]
+    P, _ = _local_frames(V, F)
+    T = np.stack([uv[F[:, 1]] - uv[F[:, 0]], uv[F[:, 2]] - uv[F[:, 0]]], axis=2)
+    D = np.stack([P[:, 1], P[:, 2]], axis=2)
+    with np.errstate(all="ignore"):
+        mapped = np.einsum("tij,tj->ti", T @ np.linalg.pinv(D), local)
+    return np.arctan2(mapped[:, 0], mapped[:, 1]), (length >= UP_DEFINED) & (area > 1e-12), area
+
+
+def _snap_degenerate(uv: np.ndarray, V: np.ndarray, F: np.ndarray) -> int:
+    """Vertices joined by an edge shorter than SNAP_EDGE_M take their mean UV (a sliver of ~zero area cannot fold)."""
+    edges = np.unique(np.sort(np.concatenate([F[:, [0, 1]], F[:, [1, 2]], F[:, [2, 0]]]), axis=1), axis=0)
+    short = edges[np.linalg.norm(V[edges[:, 0]] - V[edges[:, 1]], axis=1) < SNAP_EDGE_M]
+    if not len(short):
+        return 0
+    parent = np.arange(len(V))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for a, b in short:
+        ra, rb = find(int(a)), find(int(b))
+        if ra != rb:
+            parent[max(ra, rb)] = min(ra, rb)
+    roots = np.array([find(i) for i in range(len(V))])
+    for root in np.unique(roots[np.unique(short)]):
+        members = np.flatnonzero(roots == root)
+        uv[members] = uv[members].mean(axis=0)
+    return int(len(short))
+
+
+def _signed_uv_area(uv: np.ndarray, F: np.ndarray) -> np.ndarray:
+    t1, t2 = uv[F[:, 1]] - uv[F[:, 0]], uv[F[:, 2]] - uv[F[:, 0]]
+    return 0.5 * (t1[:, 0] * t2[:, 1] - t1[:, 1] * t2[:, 0])
+
+
+def _unfold(uv: np.ndarray, V: np.ndarray, F: np.ndarray, rings: int = 2, rounds: int = 4) -> int:
+    """Re-place the vertices around folded (negative-area, non-degenerate) triangles: the patch of `rings` rings around
+    them is solved as a uniform (Tutte) Laplacian with its boundary held, which removes local folds. Returns folds left."""
+    area3 = 0.5 * np.linalg.norm(np.cross(V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]]), axis=1)
+    edges = np.unique(np.sort(np.concatenate([F[:, [0, 1]], F[:, [1, 2]], F[:, [2, 0]]]), axis=1), axis=0)
+    neighbours: list[list[int]] = [[] for _ in range(len(V))]
+    for a, b in edges:
+        neighbours[int(a)].append(int(b))
+        neighbours[int(b)].append(int(a))
+    for _ in range(rounds):
+        folded = (_signed_uv_area(uv, F) < 0) & (area3 > 1e-10)
+        if not folded.any():
+            return 0
+        patch = set(np.unique(F[folded]).tolist())
+        for _ in range(rings):
+            patch |= {n for v in list(patch) for n in neighbours[v]}
+        inside = np.array(sorted(patch))
+        if not any(n not in patch for v in inside for n in neighbours[v]):
+            break  # the patch has no held boundary (it covers the whole panel)
+        index = {int(v): i for i, v in enumerate(inside)}
+        rows, cols, vals, rhs = [], [], [], np.zeros((len(inside), 2))
+        for v in inside:
+            i = index[int(v)]
+            rows.append(i)
+            cols.append(i)
+            vals.append(float(len(neighbours[v])))
+            for nb in neighbours[v]:
+                if nb in index:
+                    rows.append(i)
+                    cols.append(index[nb])
+                    vals.append(-1.0)
+                else:
+                    rhs[i] += uv[nb]
+        solver = splu(sparse.coo_matrix((vals, (rows, cols)), shape=(len(inside), len(inside))).tocsc())
+        uv[inside] = np.column_stack([solver.solve(rhs[:, c]) for c in range(2)])
+    return int(((_signed_uv_area(uv, F) < 0) & (area3 > 1e-10)).sum())
+
+
+def relayout_panels(arrays: dict[str, Any], kind: str) -> tuple[np.ndarray, dict[str, Any], np.ndarray]:
+    """UV layout v3 for an assembled panel garment (panels.cut then tshirt.assemble): the outer layer's UV holds
+    (panel, fan group). Returns (TEXCOORD_0, report, panel index per vertex for the _PANEL attribute)."""
+    layout = PANEL_LAYOUTS[kind]
+    positions = np.asarray(arrays["position"], dtype=np.float64)
+    faces = np.asarray(arrays["faces"]).reshape(-1, 3)
+    inner = np.asarray(arrays["_inner"], dtype=bool)
+    source = np.asarray(arrays["_source"])
+    n = int(np.argmax(inner))
+    keys = np.asarray(arrays["uv"], dtype=np.float64)
+    vertex_panel = np.rint(keys[:n, 0]).astype(int)
+    outer_faces = faces[(faces < n).all(axis=1)]
+    face_panel = vertex_panel[outer_faces[:, 0]]
+    if not (vertex_panel[outer_faces] == face_panel[:, None]).all():
+        raise ValueError("a face spans two panels: the garment was not split by panels.cut")
+    uv = np.zeros((len(positions), 2))
+    report: dict[str, Any] = {"kind": kind, "layout": "v3 (one island per panel)", "density_uv_per_m": layout["density"], "islands": {}}
+    for island in layout["islands"]:
+        F = outer_faces[face_panel == island.regions[0]]
+        if not len(F):
+            raise ValueError(f"{kind}: panel {island.name} has no faces")
+        used = np.unique(F)
+        remap = np.full(len(positions), -1)
+        remap[used] = np.arange(len(used))
+        local = remap[F]
+        V = positions[used]
+        P, area = _local_frames(V, local)
+        flat = _arap(V, local, P, _lscm(V, local, P, area), 150)
+        if _signed_uv_area(flat, local).sum() < 0:  # faces wind outward: the outside must not be mirrored
+            flat = flat * np.array([-1.0, 1.0])
+        up = panel_up(kind, island.name, V)
+        theta, defined, area3 = mapped_up(V, local, flat, up)
+        # axial mean of the mapped up lines: rotating the UVs by it (counter-clockwise turns angle theta into
+        # theta - rotation) is the best upright rotation in the area-weighted sense
+        rotation = 0.5 * np.angle(((area3 * defined) * np.exp(2j * theta)).sum())
+        c, s = np.cos(rotation), np.sin(rotation)
+        flat = flat @ np.array([[c, -s], [s, c]]).T
+        theta, _, _ = mapped_up(V, local, flat, up)
+        if np.average(np.cos(theta), weights=area3 * defined + 1e-30) < 0:  # up must run to +v, not -v
+            flat = -flat
+        flat = flat * layout["density"]
+        snapped = _snap_degenerate(flat, V, local)
+        folds_left = _unfold(flat, V, local)
+        lo, hi = flat.min(axis=0), flat.max(axis=0)
+        u0, v0, u1, v1 = island.rect
+        size, room = hi - lo, np.array([u1 - u0, v1 - v0]) - 2 * PADDING
+        if (size > room + 1e-9).any():
+            raise ValueError(f"{kind} island {island.name} ({size.round(3)}) does not fit its rectangle ({room.round(3)})")
+        offset = np.array([u0, v0]) + PADDING + (room - size) / 2 - lo
+        uv[used] = flat + offset
+        report["islands"][island.name] = {"rect": list(island.rect), "used_uv": [*(lo + offset).round(4).tolist(), *(hi + offset).round(4).tolist()],
+                                          "faces": int(len(F)), "vertices": int(len(used)), "up": up.round(4).tolist(),
+                                          "degenerate_edges_snapped": snapped, "folds_after_repair": folds_left}
+    uv[n:2 * n] = uv[:n]
+    panel = np.zeros(len(positions), dtype=np.float32)
+    panel[:n] = vertex_panel
+    panel[n:2 * n] = vertex_panel
+    first_outer: dict[int, int] = {}
+    for v in range(n):
+        first_outer.setdefault(int(source[v]), v)
+    for v in range(2 * n, len(uv)):
+        uv[v] = uv[first_outer[int(source[v])]]
+        panel[v] = vertex_panel[first_outer[int(source[v])]]
+    return uv, report, panel
+
+
+def panel_check(positions: np.ndarray, faces: np.ndarray, uv: np.ndarray, panel: np.ndarray, kind: str, tolerance: float = 0.15) -> dict[str, Any]:
+    """Per panel island of a v3 GLB (outer-layer faces, _PANEL per vertex): density, anisotropy, folds, overlap,
+    rectangle and the area-weighted up angle (lines, 0-90 deg) over the triangles where garment up is defined."""
+    layout = PANEL_LAYOUTS[kind]
+    face_panel = np.rint(np.asarray(panel)[faces[:, 0]]).astype(int)
+    report: dict[str, Any] = {}
+    for island in layout["islands"]:
+        F = faces[face_panel == island.regions[0]]
+        V = positions
+        area3 = 0.5 * np.linalg.norm(np.cross(V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]]), axis=1)
+        signed = _signed_uv_area(uv, F)
+        ok = area3 > 1e-10
+        density = np.sqrt(np.abs(signed[ok]) / area3[ok])
+        ratio = density / np.median(density)
+        P, _ = _local_frames(V, F)
+        T = np.stack([uv[F[:, 1]] - uv[F[:, 0]], uv[F[:, 2]] - uv[F[:, 0]]], axis=2)
+        D = np.stack([P[:, 1], P[:, 2]], axis=2)
+        with np.errstate(all="ignore"):
+            sv = np.linalg.svd(T @ np.linalg.pinv(D), compute_uv=False)
+        anisotropy = sv[ok, 0] / np.maximum(sv[ok, 1], 1e-12)
+        up = panel_up(kind, island.name, V[np.unique(F)])
+        theta, defined, _ = mapped_up(V, F, uv, up)
+        line = np.degrees(np.arctan2(np.abs(np.sin(theta)), np.abs(np.cos(theta))))
+        weight = area3 * defined
+        u0, v0, u1, v1 = island.rect
+        corners = uv[F].reshape(-1, 2)
+        outside = ((corners[:, 0] < u0 - 1e-6) | (corners[:, 0] > u1 + 1e-6) | (corners[:, 1] < v0 - 1e-6) | (corners[:, 1] > v1 + 1e-6)).sum()
+        report[island.name] = {
+            "triangles": int(len(F)), "median_density_uv_per_m": round(float(np.median(density)), 4),
+            "outside_tolerance_pct": round(100 * float(np.mean(np.abs(ratio - 1) > tolerance)), 2),
+            "anisotropy_p99": round(float(np.percentile(anisotropy, 99)), 3),
+            "folded_triangles": int(((signed < 0) & ok).sum()),
+            "uv_overlap_pct": round(_overlap_pct(uv, F[ok]), 3),
+            "up_angle_mean_deg": round(float((line * weight).sum() / max(weight.sum(), 1e-16)), 2),
+            "up_angle_p95_deg": round(float(np.percentile(line[defined], 95)), 2) if defined.any() else None,
+            "up_undefined_area_pct": round(100 * float(1 - weight.sum() / max(area3.sum(), 1e-16)), 1),
+            "uv_corners_outside_island": int(outside),
+        }
+    return report

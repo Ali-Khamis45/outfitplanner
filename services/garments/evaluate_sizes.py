@@ -114,7 +114,7 @@ def layering(directory: Path) -> dict[str, Any]:
     for shirt_path in sorted(directory.glob("tshirt-*.glb")):
         body_id = shirt_path.name[: -len(".glb")].split("-", 3)[3]
         body, shirt = load_asset(avatar_for(body_id)), load_asset(shirt_path)
-        for pants_path in [*([base_pants(body_id)] if base_pants(body_id) else []), *sorted(directory.glob(f"pants-v2-*-{body_id}.glb"))]:
+        for pants_path in [*([base_pants(body_id)] if base_pants(body_id) else []), *sorted(directory.glob(f"pants-v*-*-{body_id}.glb"))]:
             r = shirt_layering(load_asset(pants_path), shirt, body)
             ok = (r["pants_vertices_inside_shirt_shell"] == 0 and r["shirt_vertices_inside_pants_shell"] == 0 and r["shirt_pants_triangles_intersecting"] == 0
                   and r["shirt_vertices_under_pants"] == 0 and r["overlap_m"] >= MIN_OVERLAP_M)

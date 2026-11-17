@@ -45,7 +45,24 @@ def _lipschitz(values: np.ndarray, step_m: float, slope: float, circular: bool) 
     return out
 
 
-def push_over(garment: Any, envelope: Any, top_y: float, rules: Any) -> dict[str, Any]:
+LAYER_FALLOFF_M = 0.05  # Sprint 3.5: smooth (smoothstep) falloff of the push, at least this tall
+LAYER_SMOOTH_REACH_M = 0.20  # the smooth falloff of a ~60 mm push needs 18 cm; the reach must not cut it short
+
+
+def _smooth_envelope(values: np.ndarray, step_m: float, falloff_m: float) -> np.ndarray:
+    """Smallest smooth bump envelope >= values along one axis: each bin's value spreads to its neighbours as
+    value * (1 - smoothstep(distance / L)), L = max(falloff_m, 3 * value). The profile starts with zero slope (no ledge)
+    and its steepest slope is 1.5 * value / L <= 0.5, the 3A bound."""
+    out = values.copy()
+    positions = np.arange(len(values)) * step_m
+    for j in np.flatnonzero(values > 1e-6):
+        reach = max(falloff_m, 3.0 * float(values[j]))
+        t = np.clip(np.abs(positions - positions[j]) / reach, 0.0, 1.0)
+        out = np.maximum(out, values[j] * (1.0 - t * t * (3.0 - 2.0 * t)))
+    return out
+
+
+def push_over(garment: Any, envelope: Any, top_y: float, rules: Any, falloff_m: float | None = None) -> dict[str, Any]:
     """Push the shirt's torso clear of the pants envelope below top_y, without folding it.
 
     The push is horizontal (radial from the band's axis) and its magnitude is a field over (angle, height): every bin
@@ -57,14 +74,15 @@ def push_over(garment: Any, envelope: Any, top_y: float, rules: Any) -> dict[str
     from tshirt import REGION_TORSO
 
     vertices = np.array(garment.vertices, dtype=np.float64)
+    reach_m = LAYER_REACH_M if falloff_m is None else LAYER_SMOOTH_REACH_M
     torso = garment.region == REGION_TORSO
     band = torso & (vertices[:, 1] <= top_y)
-    reach = torso & (vertices[:, 1] <= top_y + LAYER_REACH_M)
+    reach = torso & (vertices[:, 1] <= top_y + reach_m)
     required = LAYER_CLEARANCE_M + rules.thickness_m
     centre = vertices[band].mean(axis=0)
     radius = float(np.median(np.hypot(vertices[band, 0] - centre[0], vertices[band, 2] - centre[2]))) if band.any() else 0.2
     low = float(vertices[reach, 1].min()) if reach.any() else 0.0
-    heights = int(np.ceil((top_y + LAYER_REACH_M - low) / _HEIGHT_BIN_M)) + 1
+    heights = int(np.ceil((top_y + reach_m - low) / _HEIGHT_BIN_M)) + 1
     total = np.zeros(len(vertices))
     rounds = []
     for _ in range(LAYER_ROUNDS):
@@ -86,7 +104,10 @@ def push_over(garment: Any, envelope: Any, top_y: float, rules: Any) -> dict[str
         for row in range(heights):
             field[:, row] = _lipschitz(field[:, row], 2 * np.pi * radius / _ANGLE_BINS, LAYER_SLOPE, circular=True)
         for column in range(_ANGLE_BINS):
-            field[column] = _lipschitz(field[column], _HEIGHT_BIN_M, LAYER_SLOPE, circular=False)
+            if falloff_m is None:  # Sprint 3A: linear (slope-limited) rise, with a kink where the push starts
+                field[column] = _lipschitz(field[column], _HEIGHT_BIN_M, LAYER_SLOPE, circular=False)
+            else:  # Sprint 3.5: smooth falloff, no kink (the hem ledge)
+                field[column] = _smooth_envelope(field[column], _HEIGHT_BIN_M, falloff_m)
         push = field[angle, height]
         vertices[reach] += direction * push[:, None]
         total[np.flatnonzero(reach)] += push
@@ -123,7 +144,7 @@ def fade_torso_arm_weights(garment: Any, body: RestBody, axilla_y: float) -> int
     return int(usable.sum())
 
 
-def fit_shirt(body: RestBody, spec: ShirtSpec, base_rules: Any, iterations: int = 3, envelope: Any = None, envelope_top_y: float = 0.0) -> tuple[Any, Any, dict[str, Any]]:
+def fit_shirt(body: RestBody, spec: ShirtSpec, base_rules: Any, iterations: int = 3, envelope: Any = None, envelope_top_y: float = 0.0, falloff_m: float | None = None) -> tuple[Any, Any, dict[str, Any]]:
     from tshirt import design_tshirt
 
     m = body_measurements(body)
@@ -152,7 +173,7 @@ def fit_shirt(body: RestBody, spec: ShirtSpec, base_rules: Any, iterations: int 
     arm_fade = fade_torso_arm_weights(garment, body, m["axilla_y"])
     layering = None
     if envelope is not None:  # clear every pants waistband the shirt may be worn over, then re-measure the drawn girths
-        layering = push_over(garment, envelope, envelope_top_y + 0.02, rules)
+        layering = push_over(garment, envelope, envelope_top_y + 0.02, rules, falloff_m)
         measured = measure_shirt(garment, body, m, hem_y)
     return garment, rules, {"measurements": measured, "history": history, "hem_y": hem_y, "body": m, "holds": holds, "layering_push": layering, "torso_arm_weights_faded": arm_fade}
 

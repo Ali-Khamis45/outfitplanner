@@ -13,7 +13,7 @@ smoothing, a clearance pass, then v2-style projection skin weights. Pants-specif
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import numpy as np
@@ -61,6 +61,7 @@ class PantsRules:
     cuff_turn_in_m: float = 0.0
     cuff_clearance_m: float = 0.012
     hem_loop_smoothing_iterations: int = 0  # smooth each hem loop along itself after the turn-in (0 = off, v1)
+    panel_seams: bool = False  # Sprint 3.5: left/right front/back panels and gusset by real seams; UV layout v3
 
 
 def leg_axis(body: RestBody, side: str) -> dict[str, Any]:
@@ -423,10 +424,11 @@ def leg_corrective_specs(hip_ramp_start_deg: float = 20.0, hip_radii: tuple[floa
     return tuple(specs)
 
 
-PANTS_2_1_FIELDS = ("gusset_lateral_m", "gusset_front_back_m", "gusset_cap_m", "gusset_relax_iterations", "merge_twist_weights", "cuff_turn_in_m", "cuff_clearance_m", "hem_loop_smoothing_iterations")
+PANTS_2_1_FIELDS = ("gusset_lateral_m", "gusset_front_back_m", "gusset_cap_m", "gusset_relax_iterations", "merge_twist_weights", "cuff_turn_in_m", "cuff_clearance_m", "hem_loop_smoothing_iterations", "panel_seams")
 
 # Sprint 2.1A pants v2: twist-folded crotch weights, diamond crotch gusset, turned-in cuffs; correctives with the
 # compressible (membrane) energy, triangle-based collision, larger regions and hip regions crossing the midline.
 PANTS_V2_RULES = PantsRules(merge_twist_weights=True, gusset_lateral_m=0.08, cuff_turn_in_m=0.04, hem_loop_smoothing_iterations=5)
+PANTS_V3_RULES = replace(PANTS_V2_RULES, panel_seams=True)  # Sprint 3.5 candidate: pants v2 cut into pattern panels
 PANTS_V2_SPECS = {"anchor": 0.3, "knee_radii": (0.18, 0.26), "hip_radii": (0.22, 0.30), "hip_midline_cross_m": 0.07, "signed": True}  # signed: contract v2 sidecar (Sprint 2.2A)
 PANTS_V2_CORRECTIVE_RULES = {"triangle_collision": True, "rest_edge_scale": 0.0}
