@@ -366,18 +366,29 @@ PANEL_LAYOUTS: dict[str, dict[str, Any]] = {
 }
 UP_DEFINED = 0.5  # garment up within 60 deg of the cloth's plane: the up angle is measured there (and only there)
 SNAP_EDGE_M = 0.0005  # vertices closer than this along an edge (degenerate slivers) share one UV
+# A triangle is folded when its UV area is negative by more than this share of the area its 3D size implies at the
+# layout's density. A real fold flips its whole area; a long sliver squashed to ~zero UV area (|area| ~ 1e-13, sign
+# from float32 rounding) covers nothing twice and is counted as a density outlier instead.
+FOLD_AREA_SHARE = 1e-3
+
+
+def folded_mask(signed_uv: np.ndarray, area3: np.ndarray, density: float) -> np.ndarray:
+    return signed_uv < -FOLD_AREA_SHARE * area3 * density**2
 GUSSET_PANEL = "gusset"
 
 
 def panel_up(kind: str, name: str, V: np.ndarray) -> np.ndarray:
     """Garment up of a panel (unit, world): +Y, except sleeves (the sleeve axis towards the shoulder) and the gusset (its
     length, front to back: it runs under the crotch, where +Y has no direction on the cloth)."""
-    if (kind == "tshirt" and name.startswith("sleeve")) or name == GUSSET_PANEL:
+    if name == GUSSET_PANEL:
         axis = np.linalg.svd(V - V.mean(axis=0), full_matrices=False)[2][0]
-        if name == GUSSET_PANEL:
-            return axis * (1.0 if axis[2] >= 0 else -1.0)
-        if axis[1] - np.sign(V[:, 0].mean()) * axis[0] < 0:
-            axis = -axis
+        return axis * (1.0 if axis[2] >= 0 else -1.0)
+    if kind == "tshirt" and name.startswith("sleeve"):
+        # from the cuff end (the outermost fifth of the sleeve) to the armhole end (the innermost fifth): along the arm
+        # however wide the sleeve is (a principal axis turns round the arm on wide, short sleeves)
+        reach = np.abs(V[:, 0])
+        inner, outer = V[reach <= np.quantile(reach, 0.2)].mean(axis=0), V[reach >= np.quantile(reach, 0.8)].mean(axis=0)
+        axis = inner - outer
         return axis / np.linalg.norm(axis)
     return np.array([0.0, 1.0, 0.0])
 
@@ -430,7 +441,7 @@ def _signed_uv_area(uv: np.ndarray, F: np.ndarray) -> np.ndarray:
     return 0.5 * (t1[:, 0] * t2[:, 1] - t1[:, 1] * t2[:, 0])
 
 
-def _unfold(uv: np.ndarray, V: np.ndarray, F: np.ndarray, rings: int = 2, rounds: int = 4) -> int:
+def _unfold(uv: np.ndarray, V: np.ndarray, F: np.ndarray, rings: int = 2, rounds: int = 4, density: float = 0.45) -> int:
     """Re-place the vertices around folded (negative-area, non-degenerate) triangles: the patch of `rings` rings around
     them is solved as a uniform (Tutte) Laplacian with its boundary held, which removes local folds. Returns folds left."""
     area3 = 0.5 * np.linalg.norm(np.cross(V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]]), axis=1)
@@ -440,7 +451,7 @@ def _unfold(uv: np.ndarray, V: np.ndarray, F: np.ndarray, rings: int = 2, rounds
         neighbours[int(a)].append(int(b))
         neighbours[int(b)].append(int(a))
     for _ in range(rounds):
-        folded = (_signed_uv_area(uv, F) < 0) & (area3 > 1e-10)
+        folded = folded_mask(_signed_uv_area(uv, F), area3, density) & (area3 > 1e-10)
         if not folded.any():
             return 0
         patch = set(np.unique(F[folded]).tolist())
@@ -465,7 +476,7 @@ def _unfold(uv: np.ndarray, V: np.ndarray, F: np.ndarray, rings: int = 2, rounds
                     rhs[i] += uv[nb]
         solver = splu(sparse.coo_matrix((vals, (rows, cols)), shape=(len(inside), len(inside))).tocsc())
         uv[inside] = np.column_stack([solver.solve(rhs[:, c]) for c in range(2)])
-    return int(((_signed_uv_area(uv, F) < 0) & (area3 > 1e-10)).sum())
+    return int((folded_mask(_signed_uv_area(uv, F), area3, density) & (area3 > 1e-10)).sum())
 
 
 def relayout_panels(arrays: dict[str, Any], kind: str) -> tuple[np.ndarray, dict[str, Any], np.ndarray]:
@@ -510,7 +521,7 @@ def relayout_panels(arrays: dict[str, Any], kind: str) -> tuple[np.ndarray, dict
             flat = -flat
         flat = flat * layout["density"]
         snapped = _snap_degenerate(flat, V, local)
-        folds_left = _unfold(flat, V, local)
+        folds_left = _unfold(flat, V, local, density=layout["density"])
         lo, hi = flat.min(axis=0), flat.max(axis=0)
         u0, v0, u1, v1 = island.rect
         size, room = hi - lo, np.array([u1 - u0, v1 - v0]) - 2 * PADDING
@@ -565,7 +576,8 @@ def panel_check(positions: np.ndarray, faces: np.ndarray, uv: np.ndarray, panel:
             "triangles": int(len(F)), "median_density_uv_per_m": round(float(np.median(density)), 4),
             "outside_tolerance_pct": round(100 * float(np.mean(np.abs(ratio - 1) > tolerance)), 2),
             "anisotropy_p99": round(float(np.percentile(anisotropy, 99)), 3),
-            "folded_triangles": int(((signed < 0) & ok).sum()),
+            "folded_triangles": int((folded_mask(signed, area3, layout["density"]) & ok).sum()),
+            "squashed_triangles": int(((np.abs(signed) < FOLD_AREA_SHARE * area3 * layout["density"] ** 2) & ok).sum()),
             "uv_overlap_pct": round(_overlap_pct(uv, F[ok]), 3),
             "up_angle_mean_deg": round(float((line * weight).sum() / max(weight.sum(), 1e-16)), 2),
             "up_angle_p95_deg": round(float(np.percentile(line[defined], 95)), 2) if defined.any() else None,

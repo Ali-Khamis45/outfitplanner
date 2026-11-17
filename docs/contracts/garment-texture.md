@@ -1,6 +1,6 @@
 # Contract: garment UV layout (texture islands)
 
-**Status:** v1 (UV layout v2 of the garments), Sprint 3A follow-up. **Producer:** `services/garments` (`uv_layout.py`). **Consumers:** the web app (textures, fixtures), Sprint 4A (photo projection onto the islands). Any change bumps the version.
+**Status:** v2: UV layout v2 (Sprint 3A, the defaults) and UV layout v3 (Sprint 3.5 candidates, pattern panels). **Producer:** `services/garments` (`uv_layout.py`). **Consumers:** the web app (textures, fixtures), Sprint 4A (photo projection onto the islands). Any change bumps the version.
 
 ## Garments covered
 
@@ -80,6 +80,57 @@ Both limitations come from the seams. Each panel is a tube with a single cut (ce
 | `tshirt-v5.2-S-personal-scaled.glb` | back of the shoulder tops over the neckline | 1 (0.1) | 0.731% (torso) |
 | `tshirt-v5.2-XL-neutral.glb` | underarm slivers | 9 (9.1) | 1.856% (torso) |
 | `tshirt-v5.2-XL-personal-scaled.glb` | underarm slivers | 12 (14.6) | 1.024% (sleeve_left) |
+
+## UV layout v3: pattern panels (Sprint 3.5 candidates `tshirt-v5.3`, `pants-v3`)
+
+UV layout v3 is used by the Sprint 3.5 candidates only: `tshirt-v5.3` and `pants-v3`, the neutral base garments and every size in `outputs/garments/sizes-v5.3/`. The defaults (`tshirt-v5.2`, `pants-v2`, layout v2 above) are unchanged until the candidates are accepted.
+
+**Panels and seams.** Each garment is cut into the pieces of a real pattern (`services/garments/panels.py`). Seams run along mesh edges, as shortest paths between landmarks found on the garment, each held to its intended line:
+
+- **T-shirt:** front, back, left sleeve, right sleeve.
+  - Side seams run from the armpit (the lowest point of the armhole) to the hem's raw edge, along the side.
+  - Shoulder seams run from the neckline to the shoulder point (the highest point of the armhole).
+  - Armholes separate each sleeve from the torso.
+  - Underarm seams run from the armpit to the cuff. A sleeve is a tube, so one cut makes it a flat piece.
+- **Pants:** left front, left back, right front, right back, crotch gusset.
+  - Centre front and centre back run from the waistband's middle to the gusset.
+  - Outseams run from the waistband's side to the hem, along the outer side of the leg.
+  - Inseams run from the gusset's side tip to the hem, along the inner side of the leg.
+  - The gusset is its base under the crotch. Its front and back tips, above the crease where it turns up into the crotch curve (`gusset_crease_y`, from the cloth's own curvature), belong to the panels they are sewn to.
+
+The garment's shape, triangles, skinning and correctives are those of v5.2 / pants-v2. Only the vertex split pattern (the seams) and the UVs differ. Each GLB vertex carries its panel index in the custom attribute `_PANEL` (`FLOAT`, the index in the panel lists below).
+
+**Islands** (glTF UVs, origin top-left; one island per panel; rectangle u0, v0 – u1, v1):
+
+| T-shirt panel (`_PANEL`) | Rectangle | Pants panel (`_PANEL`) | Rectangle |
+| --- | --- | --- | --- |
+| `front` (0) | 0.00, 0.00 – 0.49, 0.49 | `left_front` (0) | 0.000, 0.00 – 0.245, 0.48 |
+| `back` (1) | 0.51, 0.00 – 1.00, 0.49 | `left_back` (1) | 0.255, 0.00 – 0.500, 0.48 |
+| `sleeve_left` (2) | 0.00, 0.51 – 0.49, 1.00 | `right_front` (2) | 0.500, 0.00 – 0.745, 0.48 |
+| `sleeve_right` (3) | 0.51, 0.51 – 1.00, 1.00 | `right_back` (3) | 0.755, 0.00 – 1.000, 0.48 |
+| | | `gusset` (4) | 0.000, 0.50 – 0.200, 0.70 |
+
+**Flattening.** Each panel is flattened isometrically: an LSCM start, then 150 ARAP iterations, at the fixed 0.45 UV/m, so texel density and stripe spacing are the same everywhere. The outside is not mirrored. The panel is then rotated to its best upright angle, the axial mean of garment up mapped into UV, so garment up runs along +v. Triangles of near-zero area, with an edge shorter than 0.5 mm, get one UV; any local fold left is re-solved in its neighbourhood. The panel is centred in its rectangle; a panel that does not fit stops generation.
+
+**Garment up.** This is world +Y for the torso and pants panels. For sleeves it is the sleeve axis towards the shoulder; world +Y has no direction on the top and underside of a sleeve. For the gusset it is its length, front to back.
+
+**Quality bounds** (`services/garments/tests/test_uv_v3.py`), STRICT on every panel of every candidate GLB:
+- density within ±15% of the panel median for at least 99% of triangles;
+- anisotropy p99 ≤ 1.35;
+- **no folded triangles**;
+- overlap < 0.5% (rasterisation edge pixels);
+- no UV outside the panel's rectangle;
+- median density 0.45 ± 0.03 UV/m.
+
+**Up angle.** The up angle is the area-weighted angle between garment up mapped into UV and the v axis. It is measured as a line angle (0–90°), over the triangles where garment up lies within 60° of the cloth. Each panel's limit is the largest value measured over all candidate GLBs when layout v3 was introduced, plus 0.5° (`UP_ANGLE_LIMIT_DEG` in the test). It is a regression guard, not a target.
+
+UP_ANGLE_TABLE
+
+**Why the angles are not all under 3°.** A real flat pattern piece behaves the same way. On a panel cut flat, the stripes run straight along the grain. Sewn onto a tapered body (the thigh, the chest towards the armholes, the sleeve cap), lines that are horizontal on the body fan out across the piece. Flattened isometrically, the panels reproduce that. Making them upright everywhere would mean stretching the texture, and every stretch that was tried either folded the UVs or broke the density and anisotropy bounds. The 3A back chevron is gone: the back is now one panel at about 2.4°, instead of the two halves of a tube meeting at the centre back with opposite tilts (12.4°).
+
+**Gusset: no up-angle limit.** The gusset lies under the crotch, between the legs. There, world +Y is nearly perpendicular to the cloth or reverses along it, so garment up has no consistent direction on the piece; its grain runs along its length, front to back. Its other bounds (density, anisotropy, folds, rectangle) apply as for every panel.
+
+**For photo projection (Sprint 4A).** The front panel's island holds the whole front of the T-shirt: a front photo projects onto one island, upright, at 0.45 UV/m. The back panel does the same for a back photo. Colour differences between the two photos fall on the side and shoulder seams, where a real garment has its seams too.
 
 ## For photo projection (Sprint 4A)
 
