@@ -79,8 +79,27 @@ class CalibrationTests(unittest.TestCase):
         _, report = calibrate_body(model, "neutral", None, document, components=8)
         self.assertTrue(report["circumferences_within_1cm"])
         self.assertEqual(report["not_provided"], ["hips_cm", "inseam_cm"])
+        self.assertEqual(report["held_at_reconstruction"], ["hips_cm"])
         self.assertGreater(abs(report["errors"]["chest_cm"]["before_cm"]), 1.5)
         self.assertLessEqual(abs(report["errors"]["chest_cm"]["after_cm"]), 1.0)
+
+
+class HeightOnlyCalibrationTests(unittest.TestCase):
+    def test_height_only_changes_height_and_holds_the_girths(self) -> None:
+        from body import evaluate_rest_body, load_model
+        from calibrate import calibrate_body
+        from measure import body_measurements
+
+        model = load_model()
+        m = body_measurements(evaluate_rest_body(model, "neutral"))
+        document = {"version": 1, "units": "cm", "height_cm": m["height_m"] * 100 + 6.0, "chest_cm": None, "waist_cm": None, "hips_cm": None, "inseam_cm": None, "measured_at": "2026-11-16"}
+        _, report = calibrate_body(model, "neutral", None, document)
+        self.assertEqual(report["calibrated"], ["height_cm"])
+        self.assertEqual(report["held_at_reconstruction"], ["chest_cm", "waist_cm", "hips_cm"])
+        self.assertLess(report["errors"]["height_cm"]["before_cm"], -5.9)
+        self.assertLessEqual(abs(report["errors"]["height_cm"]["after_cm"]), 0.1)
+        for key in ("chest_cm", "waist_cm", "hips_cm"):
+            self.assertLessEqual(abs(report["errors"][key]["after_cm"]), 0.2, key)
 
 
 @unittest.skipUnless(SIZES_DIR.is_dir() and any(SIZES_DIR.glob("*.fit.json")), "generate the sizes first")

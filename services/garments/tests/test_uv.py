@@ -19,15 +19,16 @@ GARMENTS = PROJECT / "outputs" / "garments"
 NEUTRAL_BASE = {"tshirt-v5.2-mhr-neutral.glb", "pants-basic-v2-mhr-neutral.glb"}
 
 
+# Personal sizes: the calibrated primary body (outputs/avatars/measurements.json).
 # Expected failures of the overlap/fold bounds (docs/contracts/garment-texture.md, "Known limitations"): ARAP folds the
 # flattening at the underarm slivers (L/XL) or the back of the shoulder tops (S personal). Sprint 3.5's per-panel seams
 # remove both causes; this test fails when a listed file passes, so the list must shrink with the fix.
 KNOWN_FOLDS = {
-    "tshirt-v5.2-L-personal-scaled.glb": "underarm slivers flipped (5, 4.0 cm2); torso overlap 2.07% with them excluded (Sprint 3.5)",
-    "tshirt-v5.2-M-personal-scaled.glb": "back of the shoulder tops folded over the neckline (about 42 cm2); torso overlap 0.60% (Sprint 3.5)",
-    "tshirt-v5.2-S-personal-scaled.glb": "back of the shoulder tops folded over the neckline (about 48 cm2); torso overlap 0.73% (Sprint 3.5)",
+    "tshirt-v5.2-L-personal-scaled.glb": "underarm slivers flipped (6, 4.1 cm2); torso overlap 1.88% with them excluded (Sprint 3.5)",
+    "tshirt-v5.2-M-personal-scaled.glb": "back of the shoulder tops folded over the neckline; torso overlap 0.54% (Sprint 3.5)",
+    "tshirt-v5.2-S-personal-scaled.glb": "back of the shoulder tops folded over the neckline; torso overlap 0.67% (Sprint 3.5)",
     "tshirt-v5.2-XL-neutral.glb": "underarm slivers flipped (9, 9.1 cm2); torso overlap 1.86%, right sleeve 1.15% (Sprint 3.5)",
-    "tshirt-v5.2-XL-personal-scaled.glb": "underarm slivers flipped (12, 14.6 cm2, 0.0204% of the torso); torso overlap 0.64%, sleeves 0.88-1.02% (Sprint 3.5)",
+    "tshirt-v5.2-XL-personal-scaled.glb": "underarm slivers flipped (13, 9.2 cm2; 0.045% of the left sleeve); torso overlap 1.63%, sleeves 0.74-0.93% (Sprint 3.5)",
 }
 
 

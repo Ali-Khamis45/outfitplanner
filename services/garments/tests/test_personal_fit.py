@@ -18,6 +18,16 @@ from tshirt import OuterGarment, assemble  # noqa: E402
 
 PROJECT = Path(__file__).resolve().parents[3]
 MANIFEST = PROJECT / "outputs" / "garments" / "personal" / "manifest.json"
+MEASUREMENTS = PROJECT / "outputs" / "avatars" / "measurements.json"
+SIZES_DIR = PROJECT / "outputs" / "garments" / "sizes"
+
+
+def inverse_binds(path: Path) -> np.ndarray:
+    """A GLB's skin inverse bind matrices, read from its first skin."""
+    from garment_glb import accessor_array, read_glb
+
+    document, blob = read_glb(path)
+    return np.asarray(accessor_array(document, blob, document["skins"][0]["inverseBindMatrices"]), dtype=np.float64)
 
 
 def squashed_tube() -> OuterGarment:
@@ -75,14 +85,27 @@ class PersonalManifestTests(unittest.TestCase):
         self.assertRegex(self.manifest["fit_date"], r"^\d{4}-\d{2}-\d{2}$")
         self.assertIsInstance(self.manifest["secondary"], list)
         self.assertEqual((self.manifest["primary"]["id"], self.manifest["primary"]["label"]), ("personal-scaled", "My avatar"))
-        self.assertTrue(self.manifest["primary"]["body"].endswith("-rest-identity-scale-floor.glb"))
-        self.assertEqual([(e["id"], e["label"]) for e in self.manifest["secondary"]], [("personal-identity", "My avatar (identity only)")])
+        ids = [entry["id"] for entry in self.entries]
+        self.assertEqual(len(ids), len(set(ids)), "body ids must be unique")
+        secondary = [(e["id"], e["label"]) for e in self.manifest["secondary"]]
+        if MEASUREMENTS.is_file():  # calibrated: the primary is the calibrated body, the photo estimate moves to secondary
+            self.assertTrue(self.manifest["primary"]["body"].endswith("-rest-identity-scale-floor-calibrated.glb"))
+            self.assertEqual(secondary, [("personal-scaled-photo", "My avatar (photo estimate)"), ("personal-identity", "My avatar (identity only)")])
+            self.assertTrue(self.manifest["secondary"][0]["body"].endswith("-rest-identity-scale-floor.glb"))
+        else:
+            self.assertTrue(self.manifest["primary"]["body"].endswith("-rest-identity-scale-floor.glb"))
+            self.assertEqual(secondary, [("personal-identity", "My avatar (identity only)")])
         for entry in self.entries:
             self.assertEqual(set(entry), {"id", "label", "body", "top", "bottom"})
             for part in ("top", "bottom"):
                 self.assertEqual(set(entry[part]), {"glb", "sidecar"})
-                self.assertTrue(entry[part]["glb"].startswith("outputs/garments/personal/") and entry[part]["glb"].endswith(".glb"))
-                self.assertTrue(entry[part]["sidecar"].startswith("outputs/garments/personal/") and entry[part]["sidecar"].endswith(".correctives.json"))
+                glb, sidecar = entry[part]["glb"], entry[part]["sidecar"]
+                self.assertTrue(glb.endswith(".glb") and sidecar.endswith(".correctives.json"), glb)
+                if glb.startswith("outputs/garments/sizes/"):  # a body without a base fit wears its own size files
+                    self.assertTrue(glb.endswith(f"-{entry['id']}.glb"), glb)
+                    self.assertEqual(sidecar, glb[: -len(".glb")] + ".correctives.json")
+                else:
+                    self.assertTrue(glb.startswith("outputs/garments/personal/") and sidecar.startswith("outputs/garments/personal/"), glb)
             for path in (entry["body"], entry["top"]["glb"], entry["top"]["sidecar"], entry["bottom"]["glb"], entry["bottom"]["sidecar"]):
                 self.assertTrue(path.startswith("outputs/") and "\\" not in path and not re.match(r"^[A-Za-z]:|^/", path), path)
 
@@ -90,6 +113,23 @@ class PersonalManifestTests(unittest.TestCase):
         for entry in self.entries:
             for path in (entry["body"], entry["top"]["glb"], entry["top"]["sidecar"], entry["bottom"]["glb"], entry["bottom"]["sidecar"]):
                 self.assertTrue((PROJECT / path).is_file(), path)
+
+    def test_every_body_s_garments_and_sizes_are_bound_to_that_body(self) -> None:
+        """Top, bottom and every size file of a body id (outputs/garments/sizes/*-<id>.glb) carry that body's own
+        inverse bind matrices: a garment bound to another body (e.g. the uncalibrated one) would be skinned wrongly."""
+        for entry in self.entries:
+            body = inverse_binds(PROJECT / entry["body"])
+            garments = {PROJECT / entry["top"]["glb"], PROJECT / entry["bottom"]["glb"], *SIZES_DIR.glob(f"*-{entry['id']}.glb")}
+            for garment in sorted(garments):
+                with self.subTest(body=entry["id"], garment=garment.name):
+                    binds = inverse_binds(garment)
+                    self.assertEqual(binds.shape, body.shape)
+                    self.assertLessEqual(float(np.abs(binds - body).max()), 1e-5)
+            others = [e for e in self.entries if e is not entry]
+            for other in others:  # and not to any other listed body (the bodies must differ for this to mean anything)
+                if np.abs(inverse_binds(PROJECT / other["body"]) - body).max() > 1e-4:
+                    for path in SIZES_DIR.glob(f"*-{entry['id']}.glb"):
+                        self.assertGreater(float(np.abs(inverse_binds(path) - inverse_binds(PROJECT / other["body"])).max()), 1e-4, f"{path.name} bound to {other['id']}")
 
     def test_every_sidecar_target_exists_in_its_glb(self) -> None:
         from garment_glb import read_glb

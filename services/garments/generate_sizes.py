@@ -87,14 +87,21 @@ def personal_body(model: Any, body_id: str) -> tuple[RestBody, Path, dict[str, A
     variant = "personal-identity-scale" if "identity-scale" in avatar.name else "personal-identity"
     body = evaluate_rest_body(model, variant, RECONSTRUCTION, floor_align=True)
     report: dict[str, Any] = {"manifest_id": body_id, "variant": variant, "avatar": entry["body"]}
-    if MEASUREMENTS.is_file():
+    # Which body is calibrated: the manifest entry whose avatar is a "-calibrated" GLB. Before the manifest names one
+    # (first calibration), it is the primary body. Any other body (e.g. the photo estimate) is never calibrated.
+    entries = [manifest["primary"], *manifest["secondary"]]
+    named = [e["id"] for e in entries if Path(e["body"]).stem.endswith("-calibrated")]
+    calibrate_this = body_id in named if named else entry is manifest["primary"]
+    if MEASUREMENTS.is_file() and calibrate_this:
         import calibrate
 
         body, report["calibration"] = calibrate.calibrate_body(model, variant, RECONSTRUCTION, json.loads(MEASUREMENTS.read_text(encoding="utf-8")))
-        avatar = AVATAR_DIR / f"{avatar.stem}-calibrated.glb"
+        avatar = avatar if avatar.stem.endswith("-calibrated") else AVATAR_DIR / f"{avatar.stem}-calibrated.glb"
         from generate_tshirt import rest_body_glb
 
         report["calibrated_avatar"] = rest_body_glb(body, avatar)
+    elif MEASUREMENTS.is_file():
+        report["calibration"] = {"skipped": True, "reason": "not the calibrated body of the manifest"}
     else:
         report["calibration"] = {"skipped": True, "reason": f"{MEASUREMENTS.relative_to(PROJECT).as_posix()} not found"}
     report["avatar_match"] = verify_glb_matches_body(avatar, body)
@@ -106,6 +113,15 @@ def outer_layer(arrays: dict[str, Any]) -> tuple[np.ndarray, np.ndarray]:
     faces = np.asarray(arrays["faces"]).reshape(-1, 3)
     inner = np.asarray(arrays["_inner"], dtype=bool)
     return np.asarray(arrays["position"], dtype=np.float64), faces[~inner[faces].any(axis=1)]
+
+
+def has_base_pants(body_id: str) -> bool:
+    """False when the manifest's bottom for this body is one of its size files (a calibrated body has no pants v2 fit)."""
+    if body_id == "neutral":
+        return True
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    entry = next(e for e in [manifest["primary"], *manifest["secondary"]] if e["id"] == body_id)
+    return (PROJECT / entry["bottom"]["glb"]).parent.resolve() != SIZES_DIR.resolve()
 
 
 def base_pants_outer(body_id: str) -> tuple[np.ndarray, np.ndarray]:
@@ -327,7 +343,9 @@ def main() -> int:
 
         body_report["measurements"] = body_measurements(body)
         body_report["garments"] = {}
-        envelope_meshes: list[tuple[np.ndarray, np.ndarray]] = [base_pants_outer(body_id)]
+        # a calibrated body has no pants v2 fit of its own (the manifest's was fitted to the uncalibrated body)
+        calibrated = "calibrated_avatar" in body_report
+        envelope_meshes: list[tuple[np.ndarray, np.ndarray]] = [base_pants_outer(body_id)] if has_base_pants(body_id) and not calibrated else []
         if "pants" not in args.garments:  # shirts regenerated alone: layer them over the pants sizes already written
             envelope_meshes += pants_envelope_from_disk(args.out_dir, body_id)
         for garment in sorted(args.garments, key=lambda g: g != "pants"):  # pants first: the shirts clear them

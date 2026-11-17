@@ -157,7 +157,12 @@ The web form writes exactly this schema. The producer reads it to calibrate the 
   - **hips:** the fullest part of the buttocks;
   - **inseam:** crotch to floor;
   - **height:** floor to the top of the head.
-- **Calibration** (`services/garments/calibrate.py`): least squares on the body's identity (shape) coefficients. Pose and scale parameters are kept. Circumferences must end within 1 cm of the targets; the report gives each measurement's error before and after. If the file is missing, calibration is skipped and the report says so.
+- **Calibration** (`services/garments/calibrate.py`): least squares on the body's identity (shape) coefficients and the model's scale parameters (bone lengths and proportions). Height and inseam are carried by the scale parameters; the shape coefficients alone barely change them. Pose parameters are kept.
+  - Circumferences must end within 1 cm of the targets; the report gives each measurement's error before and after.
+  - **Girths that are not provided are held** at the reconstruction's own, photo-estimated values, so calibrating height alone leaves chest, waist and hips unchanged. A null inseam is left free and follows the height.
+  - The calibrated body is written as a new avatar, `<manifest body>-calibrated.glb`, next to the manifest's. The manifest's avatar is not modified. The sizes of that body id are then bound to the calibrated avatar, and the gates use it.
+  - A calibrated body has no pants v2 fit of its own, so its shirts are layered over, and gated against, its four pants sizes only.
+  - If the file is missing, calibration is skipped and the report says so.
 
 ## Sources
 

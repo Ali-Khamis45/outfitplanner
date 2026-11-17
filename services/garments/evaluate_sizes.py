@@ -49,9 +49,29 @@ def arm_poses() -> dict[str, list[Any]]:
     return poses
 
 
+MEASUREMENTS = PROJECT / "outputs" / "avatars" / "measurements.json"
+
+
+def calibrated_avatar(body_id: str) -> Path | None:
+    """The calibrated avatar generate_sizes.py wrote for a personal body (measurements.json present), else None. The
+    sizes of that body are then bound to it, not to the manifest's avatar."""
+    if body_id == "neutral" or not MEASUREMENTS.is_file():
+        return None
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    entries = [manifest["primary"], *manifest["secondary"]]
+    if any(Path(e["body"]).stem.endswith("-calibrated") for e in entries) or body_id != manifest["primary"]["id"]:
+        return None  # the manifest already names the calibrated body: it is authoritative
+    body = PROJECT / manifest["primary"]["body"]
+    path = body.with_name(body.stem + "-calibrated.glb")
+    return path if path.is_file() else None
+
+
 def avatar_for(body_id: str) -> Path:
     if body_id == "neutral":
         return PROJECT / "outputs" / "avatars" / "mhr-neutral.glb"
+    calibrated = calibrated_avatar(body_id)
+    if calibrated is not None:
+        return calibrated
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     return PROJECT / next(e for e in [manifest["primary"], *manifest["secondary"]] if e["id"] == body_id)["body"]
 
@@ -72,7 +92,15 @@ def evaluate(glb: Path, body_id: str) -> dict[str, Any]:
     return {"poses": results, "beyond_3mm_total": int(sum(r["beyond_3mm"] for r in results.values())), "worst_max_depth_mm": worst["max_depth_mm"], "pass": all(r["beyond_3mm"] == 0 for r in results.values())}
 
 
-def base_pants(body_id: str) -> Path:
+def base_pants(body_id: str) -> Path | None:
+    """The body's pants v2; None for a calibrated body (its manifest pants were fitted to the uncalibrated body)."""
+    if calibrated_avatar(body_id) is not None:
+        return None
+    if body_id != "neutral":
+        manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        bottom = PROJECT / next(e for e in [manifest["primary"], *manifest["secondary"]] if e["id"] == body_id)["bottom"]["glb"]
+        if bottom.parent.resolve() == SIZES_DIR.resolve():
+            return None  # the manifest's bottom is one of the body's own size files, already in the size list
     if body_id == "neutral":
         return PROJECT / "outputs" / "garments" / "pants-basic-v2-mhr-neutral.glb"
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
@@ -86,7 +114,7 @@ def layering(directory: Path) -> dict[str, Any]:
     for shirt_path in sorted(directory.glob("tshirt-*.glb")):
         body_id = shirt_path.name[: -len(".glb")].split("-", 3)[3]
         body, shirt = load_asset(avatar_for(body_id)), load_asset(shirt_path)
-        for pants_path in [base_pants(body_id), *sorted(directory.glob(f"pants-v2-*-{body_id}.glb"))]:
+        for pants_path in [*([base_pants(body_id)] if base_pants(body_id) else []), *sorted(directory.glob(f"pants-v2-*-{body_id}.glb"))]:
             r = shirt_layering(load_asset(pants_path), shirt, body)
             ok = (r["pants_vertices_inside_shirt_shell"] == 0 and r["shirt_vertices_inside_pants_shell"] == 0 and r["shirt_pants_triangles_intersecting"] == 0
                   and r["shirt_vertices_under_pants"] == 0 and r["overlap_m"] >= MIN_OVERLAP_M)

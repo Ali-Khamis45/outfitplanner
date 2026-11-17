@@ -6,7 +6,7 @@ Branch `sprint-3-sizes` (from `main` 39d1bd2). Contracts: [fit-map.md](../contra
 | --- | --- |
 | S–XL grading of T-shirt v5.2 and pants v2 by region, skeleton binding kept, correctives re-solved per size | PASS: 16 sizes (2 garments × 4 sizes × 2 bodies) |
 | Fit maps (`_EASE_MM`, `.fit.json`) for neutral and the primary personal body, exactly one size recommended per garment and body | PASS |
-| Calibration from `outputs/avatars/measurements.json` | SKIPPED: the file does not exist. The code path was run on synthetic targets (below) |
+| Calibration from `outputs/avatars/measurements.json` | PASS (height only, added 2026-11-16): the personal body was calibrated to the measured height (height only), +11.5 cm, and its 8 sizes were regenerated. Recommended sizes unchanged (M / M). See [Height calibration](#height-calibration-2026-11-16) |
 | Gates per size: validator, penetration > 3 mm = 0 at rest and at every supported pose | PASS: 16 of 16 sizes, 0 vertices deeper than 3 mm at rest and at every supported pose (worst depth 2.51 mm, tshirt-v5.2-M-personal-scaled.glb). Validator 22 of 22 |
 | Layering: every shirt size over pants v2 and every pants size (no penetration, hem overlap ≥ 3 cm) | PASS: 40 of 40 pairs (minimum hem overlap 5.7 cm) |
 | Fit-map fixes from the browser check: smooth heatmap (no horizontal step), vertex ease agrees with the region value | PASS: `test_vertex_ease_has_no_steps_along_the_torso`, `test_vertex_ease_agrees_in_sign_with_each_region` |
@@ -52,7 +52,9 @@ Body at rest: chest 108.7 cm, waist 92.7 cm, hips 109.5 cm, shoulder width 41.7 
 | **L** ✓ | +51 loose (c) | +110 good (c) | -2 good |
 | XL | +214 loose | +210 loose (c) | -2 good |
 
-### personal-scaled (the primary personal body)
+### personal-scaled (the primary personal body), before calibration (photo estimate)
+
+These tables are the uncalibrated sizes. The calibrated results are in [Height calibration](#height-calibration-2026-11-16).
 
 The personal body's own measurements are personal data and are not recorded here. For the same reason, the tables below give each region's status only, without `ease_mm` (an ease and its size spec together give the body girth). The full numbers are in the local, git-ignored `outputs/garment-tests/sizes-sprint-3a.json`.
 
@@ -98,7 +100,9 @@ The personal body's own measurements are personal data and are not recorded here
 
 ## Calibration
 
-`outputs/avatars/measurements.json` does not exist, so the personal body was sized uncalibrated, and its entry in the size report records `"calibration": {"skipped": true, "reason": "outputs/avatars/measurements.json not found"}`. The neutral body is never calibrated. With the file present, `generate_sizes.py` calibrates the personal body first. Only the non-null measurements are calibrated (`chest_cm`, `waist_cm`, `hips_cm`, `inseam_cm`, plus the required `height_cm`), and the report lists them along with the ones not provided.
+This section describes the first run, before `measurements.json` existed; the height-only calibration that followed is in [Height calibration](#height-calibration-2026-11-16).
+
+`outputs/avatars/measurements.json` did not exist, so the personal body was sized uncalibrated, and its entry in the size report records `"calibration": {"skipped": true, "reason": "outputs/avatars/measurements.json not found"}`. The neutral body is never calibrated. With the file present, `generate_sizes.py` calibrates the personal body first. Only the non-null measurements are calibrated (`chest_cm`, `waist_cm`, `hips_cm`, `inseam_cm`, plus the required `height_cm`), and the report lists them along with the ones not provided.
 
 The calibration code was exercised on synthetic targets on the neutral body: its own measurements with chest +3.0 cm, waist −2.0 cm and hips +1.5 cm, inseam not provided. The fit was least squares on 16 identity coefficients and took 29 evaluations:
 
@@ -111,6 +115,62 @@ The calibration code was exercised on synthetic targets on the neutral body: its
 | inseam | not provided | — | — |
 
 `circumferences_within_1cm: true`. `test_calibration_matches_circumferences_within_1_cm` covers the same path, with hips and inseam null.
+
+## Height calibration (2026-11-16)
+
+`outputs/avatars/measurements.json` now gives `height_cm` only, with every other field null. The primary personal body (`personal-scaled`) was calibrated to height only; the photo-estimated chest, waist and hips were kept. Its 8 sizes were then regenerated detached on the calibrated body, and gated.
+
+| Measurement | Result |
+| --- | --- |
+| Height | calibrated to the measured height (height only): +11.5 cm, residual 0.0 cm |
+| Chest, waist, hips (not provided) | held at the photo estimate (change 0.0 cm) |
+| Inseam (not provided) | follows the height |
+
+**Calibration fix.** The first version of `calibrate.py` could not calibrate a personal body; it only appeared to work on the neutral body used by its test. It changed two things:
+- **Too-small step.** scipy's finite-difference step from a zero start is about 1e-8. Added to the personal body's non-zero float32 parameters, that step vanished, the Jacobian read as zero, and the optimiser stopped after one evaluation with height still 11.5 cm short.
+- **Wrong parameters.** It only varied the identity (shape) coefficients, which move height by under 0.03 cm per unit; height and leg length live in the model's scale parameters.
+
+It now uses an explicit 0.01 forward-difference step, varies the scale parameters as well, and holds any girth that is not provided at the body's own value. `test_height_only_changes_height_and_holds_the_girths` covers it.
+
+**Avatar and manifest.** The calibrated body is written as a new avatar, `<manifest body>-calibrated.glb`; the uncalibrated avatar is unchanged. `outputs/garments/personal/manifest.json` (local, git-ignored) now has:
+- **primary:** the calibrated body (`personal-scaled`, "My avatar"). It has no base shirt or pants v2 fit of its own, so its top and bottom point to its recommended size files, M and M.
+- **secondary:** the previous uncalibrated body as `personal-scaled-photo` ("My avatar (photo estimate)"), with its base fits, then `personal-identity` as before.
+
+The previous manifest and the 8 uncalibrated sizes are kept in `outputs/garments/sizes-uncalibrated/`. `test_personal_fit` now checks that every listed file exists and that every body's top, bottom and size files are bound to that body's own skeleton. An uncalibrated size listed under the calibrated body differs by 0.115 in its inverse bind matrices and fails.
+
+**Fit, status only.** Recommended sizes did not change: **T-shirt M** and **pants M**, before and after.
+
+**T-shirt v5.2** (calibrated body), recommended **M**:
+
+| Size | chest | waist | hips | shoulders | length | Changed by calibration |
+| --- | --- | --- | --- | --- | --- | --- |
+| S | tight (clamped) | good (clamped) | tight (clamped) | good (clamped) | tight | length: good → tight |
+| **M** | good | good | good (clamped) | good | good | none |
+| L | loose | loose | good (clamped) | good | good | shoulders: loose → good |
+| XL | loose | loose | loose (clamped) | good | good | length: loose → good |
+
+**Pants v2** (calibrated body), recommended **M**:
+
+| Size | waist | hips | length | Changed by calibration |
+| --- | --- | --- | --- | --- |
+| S | tight (clamped) | tight (clamped) | good | length: loose → good |
+| **M** | good (clamped) | good (clamped) | good | length: loose → good |
+| L | loose | loose | good | length: loose → good |
+| XL | loose | loose | good | length: loose → good |
+
+**Gates on the calibrated avatar.**
+
+- **Pose gates:** 8 of 8 sizes pass, with 0 vertices deeper than 3 mm at every pose (worst depth 1.65 mm).
+- **Layering:** 12 of 16 pairs pass. The calibrated body has no pants v2 fit, so each shirt is checked over its 4 pants sizes. No pair has any shirt vertex under the pants, any intersecting triangle, or any vertex inside the other shell.
+- **Expected failure: shirt S over each pants size.** The hem overlaps the waistband by 2.7–2.8 cm, short of 3 cm. Shirt S's length status is already `tight` (too short) on the taller body, so the gate confirms that finding rather than a geometry defect. It is recorded as an expected failure in `outputs/garment-tests/sizes-gates-personal-calibrated.json`. The recommended M shirt passes every pair.
+- **UV:** the same four personal shirts (S, M, L, XL) remain in `test_uv.KNOWN_FOLDS`, with refreshed numbers. The calibrated pants pass every UV bound.
+
+Commands (from the repository root):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\launch_detached.ps1 -Name sizes-personal-calibrated -Arguments "generate_sizes.py --bodies personal-scaled --report ../../outputs/garment-tests/sizes-sprint-3a-personal-calibrated.json"
+# then the pose and layering gates on its 8 sizes (evaluate_sizes.py binds them to the calibrated avatar)
+```
 
 ## Gates
 
