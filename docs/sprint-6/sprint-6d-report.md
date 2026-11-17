@@ -2,7 +2,7 @@
 
 Date: 2026-11-17
 
-Branch: `sprint-6d-stylist-eval`, created from `main` at `0ff2dc2` (Sprint 6C merge).
+Branch: `sprint-6d-stylist-eval`, rebased onto `main` at `48d839c` (Next.js security patch). Implementation commit: `b195c1d`. Installed and verified Next.js **16.4.6**.
 
 ## Delivered
 
@@ -17,11 +17,12 @@ Branch: `sprint-6d-stylist-eval`, created from `main` at `0ff2dc2` (Sprint 6C me
 
 | Check | Result | Evidence |
 | --- | --- | --- |
+| Patched dependency installation | PASS | `npm.cmd ci` from `apps/web` in an isolated checkout of `b195c1d`; installed Next.js 16.4.6. Original checkout also repaired to 16.4.6 without stopping its running processes; see execution notes. |
 | Typecheck | PASS | Root `npm.cmd run typecheck`, web and contracts |
 | Lint | PASS | Root `npm.cmd run lint` |
 | Production build | PASS | Root `npm.cmd run build` with `NEXT_DIST_DIR=.next-sprint-6d-build`; route compilation, static generation and cache warmup succeeded |
 | Full tests | PASS | Root `npm.cmd test`; all 22 web test scripts, including `stylist-eval.test.mjs` |
-| Full mock CLI via actual API | PASS | 30/30 scenarios, 245/245 applicable checks, 100%; 80 total calls / 2.67 average; 46.8 ms average HTTP latency in the final mock run; exit 0 |
+| Full mock CLI via actual API | PASS | 30/30 scenarios, 245/245 applicable checks, 100%; 80 total calls / 2.67 average; 58.3 ms average HTTP latency in the final patched mock run; exit 0 |
 | Missing-model CLI | PASS | Deliberately empty model configuration produced 30 FAIL scenarios, 0/245 checks, 0 tools, `503 not_connected`, complete reports and expected exit 1 |
 | Negative scoring tests | PASS | Missing tools, wrong weather date/city, invalid IDs hidden behind valid cards, empty/malformed cards, duplicate categories, swapped/remote URLs, incorrect formality, recency boundaries, forbidden wear attempts, missing model and malformed/no response |
 | Frozen clock and read-only behavior | PASS | A 2030 reference date returns the correct 20 eligible never-worn/old fixture items; recent pieces are excluded; attempted logging leaves the stored fixture unchanged |
@@ -32,13 +33,13 @@ Branch: `sprint-6d-stylist-eval`, created from `main` at `0ff2dc2` (Sprint 6C me
 
 Final mock artifacts (local, git-ignored):
 
-`apps/web/eval/stylist/results/2026-11-17T05-05-22-169Z-2e1ff5aa/report.json` and `report.md`.
+`apps/web/eval/stylist/results/2026-11-17T05-18-58-884Z-9dc70a06/report.json` and `report.md`.
 
 Missing-model artifacts (local, git-ignored):
 
-`apps/web/eval/stylist/results/2026-11-17T05-02-13-801Z-4cef668b/report.json` and `report.md`.
+`apps/web/eval/stylist/results/2026-11-17T05-19-09-800Z-5126216d/report.json` and `report.md`.
 
-Reports include full check evidence and tool traces, response/HTTP status, tool-failure counts, scenario and fixture hashes, source revision/dirty state, model name and completion state. These validation runs correctly record a dirty source tree because implementation had not yet been committed. Scores use structured recommendations and attempts, not free-text fashion judgment or unstructured item references. Weather call correctness is scored independently of live provider availability; fixed scenario dates may eventually leave the forecast window.
+Reports include full check evidence and tool traces, response/HTTP status, tool-failure counts, scenario and fixture hashes, source revision/dirty state, model name and completion state. Both final runs use source revision `b195c1d`; the mock run starts from clean source, while the following disconnected run records Next-generated configuration changes. Scores use structured recommendations and attempts, not free-text fashion judgment or unstructured item references. Weather call correctness is scored independently of live provider availability; fixed scenario dates may eventually leave the forecast window.
 
 ## Reproduction
 
@@ -57,6 +58,8 @@ See [the evaluator README](../../apps/web/eval/stylist/README.md) for scoring de
 
 The initial sandboxed mock run completed all scenarios but was denied permission to stop its own child server. Only that known owned process tree was cleaned up, and the permitted rerun exited successfully. The runner now reports an exact owned PID, exits with an infrastructure error rather than hanging, and preserves its disposable runtime if cleanup is denied.
 
-The first browser regression attempt was interrupted when Next.js exited to display a dependency security-upgrade advisory. Retrying the unchanged command passed. No dependency upgrade was performed in this sprint. Node also emits the existing typeless-package warning when directly importing TypeScript from the CLI; it does not prevent execution.
+After the security patch landed on main, the sprint commit was rebased onto `48d839c` and every verification above was repeated against Next.js 16.4.6. The requested `npm ci` in the original checkout initially failed with Windows `EPERM` on a loaded native dependency. No process was stopped to release that lock. A detached validation checkout (`vw-codex-sprint6d-validation`) completed `npm ci` from `apps/web`; its existing nested compression package was also installed. The original checkout was repaired with `npm.cmd install --ignore-scripts --no-audit --no-fund`, which succeeded without changing tracked dependency files. Locked old binary cleanup warnings were left alone.
+
+Typecheck, lint and the full test suite passed in the isolated checkout. Its first test attempt lacked ignored avatar fixtures; linking the existing avatar/garment directories allowed the full suite to pass. Turbopack rejected those fixture links because they leave that checkout's root, so the production build was verified successfully in the repaired original checkout with `.next-sprint-6d-build`. Mock, disconnected and browser runs also passed there on port 3100. No source workaround or asset modification was needed. Node emits the existing typeless-package warning when directly importing TypeScript from the CLI; it does not prevent execution.
 
 All app server/test traffic used port 3100. Builds and evaluation use separate `.next` directories. Port 3000 was not accessed or stopped. Generated Next environment/type configuration changes were restored before commit. Changes are limited to `apps/web/` and this explicitly requested report; no services, assets or contracts were edited. No push or merge.
