@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { CATEGORIES, PATTERNS, SEASONS, type Category, type Wardrobe, type WardrobeItem } from "../../lib/wardrobe/schema";
 import { PhotoCapture, saveCaptures, type Captures } from "./PhotoCapture";
 import { TemplateThumbnail } from "./TemplateThumbnail";
+import { CollectionNav } from "./CollectionNav";
 
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const list = (s: string) => s.split(",").map(v => v.trim()).filter(Boolean);
@@ -51,7 +52,7 @@ export function WardrobePage() {
   async function saveOutfit(event: FormEvent) { event.preventDefault(); if (!data || !top || !bottom || !outfitName.trim()) return; const outfit = { id: `outfit-${crypto.randomUUID()}`, name: outfitName.trim(), items: [top, bottom], occasion: outfitOccasion.trim(), worn_on: [] }; if (await persist({ ...data, outfits: [...data.outfits, outfit] })) { setOutfitName(""); setOutfitOccasion(""); } }
   function editItem(item: WardrobeItem) { setCaptures({}); setEditing({ ...item, colors: item.colors.map(c => ({ ...c })) }); setOccasionText(item.occasions.join(", ")); setImageFile(null); setPreview(""); setSuggestions([]); setError(""); }
   const change = <K extends keyof WardrobeItem>(key: K, value: WardrobeItem[K]) => setEditing(current => current ? { ...current, [key]: value } : current);
-  return <main className="wardrobe-page"><header className="wardrobe-nav"><Link href="/try-on" className="wardrobe-brand">v<span>.</span> <small>virtual<br />wardrobe</small></Link><Link href="/try-on">THE FITTING ROOM</Link></header>
+  return <main className="wardrobe-page"><CollectionNav />
     <div className="wardrobe-shell"><section className="wardrobe-intro"><div><span className="wardrobe-eyebrow">YOUR PERSONAL COLLECTION</span><h1>Your wardrobe<span>.</span></h1><p>Keep your pieces close, and find new ways to wear them.</p></div><button className="wardrobe-primary" onClick={() => { editItem(emptyItem()); }}>+ Add a piece</button></section>
     {error && <p role="alert" className="wardrobe-error">{error}</p>}{!data && !error && <p role="status">Opening your wardrobe…</p>}
     {data && <><section aria-label="Filter wardrobe" className="wardrobe-filters"><label>Search<input placeholder="Name, material, notes…" value={search} onChange={e => setSearch(e.target.value)} /></label><label>Category<select value={category} onChange={e => setCategory(e.target.value)}><option value="">All categories</option>{CATEGORIES.map(v => <option key={v}>{v}</option>)}</select></label><label>Season<select value={season} onChange={e => setSeason(e.target.value)}><option value="">All seasons</option>{seasons.map(v => <option key={v}>{v}</option>)}</select></label><label>Occasion<select value={occasion} onChange={e => setOccasion(e.target.value)}><option value="">All occasions</option>{occasions.map(v => <option key={v}>{v}</option>)}</select></label><label>Colour<select value={color} onChange={e => setColor(e.target.value)}><option value="">All colours</option>{colors.map(v => <option key={v}>{v}</option>)}</select></label></section>
