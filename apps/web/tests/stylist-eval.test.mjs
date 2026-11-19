@@ -99,7 +99,7 @@ try {
       altered.structured.top_id="eval-top-4-fresh"; altered.structured.outer_id=null;
       assert.equal(scoreScenario(s, fixture, altered, 200, 0).quality_checks.find(c=>c.id==="warmth_vs_forecast").status,"FAIL");
     }
-    if(s.id === "en-office-weather") {
+    if(s.id === "en-office") {
       altered.structured.top_id="eval-top-3-fresh";
       assert.equal(scoreScenario(s, fixture, altered, 200, 0).quality_checks.find(c=>c.id==="best_available_formality").status,"FAIL");
     }
