@@ -45,7 +45,13 @@ RECONSTRUCTION = PROJECT / "outputs" / "sam3d-person-front-sprint03-run2" / "rec
 GARMENT_TAGS = {"tshirt": "tshirt-v5.3", "pants": "pants-v3"}
 # --revision: 3.5 = tshirt-v5.3 / pants-v3 (pattern panels, UV layout v3, smooth push falloff), the default generation;
 # 3a = tshirt-v5.2 / pants-v2 (UV layout v2, linear push), the previous default, reachable for one sprint.
-REVISIONS = {"3a": {"tshirt": "v5.2", "pants": "v2", "dir": SIZES_DIR.parent / "sizes-v5.2"}, "3.5": {"tshirt": "v5.3", "pants": "v3", "dir": SIZES_DIR}}
+# "clean_all": Sprint 3.6 runs the degenerate clean-up (personal_fit.collapse_degenerate) on every body, not only on
+# personal ones: neutral sizes kept sub-millimetre slivers (waistband rim, neckline) whose edges stretched 12-18x and
+# flipped. "hip_keys_deg": the pants hip-flexion corrective keys (pants.leg_corrective_specs). With the single 90 deg key, l-hip-60 showed
+# 56 % of the 90 deg shape and the groin crease folded (neutral L: 64 flips where the gate allows 24); Sprint 3.6 adds a 60 deg key.
+# "shoulder_search_all": every body searches the shoulder corrective settings against its own gates (shoulder_morphs)., so the v5.2 / pants-v2 sizes still regenerate byte for byte.
+REVISIONS = {"3a": {"tshirt": "v5.2", "pants": "v2", "dir": SIZES_DIR.parent / "sizes-v5.2", "clean_all": False, "hip_keys_deg": (90.0,), "shoulder_search_all": False},
+             "3.5": {"tshirt": "v5.3", "pants": "v3", "dir": SIZES_DIR, "clean_all": True, "hip_keys_deg": (60.0, 90.0), "shoulder_search_all": True}}
 CRASH_LOG = PROJECT / "outputs" / "garment-tests" / "sizes-crash.log"  # faulthandler + per-stage peak memory
 ENTRIES_DIR = PROJECT / "outputs" / "garment-tests" / "sizes"  # per-size report entries (resume)
 
@@ -152,7 +158,15 @@ def outward_faces(vertices: np.ndarray, faces: np.ndarray) -> tuple[np.ndarray, 
     return vertices, faces[outward]
 
 
-def shoulder_morphs(arrays: dict[str, Any], outer: Any, avatar: Any, body_id: str) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+def shoulder_morphs(arrays: dict[str, Any], outer: Any, avatar: Any, body_id: str, avatar_path: Path | None = None, search_all: bool = False) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+    """Shoulder targets for a size. Sprint 3A: neutral sizes take the neutral settings; personal sizes search
+    personal_fit.SHOULDER_CANDIDATES against the body's own gates. Sprint 3.6 (`search_all`): every body searches
+    personal_fit.SHOULDER_CANDIDATES_3_6 against its gates (size_gates.shoulder_gates), the same gates the size gates check."""
+    if search_all:
+        import personal_fit
+        import size_gates
+
+        return personal_fit.fit_shoulders(arrays, outer, avatar, size_gates.shoulder_gates(Path(avatar_path)), personal_fit.SHOULDER_CANDIDATES_3_6)
     if body_id == "neutral":
         return correctives.solve_targets(arrays, outer.vertices, outer.faces, avatar.skeleton, avatar)
     import personal_fit
@@ -236,6 +250,39 @@ def resume_entry(out_dir: Path, entries_dir: Path, name: str, regions: tuple[str
     return entry
 
 
+COLLISION_PYTHON = PROJECT / "tools" / "collision" / ".venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
+
+
+def size_gates_entry(glb: Path, avatar_path: Path, entries_dir: Path, name: str) -> dict[str, Any]:
+    """Sprint 3.6: the deformation gates of a written size (size_gates.py: stretch, flips and penetration at every
+    supported pose, against the size's own avatar). They always run, in the collision tool's environment (the exact
+    checks need its trimesh + Embree + rtree); the result is kept next to the size's report entry (<name>.gates.json), so
+    a resumed run reuses it."""
+    import subprocess
+
+    path = entries_dir / f"{name}.gates.json"
+    if not path.is_file():
+        if not COLLISION_PYTHON.is_file():
+            raise SystemExit(f"The size gates need the collision tool's environment ({COLLISION_PYTHON}); see tools/collision/README.md")
+        entries_dir.mkdir(parents=True, exist_ok=True)
+        run = subprocess.run([str(COLLISION_PYTHON), str(Path(__file__).with_name("size_gates.py")), f"{glb}={avatar_path}", "--out", str(path)], capture_output=True, text=True)
+        if run.returncode not in (0, 1) or not path.is_file():  # 1: the size failed a gate (reported, not an error)
+            raise SystemExit(f"size_gates.py failed on {glb.name} (exit {run.returncode}):\n{run.stderr[-2000:]}")
+    return json.loads(path.read_text(encoding="utf-8"))[glb.name]
+
+
+def withhold(out_dir: Path, withheld_dir: Path, name: str, why: str, entries_dir: Path) -> None:
+    """Move a size that failed its gates out of the shipped folder (GLB, sidecar, fit.json) into the withheld folder, with
+    a note the web reads to show the size as not ready. Its report entry and gate report stay in the entries folder."""
+    withheld_dir.mkdir(parents=True, exist_ok=True)
+    for suffix in (".glb", ".correctives.json", ".fit.json"):
+        source = out_dir / f"{name}{suffix}"
+        if source.is_file():
+            source.rename(new_file(withheld_dir / f"{name}{suffix}"))
+    note = {"version": 1, "size": name, "reason": "failed its deformation gates", "failed_gates": why, "gates": (entries_dir / f"{name}.gates.json").name}
+    new_file(withheld_dir / f"{name}.withheld.json").write_text(json.dumps(note, indent=2) + "\n", encoding="utf-8")
+
+
 def pants_envelope_from_disk(out_dir: Path, body_id: str) -> list[tuple[np.ndarray, np.ndarray]]:
     """Outer layers of the pants sizes already written for this body (when the shirts are regenerated alone)."""
     meshes = []
@@ -245,7 +292,7 @@ def pants_envelope_from_disk(out_dir: Path, body_id: str) -> list[tuple[np.ndarr
     return meshes
 
 
-def build_shirt(body: RestBody, body_id: str, avatar_path: Path, spec: Any, surface: Any, envelope: Any = None, envelope_top_y: float = 0.0, revision: str = "v5.2") -> dict[str, Any]:
+def build_shirt(body: RestBody, body_id: str, avatar_path: Path, spec: Any, surface: Any, envelope: Any = None, envelope_top_y: float = 0.0, revision: str = "v5.2", clean_all: bool = False, shoulder_search_all: bool = False) -> dict[str, Any]:
     from fit_sizes import LAYER_FALLOFF_M, fit_shirt
     from sizes import ease_map_mm, shirt_regions, shirt_target_m
     from tshirt import V5_2_RULES, V5_3_RULES, assemble
@@ -254,7 +301,7 @@ def build_shirt(body: RestBody, body_id: str, avatar_path: Path, spec: Any, surf
     base_rules = V5_3_RULES if revision == "v5.3" else V5_2_RULES
     falloff = LAYER_FALLOFF_M if base_rules.panel_seams else None  # Sprint 3.5: smooth push falloff (no hem ledge)
     garment, rules, fit = fit_shirt(body, spec, base_rules, envelope=envelope, envelope_top_y=envelope_top_y, falloff_m=falloff)
-    if body_id != "neutral":
+    if body_id != "neutral" or clean_all:
         from personal_fit import collapse_degenerate
 
         garment, fit["degenerate_cleanup"] = collapse_degenerate(garment, len(body.joint_names))
@@ -272,7 +319,7 @@ def build_shirt(body: RestBody, body_id: str, avatar_path: Path, spec: Any, surf
 
         arrays["uv"], fit["uv_layout"] = relayout(arrays, "tshirt")
     avatar = load_asset(avatar_path)
-    morphs, fit["shoulder_correctives"] = shoulder_morphs(arrays, garment, avatar, body_id)
+    morphs, fit["shoulder_correctives"] = shoulder_morphs(arrays, garment, avatar, body_id, avatar_path, shoulder_search_all)
     extra, _ = correctives.solve_specs(arrays, garment.vertices, garment.faces, avatar.skeleton, avatar, correctives.shirt_hip_specs(), correctives.CorrectiveRules(**SHIRT_LIMB_RULES))
     morphs.update(extra)
     sidecar = correctives.signed_shirt_sidecar(avatar.skeleton, True)
@@ -288,7 +335,7 @@ def build_shirt(body: RestBody, body_id: str, avatar_path: Path, spec: Any, surf
     return {"arrays": arrays, "morphs": morphs, "sidecar": sidecar, "ease": ease, "regions": regions, "info": info, "material": SHIRT_MATERIAL, "fit": fit, "seconds": round(time.perf_counter() - started, 1), "extra_attributes": extra_attributes}
 
 
-def build_pants(body: RestBody, body_id: str, avatar_path: Path, spec: Any, surface: Any, revision: str = "v2") -> dict[str, Any]:
+def build_pants(body: RestBody, body_id: str, avatar_path: Path, spec: Any, surface: Any, revision: str = "v2", clean_all: bool = False, hip_keys_deg: tuple[float, ...] = (90.0,)) -> dict[str, Any]:
     from fit_sizes import fit_pants
     from generate_pants import MATERIAL as PANTS_MATERIAL, metadata as pants_metadata
     from pants import PANTS_V2_CORRECTIVE_RULES, PANTS_V2_RULES, PANTS_V2_SPECS, PANTS_V3_RULES, leg_corrective_specs
@@ -297,7 +344,7 @@ def build_pants(body: RestBody, body_id: str, avatar_path: Path, spec: Any, surf
 
     started = time.perf_counter()
     garment, rules, fit = fit_pants(body, spec, PANTS_V3_RULES if revision == "v3" else PANTS_V2_RULES)
-    if body_id != "neutral":
+    if body_id != "neutral" or clean_all:
         from personal_fit import collapse_degenerate
 
         garment, fit["degenerate_cleanup"] = collapse_degenerate(garment, len(body.joint_names))
@@ -315,7 +362,7 @@ def build_pants(body: RestBody, body_id: str, avatar_path: Path, spec: Any, surf
 
         arrays["uv"], fit["uv_layout"] = relayout(arrays, "pants")
     avatar = load_asset(avatar_path)
-    specs = leg_corrective_specs(**PANTS_V2_SPECS)
+    specs = leg_corrective_specs(**{**PANTS_V2_SPECS, "hip_keys_deg": hip_keys_deg})
     morphs, fit["correctives"] = correctives.solve_specs(arrays, garment.vertices, garment.faces, avatar.skeleton, avatar, specs, correctives.CorrectiveRules(**{**PANTS_V2_CORRECTIVE_RULES, **PANTS_RULES}))
     sidecar = correctives.spec_sidecar(specs, avatar.skeleton)
     waist_y, hips_y = fit["marks"]["waist_y"], fit["body"]["hips_y"]
@@ -341,12 +388,14 @@ def main() -> int:
     parser.add_argument("--revision", choices=sorted(REVISIONS), default="3.5", help="3.5: tshirt-v5.3 / pants-v3 (default); 3a: tshirt-v5.2 / pants-v2")
     args = parser.parse_args()
     args.out_dir = args.out_dir or REVISIONS[args.revision]["dir"]
+    withheld_dir = args.out_dir.with_name(args.out_dir.name + "-withheld")  # Sprint 3.6: sizes that fail their gates
     args.report = args.report or PROJECT / "outputs" / "garment-tests" / f"sizes-sprint-{args.revision}.json"
     GARMENT_TAGS.update({"tshirt": "tshirt-" + REVISIONS[args.revision]["tshirt"], "pants": "pants-" + REVISIONS[args.revision]["pants"]})
     CRASH_LOG.parent.mkdir(parents=True, exist_ok=True)
     crash_log = open(CRASH_LOG, "a", encoding="utf-8")  # stays open for the process lifetime: faulthandler writes to it on a fatal signal
     faulthandler.enable(file=crash_log, all_threads=True)
     stage_log(crash_log, f"start bodies={args.bodies} garments={args.garments} sizes={args.sizes} pid={__import__('os').getpid()}")
+    import size_gates
     from pants import PantsRules, pants_landmarks
     from sizes import SIZES, pants_specs, recommend, shirt_specs
     from tshirt import V2_RULES, BodySurface
@@ -361,6 +410,7 @@ def main() -> int:
     shirt = shirt_specs(neutral, V2_RULES.hem_below_hip_m)
     pants, pants_ratio = pants_specs(neutral, base_pants["waist_y"], base_pants["seam_y"] - base_hem_y)
     report: dict[str, Any] = {"specs": {"tshirt": {k: v.__dict__ for k, v in shirt.items()}, "pants": {k: v.__dict__ for k, v in pants.items()}, "pants_ratio": pants_ratio}, "bodies": {}}
+    failed: dict[str, str | None] = {}  # size name -> failed gates (None: passed)
     args.out_dir.mkdir(parents=True, exist_ok=True)
     for body_id in args.bodies:
         if body_id == "neutral":
@@ -376,25 +426,27 @@ def main() -> int:
         calibrated = "calibrated_avatar" in body_report
         envelope_meshes: list[tuple[np.ndarray, np.ndarray]] = [base_pants_outer(body_id)] if has_base_pants(body_id) and not calibrated else []
         if "pants" not in args.garments:  # shirts regenerated alone: layer them over the pants sizes already written
-            envelope_meshes += pants_envelope_from_disk(args.out_dir, body_id)
+            envelope_meshes += pants_envelope_from_disk(args.out_dir, body_id) + pants_envelope_from_disk(withheld_dir, body_id)
         for garment in sorted(args.garments, key=lambda g: g != "pants"):  # pants first: the shirts clear them
             region_names = ("chest", "waist", "hips", "shoulders", "length") if garment == "tshirt" else ("waist", "hips", "length")
             entries: dict[str, dict[str, Any]] = {}
+            size_dirs: dict[str, Path] = {}  # where each size lives: the out dir, or the withheld dir after a failed gate
             for size in args.sizes:
                 name = f"{GARMENT_TAGS[garment]}-{size}-{body_id}"  # strings: "v5.2" would confuse Path.with_suffix
-                entry = resume_entry(args.out_dir, args.entries_dir, name, region_names)
+                size_dirs[size] = withheld_dir if (withheld_dir / f"{name}.glb").is_file() else args.out_dir
+                entry = resume_entry(size_dirs[size], args.entries_dir, name, region_names)
                 if entry is not None:
                     stage_log(crash_log, f"resume {body_id} {garment} {size} (outputs validated, build skipped)")
                 else:
                     stage_log(crash_log, f"begin {body_id} {garment} {size}")
                     if garment == "pants":
-                        item = build_pants(body, body_id, avatar_path, pants[size], surface, REVISIONS[args.revision]["pants"])
+                        item = build_pants(body, body_id, avatar_path, pants[size], surface, REVISIONS[args.revision]["pants"], REVISIONS[args.revision]["clean_all"], REVISIONS[args.revision]["hip_keys_deg"])
                     else:
                         from sizes import GarmentEnvelope
 
                         envelope = GarmentEnvelope(envelope_meshes)
                         top = float(max(vertices[:, 1].max() for vertices, _ in envelope_meshes))
-                        item = build_shirt(body, body_id, avatar_path, shirt[size], surface, envelope, top, REVISIONS[args.revision]["tshirt"])
+                        item = build_shirt(body, body_id, avatar_path, shirt[size], surface, envelope, top, REVISIONS[args.revision]["tshirt"], REVISIONS[args.revision]["clean_all"], REVISIONS[args.revision]["shoulder_search_all"])
                     print(f"{body_id} {garment} {size}: {item['seconds']} s {json.dumps(item['regions'])}", flush=True)
                     memory = stage_log(crash_log, f"done {body_id} {garment} {size} ({item['seconds']} s)")
                     # written at once, so a killed run keeps every finished size (fit.json follows, once all sizes exist)
@@ -406,15 +458,18 @@ def main() -> int:
                     new_file(args.entries_dir / f"{name}.json").write_text(json.dumps(entry, indent=2, default=lambda o: o.tolist() if hasattr(o, "tolist") else float(o)), encoding="utf-8")
                     del item  # the arrays and morphs of a written size are not kept in memory
                 entries[size] = entry
+                gates = size_gates_entry(size_dirs[size] / f"{name}.glb", avatar_path, args.entries_dir, name)
+                failed[name] = None if gates["pass"] else size_gates.failed_checks(gates)
+                stage_log(crash_log, f"gates {body_id} {garment} {size}: {'PASS' if gates['pass'] else 'FAIL ' + failed[name]}")
                 if garment == "pants":
-                    asset = load_asset(args.out_dir / f"{name}.glb")
+                    asset = load_asset(size_dirs[size] / f"{name}.glb")
                     envelope_meshes.append(outward_faces(asset.positions, asset.indices))
             girth_regions = ("chest", "waist", "hips") if garment == "tshirt" else ("waist", "hips")
             chosen = recommend({s: entries[s]["regions"] for s in entries}, girth_regions) if set(entries) == set(SIZES) else None
             for size, entry in entries.items():
                 name = f"{GARMENT_TAGS[garment]}-{size}-{body_id}"
                 fit_json = {"version": 1, "garment": GARMENT_TAGS[garment], "size": size, "body": body_id, "regions": entry["regions"], "recommended": size == chosen}
-                fit_path = args.out_dir / f"{name}.fit.json"
+                fit_path = size_dirs[size] / f"{name}.fit.json"
                 if fit_path.is_file():
                     if json.loads(fit_path.read_text(encoding="utf-8")) != fit_json:
                         raise SystemExit(f"{fit_path} exists and differs from this run's fit data; remove it to rewrite")
@@ -422,11 +477,22 @@ def main() -> int:
                     fit_path.write_text(json.dumps(fit_json, indent=2) + "\n", encoding="utf-8")
                 body_report["garments"].setdefault(garment, {})[size] = {**entry, "recommended": size == chosen}
             body_report["garments"][garment]["recommended"] = chosen
+            for size in entries:  # Sprint 3.6: a size that fails its gates is withheld (not shipped); the recommended one must pass
+                name = f"{GARMENT_TAGS[garment]}-{size}-{body_id}"
+                if failed[name] and size == chosen:
+                    raise SystemExit(f"{name} is the recommended size and fails its gates ({failed[name]}); it cannot be withheld")
+                if failed[name] and size_dirs[size] == args.out_dir:
+                    withhold(args.out_dir, withheld_dir, name, failed[name], args.entries_dir)
+                    stage_log(crash_log, f"withheld {name}: {failed[name]}")
         report["bodies"][body_id] = body_report
+    report["gates"] = {"rules": "services/garments/size_gates.py", "withheld_dir": withheld_dir.name,
+                       "withheld": {name: why for name, why in failed.items() if why}, "passed": sorted(name for name, why in failed.items() if not why)}
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2, default=lambda o: o.tolist() if hasattr(o, "tolist") else float(o)), encoding="utf-8")
     print(f"Wrote {args.report}")
     stage_log(crash_log, f"finished report={args.report}")
+    if report["gates"]["withheld"]:
+        print("Withheld (failed their gates): " + "; ".join(f"{name}: {why}" for name, why in report["gates"]["withheld"].items()), file=sys.stderr)
     return 0
 
 

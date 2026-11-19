@@ -3,6 +3,7 @@ import path from "node:path";
 import { compressGlb } from "../../../asset-compression/compress.mjs";
 import { parseFitMap, SIZES, type Size } from "../../../lib/garment/fitMap.ts";
 import { DEFAULT_GENERATION, GENERATIONS, parseGeneration } from "../../../lib/garment/generation.ts";
+import { withheldSizes } from "../../../lib/garment/withheldSizes.ts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,7 +42,7 @@ export async function GET(request: Request) {
       options.push({ size: fit.size, fit, glb: `/api/size-garment?${safe}&asset=glb`, sidecar: `/api/size-garment?${safe}&asset=sidecar`, fileBase });
     }
     options.sort((a, b) => SIZES.indexOf(a.size) - SIZES.indexOf(b.size));
-    if (size === null && asset === null) return Response.json(options.map(option => ({ size: option.size, fit: option.fit, glb: option.glb, sidecar: option.sidecar })), { headers });
+    if (size === null && asset === null) return Response.json([...options.map(option => ({ size: option.size, fit: option.fit, glb: option.glb, sidecar: option.sidecar })), ...await withheldSizes(root, slot === "top" ? top : bottom, body, files)], { headers });
     if (!size || !SIZES.includes(size as Size) || (asset !== "glb" && asset !== "sidecar")) return missing();
     const option = options.find(item => item.size === size);
     if (!option) return missing();

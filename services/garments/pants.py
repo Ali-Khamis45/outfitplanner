@@ -402,18 +402,26 @@ def design_pants(body: RestBody, rules: PantsRules = PantsRules()) -> tuple[Oute
     return garment, marks
 
 
-def leg_corrective_specs(hip_ramp_start_deg: float = 20.0, hip_radii: tuple[float, float] = (0.18, 0.25), knee_radii: tuple[float, float] = (0.12, 0.17), anchor: float = 1.0, gate: str = "midline", knee_gate: str = "midline", influence_full_share: float = 0.1, hip_midline_cross_m: float = 0.0, signed: bool = False) -> tuple[Any, ...]:
+def leg_corrective_specs(hip_ramp_start_deg: float = 20.0, hip_radii: tuple[float, float] = (0.18, 0.25), knee_radii: tuple[float, float] = (0.12, 0.17), anchor: float = 1.0, gate: str = "midline", knee_gate: str = "midline", influence_full_share: float = 0.1, hip_midline_cross_m: float = 0.0, signed: bool = False, hip_keys_deg: tuple[float, ...] = (90.0,)) -> tuple[Any, ...]:
     """Hip-flexion and knee-flexion correctives per leg (corrective-morphs contract, swing-driven).
 
     Hip targets start their ramp at `hip_ramp_start_deg` so the 15-20 deg extension/abduction poses, which swing the
     thigh as much as a small flexion would, leave them off.
+
+    `hip_keys_deg` (Sprint 3.6): the hip-flexion key angles. (90,) is the single corr_*_hip90 target of pants v1-v3. (60,
+    90) adds corr_*_hip60, solved at 60 deg with the ramp [start, 60], and makes corr_*_hip90 hold only the correction
+    beyond it (ramp [60, 90]), so the garment takes its solved shape at 60 deg instead of a blend of the 90 deg one.
     """
     from correctives import CorrectiveSpec
 
     x = (1.0, 0.0, 0.0)
     specs = []
     for side, tag in (("l", "L"), ("r", "R")):
-        specs.append(CorrectiveSpec(f"corr_{tag}_hip90", f"{side}_upleg", f"{side}_lowleg", (hip_ramp_start_deg, 90.0), ((f"{side}_upleg", x, -90.0),), f"{side}_upleg", hip_radii[0], hip_radii[1], side, anchor, gate, influence_full_share, hip_midline_cross_m))
+        start, base = hip_ramp_start_deg, None
+        for key in hip_keys_deg:
+            target = f"corr_{tag}_hip{key:g}"
+            specs.append(CorrectiveSpec(target, f"{side}_upleg", f"{side}_lowleg", (start, key), ((f"{side}_upleg", x, -key),), f"{side}_upleg", hip_radii[0], hip_radii[1], side, anchor, gate, influence_full_share, hip_midline_cross_m, base=base))
+            start, base = key, target
         specs.append(CorrectiveSpec(f"corr_{tag}_knee90", f"{side}_lowleg", f"{side}_foot", (0.0, 90.0), ((f"{side}_lowleg", x, 90.0),), f"{side}_lowleg", knee_radii[0], knee_radii[1], side, anchor, knee_gate, influence_full_share))
     if signed:  # contract v2: hips measured as signed flexion (+X rotation is extension), knees as signed flexion
         from dataclasses import replace as replace_spec

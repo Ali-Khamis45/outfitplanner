@@ -5,6 +5,7 @@ import { compressGlb } from "../../asset-compression/compress.mjs";
 import { localRequest } from "../../lib/personalFit.ts";
 import { parseFitMap, SIZES, type Size, type Slot } from "../../lib/garment/fitMap.ts";
 import { DEFAULT_GENERATION, GENERATIONS, parseGeneration } from "../../lib/garment/generation.ts";
+import { withheldSizes } from "../../lib/garment/withheldSizes.ts";
 
 // Neutral sizes are public demo assets. Personal sizes retain the local-only,
 // development-only boundary used for the personal-fit endpoint.
@@ -37,7 +38,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       options.push({ size: fit.size, fit, glb: `/api/size-garment?${safe}&asset=glb`, sidecar: `/api/size-garment?${safe}&asset=sidecar`, fileBase });
     }
     options.sort((a, b) => SIZES.indexOf(a.size) - SIZES.indexOf(b.size));
-    if (size === undefined && asset === undefined) return res.status(200).json(options.map(option => ({ size: option.size, fit: option.fit, glb: option.glb, sidecar: option.sidecar })));
+    if (size === undefined && asset === undefined) return res.status(200).json([...options.map(option => ({ size: option.size, fit: option.fit, glb: option.glb, sidecar: option.sidecar })), ...await withheldSizes(root, slot === "top" ? top : bottom, body, files)]);
     if (typeof size !== "string" || !SIZES.includes(size as Size) || (asset !== "glb" && asset !== "sidecar")) return res.status(404).end();
     const option = options.find(item => item.size === size);
     if (!option) return res.status(404).end();

@@ -250,6 +250,10 @@ class CorrectiveSpec:
     # Sprint 2.2A: further poses (rotation lists) whose posed body the solved shape must also clear, e.g. the walk arm
     # swing around the key pose; the garment is solved at `rotations` only.
     collision_poses: tuple[Any, ...] = ()
+    # Sprint 3.6: chained keys. The target holds only the correction beyond `base`'s solved shape (as abd120 over abd90):
+    # with ramps [a, k1] for the base and [k1, k2] for this target, the garment takes exactly the solved shape at each key.
+    # `base` must come earlier in the spec list.
+    base: str | None = None
 
 
 def spec_region(rest: np.ndarray, pivot: np.ndarray, spec: CorrectiveSpec, midline_fade_m: float) -> np.ndarray:
@@ -296,8 +300,11 @@ def solve_specs(arrays: dict[str, Any], outer_vertices: np.ndarray, outer_faces:
     data = _skinning_inputs(arrays, outer_vertices)
     rest_world = world_from_local(skeleton, skeleton.local)
     morphs: dict[str, np.ndarray] = {}
+    solved: dict[str, np.ndarray] = {}  # full solved delta per target (a chained target's morph is relative to its base)
     report: dict[str, Any] = {"rules": rules_record(rules), "targets": {}}
     for spec in specs:
+        if spec.base is not None and spec.base not in solved:
+            raise ValueError(f"{spec.target}: base {spec.base} must be solved first")
         mask = spec_region(outer_vertices, rest_world[skeleton.index(spec.pivot_joint)][:3, 3], spec if spec.gate == "midline" else replace(spec, side=None), rules.midline_fade_m)
         if spec.gate == "influence":
             subtree = np.zeros(len(skeleton.names), dtype=bool)
@@ -307,7 +314,8 @@ def solve_specs(arrays: dict[str, Any], outer_vertices: np.ndarray, outer_faces:
                     subtree[k] = True
             share = (data["outer_weights"] * subtree[data["outer_joints"]]).sum(axis=1)
             mask = mask * _smoothstep(share / spec.influence_full_share)
-        morphs[spec.target] = _solve_pose(data, outer_vertices, outer_faces, mask, list(spec.rotations), skeleton, body, rules, spec.anchor, spec.collision_poses)
+        solved[spec.target] = _solve_pose(data, outer_vertices, outer_faces, mask, list(spec.rotations), skeleton, body, rules, spec.anchor, spec.collision_poses)
+        morphs[spec.target] = solved[spec.target] - solved[spec.base] if spec.base is not None else solved[spec.target]
         report["targets"][spec.target] = {"region_vertices": int((mask > 0).sum()), "max_delta_m": float(np.linalg.norm(morphs[spec.target], axis=1).max())}
     return morphs, report
 

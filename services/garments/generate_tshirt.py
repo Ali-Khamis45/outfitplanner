@@ -33,7 +33,7 @@ RULESETS = {
     "v5": V5_RULES,  # Sprint 1.4A: v2 + shoulder corrective morph targets (promotion candidate, not the default)
     "v5.1": V5_1_RULES,  # Sprint 2.1A: v5 + hip-flexion hem correctives
     "v5.2": V5_2_RULES,  # Sprint 2.2A: v5.1 + arm-down correctives (signed sidecar, contract v2)
-    "v5.3": V5_3_RULES,  # Sprint 3.5 candidate: v5.2 cut into pattern panels, UV layout v3 (not the default)
+    "v5.3": V5_3_RULES,  # Sprint 3.5: v5.2 cut into pattern panels, UV layout v3 (the default generation since 2026-11-19)
     # Ablations for the Sprint 1.1 deformation analysis: each change on its own.
     "v2-separation-only": FitRules(underarm_separation_m=0.007),
     "v2-weights-only": FitRules(weight_mode="region", weight_smoothing_iterations=4),
@@ -135,7 +135,8 @@ def write(directory: Path, body: RestBody, outer: OuterGarment, rules: FitRules,
             import personal_fit
 
             gates = personal_fit.body_gates(original[0], load_asset(original[1]))
-            morphs, extra["correctives"] = personal_fit.fit_shoulders(arrays, outer, avatar, gates)
+            # Sprint 3.6: the v5.3 (panel) fits search the extended candidates, as the sizes do; earlier revisions keep their bytes
+            morphs, extra["correctives"] = personal_fit.fit_shoulders(arrays, outer, avatar, gates, personal_fit.SHOULDER_CANDIDATES_3_6 if rules.panel_seams else personal_fit.SHOULDER_CANDIDATES)
         else:
             morphs, extra["correctives"] = correctives.solve_targets(arrays, outer.vertices, outer.faces, avatar.skeleton, avatar)
         document = correctives.sidecar()
