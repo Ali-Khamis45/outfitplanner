@@ -7,7 +7,7 @@ import { DEFAULT_GENERATION, generationQuery, type Generation } from "../lib/gar
 
 export function useSizes(body: string | null, slot: Slot, fixtures = false, preferredSize = "", generation: Generation = DEFAULT_GENERATION) {
   const key = JSON.stringify([body, slot, fixtures, preferredSize, generation]);
-  const [discovery, setDiscovery] = useState<{ key: string; options: SizeOption[]; initial: Size | null } | null>(null);
+  const [discovery, setDiscovery] = useState<{ key: string; options: SizeOption[]; withheld: Size[]; initial: Size | null } | null>(null);
   const [choice, setChoice] = useState<{ key: string; size: Size } | null>(null);
   const [loaded, setLoaded] = useState<{ url: string; sidecar: Sidecar | null } | null>(null);
   useEffect(() => {
@@ -18,16 +18,19 @@ export function useSizes(body: string | null, slot: Slot, fixtures = false, pref
     if (fixtures) query.set("fixtures", "1");
     fetch(`/api/size-garment?${query}`, { cache: "no-store" })
       .then(response => response.ok ? response.json() : [])
-      .then((items: SizeOption[]) => {
+      .then((items: unknown[]) => {
         if (!active) return;
-        const options = Array.isArray(items) ? items.filter(item => { try { const fit = parseFitMap(item.fit); return fit.body === body && fit.size === item.size && SIZES.includes(item.size) && typeof item.glb === "string" && typeof item.sidecar === "string"; } catch { return false; } }) : [];
+        // Sprint 3.6: sizes that failed their gates are listed as { size, withheld: true } and shown as not ready
+        const withheld = Array.isArray(items) ? items.flatMap(item => { const value = item as { size?: unknown; withheld?: unknown }; return value?.withheld === true && SIZES.includes(value.size as Size) ? [value.size as Size] : []; }) : [];
+        const options = Array.isArray(items) ? (items as SizeOption[]).filter(item => { try { const fit = parseFitMap(item.fit); return fit.body === body && fit.size === item.size && SIZES.includes(item.size) && typeof item.glb === "string" && typeof item.sidecar === "string"; } catch { return false; } }) : [];
         const initial = options.find(item => item.size === preferredSize)?.size ?? options.find(item => item.fit.recommended)?.size ?? options[0]?.size ?? null;
-        setDiscovery({ key, options, initial });
-      }).catch(() => { if (active) setDiscovery({ key, options: [], initial: null }); });
+        setDiscovery({ key, options, withheld: withheld.filter(size => !options.some(option => option.size === size)), initial });
+      }).catch(() => { if (active) setDiscovery({ key, options: [], withheld: [], initial: null }); });
     return () => { active = false; };
   }, [body, slot, fixtures, preferredSize, generation, key]);
   const resolved = !body || discovery?.key === key;
   const options = resolved && body ? discovery?.options ?? [] : [];
+  const withheld = resolved && body ? discovery?.withheld ?? [] : [];
   const size = resolved ? (choice?.key === key ? choice.size : discovery?.initial ?? null) : null;
   const selected = options.find(option => option.size === size) ?? null;
   useEffect(() => {
@@ -37,14 +40,20 @@ export function useSizes(body: string | null, slot: Slot, fixtures = false, pref
     return () => { active = false; };
   }, [selected]);
   const setSize = (next: Size) => setChoice({ key, size: next });
-  return { options, size, setSize, selected, resolved, garment: selected && loaded?.url === selected.glb ? { url: selected.glb, sidecar: loaded.sidecar } : null };
+  return { options, withheld, size, setSize, selected, resolved, garment: selected && loaded?.url === selected.glb ? { url: selected.glb, sidecar: loaded.sidecar } : null };
 }
 
-export function FitPicker({ title, options, selected, onSize }: { title: string; options: SizeOption[]; selected: Size | null; onSize: (size: Size) => void }) {
+export const WITHHELD_SIZE_REASON = "This size isn't ready yet";
+
+export function FitPicker({ title, options, withheld = [], selected, onSize }: { title: string; options: SizeOption[]; withheld?: readonly Size[]; selected: Size | null; onSize: (size: Size) => void }) {
   const fit = options.find(option => option.size === selected)?.fit;
+  const tip = useId();
   return <section className="fit-picker" aria-label={`${title} fit`}>
     <div className="fit-heading"><strong>{title} size</strong>{options.some(option => option.fit.recommended) && <span>● Recommended</span>}</div>
-    <div className="fit-sizes" role="group" aria-label={`${title} size`}>{SIZES.map(size => { const recommended = options.some(option => option.size === size && option.fit.recommended); return <button type="button" key={size} disabled={!options.some(option => option.size === size)} aria-label={recommended ? `${size}, Recommended` : size} aria-pressed={selected === size} onClick={() => onSize(size)}>{size}{recommended && <span className="fit-recommended-dot" aria-hidden="true" title="Recommended" />}</button>; })}</div>
+    <div className="fit-sizes" role="group" aria-label={`${title} size`}>{SIZES.map(size => {
+      // A withheld size stays focusable (aria-disabled, not disabled) so its reason is reachable on hover and on keyboard focus.
+      if (withheld.includes(size) && !options.some(option => option.size === size)) return <span key={size} className="fit-size-withheld"><button type="button" aria-disabled="true" aria-describedby={`${tip}-${size}`}>{size}</button><span role="tooltip" id={`${tip}-${size}`}>{WITHHELD_SIZE_REASON}</span></span>;
+      const recommended = options.some(option => option.size === size && option.fit.recommended); return <button type="button" key={size} disabled={!options.some(option => option.size === size)} aria-label={recommended ? `${size}, Recommended` : size} aria-pressed={selected === size} onClick={() => onSize(size)}>{size}{recommended && <span className="fit-recommended-dot" aria-hidden="true" title="Recommended" />}</button>; })}</div>
     {fit ? <div className="fit-summary">{isFullyClampedAndTight(fit) && <p className="fit-clamped-warning">Too small for this body. Shown at the closest wearable fit.</p>}<strong>Fit summary</strong>{Object.entries(fit.regions).map(([name, region]) => <p key={name} className="fit-label" data-fit={region.status}>{formatRegion(name, region, fit.garment)}{regionEstimateNote(region) && <small className="fit-estimate-note"> {regionEstimateNote(region)}</small>}</p>)}</div> : <p className="fit-unavailable">Size fits are not available yet.</p>}
   </section>;
 }

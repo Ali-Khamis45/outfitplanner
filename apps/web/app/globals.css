@@ -10,6 +10,12 @@ body { font-family: Arial, Helvetica, sans-serif; }
 .fit-sizes button[aria-pressed="true"] { background: #283f34; color: #fff; border-color: #283f34; }
 .fit-recommended-dot { display: inline-block; width: 6px; height: 6px; margin-left: 5px; border-radius: 50%; background: currentColor; vertical-align: middle; }
 .fit-sizes button:disabled, .measurement-actions button:disabled { opacity: .35; cursor: not-allowed; }
+/* Sprint 3.6: a size withheld by its gates is shown as not ready; the reason appears on hover and on keyboard focus */
+.fit-size-withheld { position: relative; display: inline-flex; }
+.fit-sizes .fit-size-withheld button { opacity: .35; cursor: not-allowed; }
+.fit-size-withheld [role="tooltip"] { position: absolute; bottom: calc(100% + 6px); left: 50%; z-index: 2; transform: translateX(-50%); padding: 5px 8px; border-radius: 4px; background: var(--text, #211c18); color: var(--surface, #fff); font-size: 12px; line-height: 1.3; white-space: nowrap; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .12s ease-out, visibility .12s; }
+.fit-size-withheld:hover [role="tooltip"], .fit-size-withheld button:focus-visible + [role="tooltip"] { opacity: 1; visibility: visible; }
+@media (prefers-reduced-motion: reduce) { .fit-size-withheld [role="tooltip"] { transition: none; } }
 .fit-summary { padding: 12px; background: rgba(128, 150, 128, .12); }
 .fit-summary p, .fit-unavailable, .measurements p { margin: 5px 0; line-height: 1.4; }
 .fit-estimate-note { color: #566553; font-size: 11px; }

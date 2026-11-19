@@ -21,9 +21,9 @@ LEGACY_SIZES_DIR = PROJECT / "outputs" / "garments" / "sizes-v5.2"  # tshirt-v5.
 CANDIDATE_PANTS_DIR = PROJECT / "outputs" / "garments" / "sizes-pants-v3.1"  # candidate pants-v3.1 (no knee step)
 SIZE_DIRS = [d for d in (SIZES_DIR, LEGACY_SIZES_DIR, CANDIDATE_PANTS_DIR) if d.is_dir()]
 # per generation: its folder, the generate_sizes reports holding each size's ease levels, and the garment tags
-GENERATIONS = [(SIZES_DIR, ("sizes-sprint-3.5-neutral.json", "sizes-sprint-3.5-personal.json"), {"tshirt": "tshirt-v5.3", "pants": "pants-v3"}),
+GENERATIONS = [(SIZES_DIR, ("sizes-sprint-3.6-neutral.json", "sizes-sprint-3.6-personal.json"), {"tshirt": "tshirt-v5.3", "pants": "pants-v3"}),
                (LEGACY_SIZES_DIR, ("sizes-sprint-3a.json",), {"tshirt": "tshirt-v5.2", "pants": "pants-v2"}),
-               (CANDIDATE_PANTS_DIR, ("sizes-sprint-3.5-knee-neutral.json", "sizes-sprint-3.5-knee-personal-scaled.json"), {"pants": "pants-v3.1"})]
+               (CANDIDATE_PANTS_DIR, ("sizes-sprint-3.6-knee-neutral.json", "sizes-sprint-3.6-knee-personal.json"), {"pants": "pants-v3.1"})]
 MODEL_PRESENT = (PROJECT / "external").is_dir()
 
 
@@ -158,6 +158,8 @@ class GeneratedSizesTests(unittest.TestCase):
                             for size in SIZES:
                                 if size in sizes:
                                     stem = directory / f"{tags[garment]}-{size}-{body_id}"
+                                    if not stem.with_name(stem.name + ".glb").is_file():  # Sprint 3.6: withheld (failed its gates), not shipped
+                                        continue
                                     yield stem.with_name(stem.name + ".glb"), stem.with_name(stem.name + ".fit.json"), sizes[size], garment
 
         checked = 0

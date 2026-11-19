@@ -111,6 +111,13 @@ class PersonalManifestTests(unittest.TestCase):
             for path in (entry["body"], entry["top"]["glb"], entry["top"]["sidecar"], entry["bottom"]["glb"], entry["bottom"]["sidecar"]):
                 self.assertTrue(path.startswith("outputs/") and "\\" not in path and not re.match(r"^[A-Za-z]:|^/", path), path)
 
+    def test_the_builder_reproduces_the_manifest(self) -> None:
+        """personal_manifest.py writes this manifest: the bodies and garments it lists are the ones on disk (Sprint 3.6)."""
+        from personal_manifest import build
+
+        built = build("sam3d-person-front-sprint03-run2")
+        self.assertEqual({k: v for k, v in built.items() if k != "fit_date"}, {k: v for k, v in self.manifest.items() if k != "fit_date"})
+
     def test_every_listed_file_exists(self) -> None:
         for entry in self.entries:
             for path in (entry["body"], entry["top"]["glb"], entry["top"]["sidecar"], entry["bottom"]["glb"], entry["bottom"]["sidecar"]):

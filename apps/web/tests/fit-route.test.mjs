@@ -18,15 +18,24 @@ try {
     await writeFile(path.join(directory, `${stem}.correctives.json`), "{}");
     await writeFile(path.join(directory, `${stem}.fit.json`), JSON.stringify({ version: 1, garment, size, body: "neutral", regions: { chest: { ease_mm: 62, status: "tight", clamped: size === "S" }, waist: { ease_mm: 84, status: "good", clamped: size === "S" }, hips: { ease_mm: -84, status: "tight", clamped: size === "S" } }, recommended: size === "M" }));
   }
+  // Sprint 3.6: L failed its gates and was withheld; a stale note for the shipped M and a note naming another file are ignored
+  const withheld = path.join(root, "outputs", "garments", "sizes-withheld"); await mkdir(withheld, { recursive: true });
+  for (const [file, size] of [["tshirt-v5.3-L-neutral", "tshirt-v5.3-L-neutral"], ["tshirt-v5.3-M-neutral", "tshirt-v5.3-M-neutral"], ["tshirt-v5.3-XL-neutral", "tshirt-v5.3-S-neutral"]]) await writeFile(path.join(withheld, `${file}.withheld.json`), JSON.stringify({ version: 1, size, reason: "failed its deformation gates", failed_gates: "raise_both_120" }));
+  await writeFile(path.join(withheld, "tshirt-v5.3-L-neutral.glb"), bytes);
   process.chdir(web);
   const request = query => GET(new Request(`http://localhost:3000/api/size-garment?${new URLSearchParams(query)}`));
   const options = await request({ body: "neutral", slot: "top" });
-  assert.equal(options.status, 200); const items = await options.json(); assert.deepEqual(items.map(item => item.size), ["S", "M"]); assert.equal(items[1].fit.recommended, true);
+  assert.equal(options.status, 200); const listed = await options.json(), items = listed.filter(item => !item.withheld);
+  assert.deepEqual(items.map(item => item.size), ["S", "M"]); assert.equal(items[1].fit.recommended, true);
+  assert.deepEqual(listed.filter(item => item.withheld), [{ size: "L", withheld: true }], "withheld sizes are listed without files");
+  assert.equal((await request({ body: "neutral", slot: "top", size: "L", asset: "glb" })).status, 404, "a withheld size is never served");
+  assert.deepEqual((await (await request({ body: "neutral", slot: "bottom" })).json()), [], "nothing withheld for the bottom");
   assert.ok(items.every(item => item.fit.garment === "tshirt-v5.3" && !item.glb.includes("gen=")), "default generation without a gen parameter");
   const legacyItems = await (await request({ body: "neutral", slot: "top", gen: "v5.2" })).json();
+  assert.ok(!legacyItems.some(item => item.withheld), "the withheld folder belongs to sizes/ only");
   assert.deepEqual(legacyItems.map(item => [item.size, item.fit.garment]), [["S", "tshirt-v5.2"], ["M", "tshirt-v5.2"]]); assert.match(legacyItems[0].glb, /gen=v5\.2/);
   assert.equal((await request({ body: "neutral", slot: "top", gen: "v5.2", size: "M", asset: "glb" })).status, 200);
-  assert.deepEqual((await (await request({ body: "neutral", slot: "top", gen: "v4" })).json()).map(item => item.fit.garment), ["tshirt-v5.3", "tshirt-v5.3"], "unknown generations fall back to the default");
+  assert.deepEqual((await (await request({ body: "neutral", slot: "top", gen: "v4" })).json()).filter(item => !item.withheld).map(item => item.fit.garment), ["tshirt-v5.3", "tshirt-v5.3"], "unknown generations fall back to the default");
   assert.deepEqual([items[0].fit.regions.chest.clamped, items[0].fit.regions.waist.clamped, items[0].fit.regions.hips.clamped], [true, true, true]);
   const glb = await request({ body: "neutral", slot: "top", size: "M", asset: "glb" });
   assert.equal(glb.status, 200); assert.equal(glb.headers.get("Content-Type"), "model/gltf-binary");

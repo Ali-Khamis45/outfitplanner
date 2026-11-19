@@ -1,4 +1,5 @@
-"""Sprint 3A gates for every size: penetration > 3 mm = 0 at rest and at every supported pose.
+"""Sprint 3A gates for every size: penetration > 3 mm = 0 at rest and at every supported pose; since Sprint 3.6 also the
+deformation gates of size_gates.py (stretch, flips, shoulder gates).
 
 Run with the collision tool's environment, from the repository root:
 
@@ -131,12 +132,20 @@ def main() -> int:
     parser.add_argument("--dir", type=Path, default=SIZES_DIR)
     parser.add_argument("--skip-layering", action="store_true")
     parser.add_argument("--skip-poses", action="store_true", help="layering only")
+    parser.add_argument("--skip-deformation", action="store_true", help="penetration only (no size_gates.py stretch / flip gates)")
     parser.add_argument("--out", type=Path, default=PROJECT / "outputs" / "garment-tests" / "sizes-gates.json")
     args = parser.parse_args()
     report = {}
     for glb in [] if args.skip_poses else sorted(args.dir.glob("*.glb")):
         body_id = glb.name[: -len(".glb")].split("-", 3)[3]  # <garment>-<version>-<size>-<bodyId>
         report[glb.name] = evaluate(glb, body_id)
+        if not args.skip_deformation:  # Sprint 3.6
+            import size_gates
+
+            gates = size_gates.evaluate(glb, avatar_for(body_id))
+            report[glb.name]["deformation"] = gates
+            report[glb.name]["pass"] = report[glb.name]["pass"] and gates["pass"]
+            print(size_gates.summary_line(gates), flush=True)
         print(glb.name, "PASS" if report[glb.name]["pass"] else "FAIL", report[glb.name]["beyond_3mm_total"], report[glb.name]["worst_max_depth_mm"], flush=True)
     layered = layering(args.dir) if not args.skip_layering else {}
     args.out.parent.mkdir(parents=True, exist_ok=True)

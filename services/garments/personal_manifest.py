@@ -1,4 +1,4 @@
-"""Write outputs/garments/personal/manifest.json for the personal fit (Sprint 2.3A).
+"""Write outputs/garments/personal/manifest.json for the personal fit (Sprint 2.3A; layout of Sprint 3A, garments of 3.6).
 
     python personal_manifest.py [--stem sam3d-person-front-sprint03-run2]
 
@@ -8,8 +8,15 @@ Schema (consumed by the web app; keep it exact):
      "primary":   {"id", "label", "body", "top": {"glb", "sidecar"}, "bottom": {"glb", "sidecar"}},
      "secondary": [ same shape, ... ]}
 
-The primary body is "identity + scales, ground-aligned"; identity-only is secondary. Paths are repository-relative with
-forward slashes, all inside outputs/. The files are personal data: they stay local and git-ignored.
+Bodies and garments (the default generation, tshirt-v5.3 / pants-v3):
+- Not calibrated (no outputs/avatars/measurements.json, or no calibrated avatar yet): the primary body is "identity +
+  scales, ground-aligned", identity-only is secondary. Each wears its own base fit from outputs/garments/personal/.
+- Calibrated (Sprint 3A): the primary body is the calibrated avatar. It has no base fit of its own, so it wears its
+  recommended size files from outputs/garments/sizes/ (the .fit.json marked recommended). The uncalibrated body follows
+  as "My avatar (photo estimate)", then identity-only; both wear their base fits.
+
+Paths are repository-relative with forward slashes, all inside outputs/. The files are personal data: they stay local
+and git-ignored.
 """
 from __future__ import annotations
 
@@ -21,10 +28,11 @@ from typing import Any
 
 PROJECT = Path(__file__).resolve().parents[2]
 PERSONAL_DIR = PROJECT / "outputs" / "garments" / "personal"
-# (manifest id, label, body suffix)
-PRIMARY = ("personal-scaled", "My avatar", "rest-identity-scale-floor")
-SECONDARY = (("personal-identity", "My avatar (identity only)", "rest-identity"),)
-SHIRT_REVISION, PANTS_REVISION = "v5.2", "v2"
+SIZES_DIR = PROJECT / "outputs" / "garments" / "sizes"
+AVATARS = PROJECT / "outputs" / "avatars"
+MEASUREMENTS = AVATARS / "measurements.json"
+SHIRT_REVISION, PANTS_REVISION = "v5.3", "v3"
+SCALED, IDENTITY = "rest-identity-scale-floor", "rest-identity"
 
 
 def _relative(path: Path) -> str:
@@ -33,26 +41,39 @@ def _relative(path: Path) -> str:
     return path.resolve().relative_to(PROJECT).as_posix()
 
 
-def _body(stem: str, directory: Path, ident: str, label: str, suffix: str) -> dict[str, Any]:
-    shirt = f"tshirt-{SHIRT_REVISION}-{stem}-{suffix}"  # plain strings: "v5.2" would confuse Path.with_suffix
-    pants = f"pants-basic-{PANTS_REVISION}-{stem}-{suffix}"
-    return {
-        "id": ident,
-        "label": label,
-        "body": _relative(PROJECT / "outputs" / "avatars" / f"{stem}-{suffix}.glb"),
-        "top": {"glb": _relative(directory / f"{shirt}.glb"), "sidecar": _relative(directory / f"{shirt}.correctives.json")},
-        "bottom": {"glb": _relative(directory / f"{pants}.glb"), "sidecar": _relative(directory / f"{pants}.correctives.json")},
-    }
+def _entry(ident: str, label: str, body: Path, top: Path, bottom: Path) -> dict[str, Any]:
+    def part(glb: Path) -> dict[str, str]:
+        return {"glb": _relative(glb), "sidecar": _relative(glb.with_name(glb.name[: -len(".glb")] + ".correctives.json"))}
+
+    return {"id": ident, "label": label, "body": _relative(body), "top": part(top), "bottom": part(bottom)}
 
 
-def build(stem: str, directory: Path = PERSONAL_DIR) -> dict[str, Any]:
-    entries = [PRIMARY, *SECONDARY]
-    newest = max((directory / f"{prefix}-{stem}-{suffix}.glb").stat().st_mtime for _, _, suffix in entries for prefix in (f"tshirt-{SHIRT_REVISION}", f"pants-basic-{PANTS_REVISION}"))
+def _base_fit(stem: str, directory: Path, ident: str, label: str, suffix: str) -> dict[str, Any]:
+    # plain strings: "v5.3" would confuse Path.with_suffix
+    return _entry(ident, label, AVATARS / f"{stem}-{suffix}.glb", directory / f"tshirt-{SHIRT_REVISION}-{stem}-{suffix}.glb", directory / f"pants-basic-{PANTS_REVISION}-{stem}-{suffix}.glb")
+
+
+def _recommended(garment: str, body_id: str, sizes: Path) -> Path:
+    for fit in sorted(sizes.glob(f"{garment}-*-{body_id}.fit.json")):
+        if json.loads(fit.read_text(encoding="utf-8")).get("recommended"):
+            return fit.with_name(fit.name[: -len(".fit.json")] + ".glb")
+    raise SystemExit(f"No recommended {garment} size for {body_id} in {sizes}")
+
+
+def build(stem: str, directory: Path = PERSONAL_DIR, sizes: Path = SIZES_DIR) -> dict[str, Any]:
+    calibrated = AVATARS / f"{stem}-{SCALED}-calibrated.glb"
+    identity = _base_fit(stem, directory, "personal-identity", "My avatar (identity only)", IDENTITY)
+    if MEASUREMENTS.is_file() and calibrated.is_file():
+        primary = _entry("personal-scaled", "My avatar", calibrated, _recommended(f"tshirt-{SHIRT_REVISION}", "personal-scaled", sizes), _recommended(f"pants-{PANTS_REVISION}", "personal-scaled", sizes))
+        secondary = [_base_fit(stem, directory, "personal-scaled-photo", "My avatar (photo estimate)", SCALED), identity]
+    else:
+        primary, secondary = _base_fit(stem, directory, "personal-scaled", "My avatar", SCALED), [identity]
+    garments = [PROJECT / e[part]["glb"] for e in (primary, *secondary) for part in ("top", "bottom")]
     return {
         "version": 1,
-        "fit_date": datetime.fromtimestamp(newest, tz=timezone.utc).date().isoformat(),
-        "primary": _body(stem, directory, *PRIMARY),
-        "secondary": [_body(stem, directory, *entry) for entry in SECONDARY],
+        "fit_date": datetime.fromtimestamp(max(path.stat().st_mtime for path in garments), tz=timezone.utc).date().isoformat(),
+        "primary": primary,
+        "secondary": secondary,
     }
 
 

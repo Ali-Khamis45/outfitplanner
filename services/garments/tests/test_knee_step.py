@@ -66,7 +66,7 @@ class KneeStepTests(unittest.TestCase):
 
     def test_the_straight_tube_is_no_worse_than_v3(self) -> None:
         for path, body in v3_1_glbs():
-            v3 = GARMENTS / "pants-basic-v3-mhr-neutral.glb" if path.parent == GARMENTS else GARMENTS / "sizes" / path.name.replace("pants-v3.1-", "pants-v3-")
+            v3 = GARMENTS / "pants-basic-v3-mhr-neutral.glb" if path.parent == GARMENTS else next((d / path.name.replace("pants-v3.1-", "pants-v3-") for d in (GARMENTS / "sizes", GARMENTS / "sizes-withheld") if (d / path.name.replace("pants-v3.1-", "pants-v3-")).is_file()), GARMENTS / "sizes" / path.name.replace("pants-v3.1-", "pants-v3-"))  # Sprint 3.6: a withheld v3 size is still the reference
             if not v3.is_file():
                 continue
             new, old = (profile(p, avatar(body), self.trees[body]) for p in (path, v3))
