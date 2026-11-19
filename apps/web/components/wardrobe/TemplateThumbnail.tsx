@@ -18,7 +18,7 @@ async function createRenderer() {
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
   renderer.setSize(320, 360, false); renderer.setPixelRatio(1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  const scene = new THREE.Scene(); scene.background = new THREE.Color("#e9e9e0");
+  const scene = new THREE.Scene(); scene.background = new THREE.Color("#eee8df");
   scene.add(new THREE.HemisphereLight(0xffffff, 0xb7b9ae, 2));
   const light = new THREE.DirectionalLight(0xffffff, 2); light.position.set(2, 3, 4); scene.add(light);
   const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);

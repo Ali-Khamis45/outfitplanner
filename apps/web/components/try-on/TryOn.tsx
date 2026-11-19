@@ -89,11 +89,11 @@ export function TryOn({ candidate = false, textureFixture = false, fixtures = fa
   const topSizes = useSizes(bodyId, "top", fixtures && bodyId === "neutral", outfitSizes.top, candidate), bottomSizes = useSizes(bodyId, "bottom", fixtures && bodyId === "neutral", outfitSizes.bottom, candidate);
   const [heatmap, setHeatmap] = useState(false);
   useEffect(() => {
-    if (!outfitId && !(topId && bottomId)) return;
+    if (!outfitId && !topId && !bottomId) return;
     let active = true;
     fetch("/api/wardrobe", { cache: "no-store" }).then(response => { if (!response.ok) throw new Error("This outfit is only available on the local development server."); return response.json(); }).then(value => {
       if (!active) return;
-      const wardrobe = parseWardrobe(value), outfit = outfitId ? wardrobe.outfits.find(item => item.id === outfitId) : { name: "selected pieces", items: [topId!, bottomId!] };
+      const wardrobe = parseWardrobe(value), outfit = outfitId ? wardrobe.outfits.find(item => item.id === outfitId) : { name: "selected pieces", items: [topId, bottomId].filter((id): id is string => !!id) };
       if (!outfit) throw new Error("Outfit not found in your wardrobe.");
       const items = outfit.items.map(id => wardrobe.items.find(item => item.id === id)).filter(item => item !== undefined);
       const topItem = items.find(item => item.category === "top"), bottomItem = items.find(item => item.category === "bottom");
@@ -103,7 +103,7 @@ export function TryOn({ candidate = false, textureFixture = false, fixtures = fa
       const mainColor = (item: NonNullable<typeof topItem>) => item.colors.reduce((best, color) => color.share > best.share ? color : best).hex;
       if (topSupported) { setTopColor(mainColor(topItem)); setTopTexture(topItem.texture ?? null); setTopOriginal(true); }
       if (bottomSupported) { setBottomColor(mainColor(bottomItem)); setBottomTexture(bottomItem.texture ?? null); setBottomOriginal(true); }
-      if (!topSupported || !bottomSupported) setMessage("Some pieces have no supported 3D template. Add tshirt-v5.2 for a top or pants-basic-v2 for a bottom to preview them.");
+      if ((topItem && !topSupported) || (bottomItem && !bottomSupported) || !items.length) setMessage("Some pieces have no supported 3D template. Add tshirt-v5.2 for a top or pants-basic-v2 for a bottom to preview them.");
       else setMessage(`Showing ${outfit.name} from your wardrobe.`);
     }).catch(error => { if (active) setMessage(error instanceof Error ? error.message : "Could not load the outfit."); });
     return () => { active = false; };
