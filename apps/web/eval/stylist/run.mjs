@@ -50,7 +50,7 @@ async function main(mock) {
     server = startServer(app, env, message => { logs.push(message); if (logs.length > 500) logs.shift(); });
     await server.ready(marker, controller.signal);
     const metadata = { run_id: runId, started_at: startedAt, mode: mock ? "mock" : "local-model", model: env.STYLIST_MODEL?.trim() || null,
-      thinking: env.STYLIST_THINKING?.trim().toLowerCase() || "off", reasoning_effort: env.STYLIST_THINKING?.trim().toLowerCase() === "on" ? "model-default" : "none",
+      pipeline: "v2", thinking: env.STYLIST_THINKING?.trim().toLowerCase() || "off", reasoning_effort: env.STYLIST_THINKING?.trim().toLowerCase() === "on" ? "model-default" : "none",
       weather: mock ? "synthetic fixture" : "live Open-Meteo (availability not guaranteed for fixed scenario dates)", fixture_version: FIXTURE_VERSION,
       scenarios_sha256: createHash("sha256").update(scenarioText).digest("hex"), source_revision: revision, source_dirty: sourceDirty, endpoint: BASE_URL + "/api/stylist/chat" };
     console.log(`${mock ? "MOCK harness verification" : "LOCAL MODEL evaluation"}: 30 scenarios on ${BASE_URL}.`);
