@@ -1,6 +1,6 @@
-﻿import { InputError, object, validDate } from "./core.ts";
+import { InputError, object, validDate } from "./core.ts";
 
-type Weather = { city: string; date: string; temperature_min_c: number; temperature_max_c: number; precipitation_probability_percent: number | null; wind_max_kmh: number; condition: string; attribution: string };
+export type Weather = { city: string; date: string; temperature_min_c: number; temperature_max_c: number; precipitation_probability_percent: number | null; wind_max_kmh: number; condition: string; attribution: string };
 function condition(code: number): string {
   if (code === 0) return "Clear"; if (code <= 3) return "Cloudy"; if (code <= 49) return "Fog"; if (code <= 59) return "Drizzle"; if (code <= 69) return "Rain"; if (code <= 79) return "Snow"; if (code <= 82) return "Rain showers"; if (code <= 86) return "Snow showers"; if (code >= 95) return "Thunderstorm"; return "Unknown";
 }

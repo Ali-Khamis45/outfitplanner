@@ -1,19 +1,23 @@
 import { validDate, record } from "../../lib/stylist/core.ts";
 import type { Wardrobe } from "../../lib/wardrobe/schema.ts";
 import { validToolArguments } from "../../lib/stylist/toolValidation.ts";
+import { qualityChecks } from "./quality.ts";
+import type { EvaluationContext } from "../../lib/stylist/evaluation.ts";
 
-export type Scenario = { id: string; language: "en" | "arz"; message: string; date: string; city: string; expect: {
+export type Scenario = { id: string; language: "en" | "arz"; message: string; date: string; city: string; reference_date?: string; fixture?: "gap" | "recent" | "cold" | "rain" | "mixed" | "while"; forecast?: EvaluationContext["forecast"]; expect: {
   must_call_get_wardrobe: true; must_call_get_weather: boolean; recommended_items_exist: true;
   categories: { top: "top"; bottom: "bottom" }; occasion: string; formality_range: [number, number]; not_worn_days: number | null;
 } };
 export type Check = { id: string; status: "PASS" | "FAIL" | "N/A"; detail: string };
-export type Score = { id: string; language: string; status: "PASS" | "FAIL"; checks: Check[]; passed_checks: number; applicable_checks: number; score: number; tool_calls: number; valid_tool_calls: number; invalid_tool_calls: number; latency_ms: number; http_status: number; response_status: string; tool_failures: number; validation_attempts?: number; context_reads?: number; error?: string };
+export type Score = { id: string; language: string; status: "PASS" | "FAIL"; checks: Check[]; passed_checks: number; applicable_checks: number; score: number; tool_calls: number; valid_tool_calls: number; invalid_tool_calls: number; latency_ms: number; http_status: number; response_status: string; tool_failures: number; validation_attempts?: number; context_reads?: number; quality_checks?: Check[]; quality_status?: "PASS" | "FAIL"; first_try_pass?: boolean; first_try_validation_pass?: boolean; error?: string };
 export function parseScenarios(value: unknown): Scenario[] {
-  if (!Array.isArray(value) || value.length !== 30) throw new Error("The evaluation suite must contain exactly 30 scenarios.");
+  if (!Array.isArray(value) || ![30, 40].includes(value.length)) throw new Error("The evaluation suite must contain 30 legacy or 40 combined scenarios.");
   const ids = new Set<string>();
   for (const s of value) {
     if (!record(s) || typeof s.id !== "string" || !/^[a-z0-9-]+$/.test(s.id) || ids.has(s.id) || !["en", "arz"].includes(String(s.language))
       || typeof s.message !== "string" || !s.message.trim() || s.message.length > 4000 || !validDate(s.date) || typeof s.city !== "string" || !s.city.trim() || s.city.length > 100 || !record(s.expect)) throw new Error("Invalid scenario.");
+    if (s.reference_date !== undefined && !validDate(s.reference_date)) throw new Error("Invalid reference date.");
+    if (s.fixture !== undefined && !["gap", "recent", "cold", "rain", "mixed", "while"].includes(String(s.fixture))) throw new Error("Invalid fixture profile.");
     const e = s.expect, range = e.formality_range;
     if (e.must_call_get_wardrobe !== true || typeof e.must_call_get_weather !== "boolean" || e.recommended_items_exist !== true
       || !record(e.categories) || e.categories.top !== "top" || e.categories.bottom !== "bottom" || typeof e.occasion !== "string" || !e.occasion.trim()
@@ -59,7 +63,7 @@ export function scoreScenario(scenario: Scenario, wardrobe: Wardrobe, response: 
   const checks: Check[] = [];
   const check = (id: string, passed: boolean, detail: string, applicable = true) => checks.push({ id, status: applicable ? passed ? "PASS" : "FAIL" : "N/A", detail });
   check("response_ok", httpStatus === 200 && data.status === "ok" && typeof data.message === "string" && !!data.message.trim(), `HTTP ${httpStatus}; status ${String(data.status ?? "missing")}`);
-  check("evaluation_context", record(evaluation.context) && evaluation.context.date === scenario.date && evaluation.context.city === scenario.city, "Trace must match the scenario reference date and city.");
+  check("evaluation_context", record(evaluation.context) && evaluation.context.date === (scenario.reference_date ?? scenario.date) && evaluation.context.city === scenario.city, "Trace must match the scenario reference date and city.");
   check("get_wardrobe", trace.some(call => call.name === "get_wardrobe" && call.ok === true), "Requires a successful wardrobe lookup, not just a label in prose.");
   check("get_weather", trace.some(call => call.name === "get_weather" && record(call.arguments) && call.arguments.date === scenario.date && normalCity(call.arguments.city ?? "Cairo") === normalCity(scenario.city)),
     `Requires a call for ${scenario.date} in ${scenario.city}; provider availability is recorded separately.`, scenario.expect.must_call_get_weather);
@@ -73,7 +77,12 @@ export function scoreScenario(scenario: Scenario, wardrobe: Wardrobe, response: 
   const validity = record(evaluation.tool_validity) ? evaluation.tool_validity : null;
   const validCalls = validity && Number.isInteger(validity.valid) ? Number(validity.valid) : trace.filter(call => typeof call.name === "string" && validToolArguments(call.name, call.arguments)).length;
   const invalidCalls = validity && Number.isInteger(validity.invalid) ? Number(validity.invalid) : trace.length - validCalls;
+  const quality = qualityChecks(scenario, wardrobe, data);
+  const first = qualityChecks(scenario, wardrobe, { structured: evaluation.first_draft, evaluation }, true);
+  const qualityPassed = data.status === "ok" && httpStatus === 200 && quality.every(c => c.status !== "FAIL");
   return { id: scenario.id, language: scenario.language, status: passed === applicable ? "PASS" : "FAIL", checks, passed_checks: passed, applicable_checks: applicable,
+    quality_checks: quality, quality_status: qualityPassed ? "PASS" : "FAIL", first_try_validation_pass: evaluation.first_validation_pass === true,
+    first_try_pass: evaluation.first_validation_pass === true && first.every(c => c.status !== "FAIL"),
     ...(pipelineV2 ? { validation_attempts: Number(evaluation.validation_attempts ?? 0), context_reads: trace.length } : {}),
     score: passed / applicable, tool_calls: pipelineV2 ? 0 : validCalls + invalidCalls || calls.length, valid_tool_calls: validCalls, invalid_tool_calls: invalidCalls, tool_failures: trace.filter(call => call.ok !== true).length,
     latency_ms: Math.round(latencyMs), http_status: httpStatus, response_status: String(data.status ?? "missing"), ...(error ? { error } : {}) };
@@ -82,7 +91,13 @@ export function summarize(scores: Score[]) {
   const passedChecks = scores.reduce((n, s) => n + s.passed_checks, 0), applicableChecks = scores.reduce((n, s) => n + s.applicable_checks, 0);
   const valid = scores.reduce((n, s) => n + s.valid_tool_calls, 0), invalid = scores.reduce((n, s) => n + s.invalid_tool_calls, 0);
   const failures = Object.fromEntries([...new Set(scores.flatMap(s => s.checks.map(c => c.id)))].map(id => [id, scores.filter(s => s.checks.some(c => c.id === id && c.status === "FAIL")).length]));
+  const qualityFailures = Object.fromEntries([...new Set(scores.flatMap(s => (s.quality_checks ?? []).map(c => c.id)))].map(id => [id, scores.filter(s => s.quality_checks?.some(c => c.id === id && c.status === "FAIL")).length]));
+  const cohort = (group: Score[]) => ({ scenarios: group.length, old_checks_passed: group.filter(s => s.status === "PASS").length, quality_passed: group.filter(s => s.quality_status === "PASS").length, first_try_passed: group.filter(s => s.first_try_pass).length });
   return { scenarios: scores.length, passed_scenarios: scores.filter(s => s.status === "PASS").length, failed_scenarios: scores.filter(s => s.status === "FAIL").length,
+    quality_passed_scenarios: scores.filter(s => s.quality_status === "PASS").length, quality_failures_by_category: qualityFailures,
+    first_try_passed_scenarios: scores.filter(s => s.first_try_pass).length, first_try_validation_passed_scenarios: scores.filter(s => s.first_try_validation_pass).length,
+    retry_count: scores.reduce((n, s) => n + Math.max(0, (s.validation_attempts ?? 0) - 1), 0),
+    cohorts: { legacy: cohort(scores.filter(s => !s.id.startsWith("hard-"))), hard: cohort(scores.filter(s => s.id.startsWith("hard-"))) },
     retried_scenarios: scores.filter(s => (s.validation_attempts ?? 0) > 1).length,
     average_context_reads: scores.length ? scores.reduce((n, s) => n + (s.context_reads ?? 0), 0) / scores.length : 0,
     valid_tool_calls: valid, invalid_tool_calls: invalid, tool_call_validity: valid + invalid ? valid / (valid + invalid) : null, failures_by_category: failures,

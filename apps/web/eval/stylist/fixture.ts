@@ -1,6 +1,7 @@
 import { parseWardrobe, type Wardrobe, type WardrobeItem } from "../../lib/wardrobe/schema.ts";
+import type { Scenario } from "./scoring.ts";
 
-export const FIXTURE_VERSION = "stylist-eval-v1";
+export const FIXTURE_VERSION = "stylist-eval-v2-quality";
 export function fixtureWardrobe(referenceDate: string): Wardrobe {
   const items: WardrobeItem[] = [];
   const names = ["Sport", "Casual", "Office", "Business", "Formal"];
@@ -19,4 +20,16 @@ export function fixtureWardrobe(referenceDate: string): Wardrobe {
     }
   }
   return parseWardrobe({ version: 1, items, outfits: [] });
+}
+export function scenarioWardrobe(scenario: Scenario): Wardrobe {
+  const today = scenario.reference_date ?? scenario.date, wardrobe = fixtureWardrobe(today);
+  if (scenario.fixture === "gap") wardrobe.items = wardrobe.items.filter(item => item.formality <= 2).map(item => ({ ...item, type: item.category === "top" ? "t-shirt" : "casual trousers", name: item.category === "top" ? `Cotton tee ${item.id}` : `Casual trousers ${item.id}` }));
+  if (scenario.fixture === "recent") wardrobe.items = wardrobe.items.map(item => ({ ...item, last_worn: today }));
+  if (["cold", "rain"].includes(scenario.fixture ?? "")) {
+    wardrobe.items = wardrobe.items.map(item => ({ ...item, last_worn: null, warmth: item.id.endsWith("fresh") ? 1 : item.id.endsWith("recent") ? 2 : 4 }));
+    wardrobe.items.push({ ...wardrobe.items[0], id: "eval-outer-shell", category: "outerwear", name: "Rain shell", type: "rain shell", material: "waterproof nylon", template: null, formality: 4, warmth: 1 });
+    if (scenario.fixture === "cold") wardrobe.items.push({ ...wardrobe.items[0], id: "eval-outer-coat", category: "outerwear", name: "Warm coat", type: "coat", material: "wool", template: null, formality: 4, warmth: 3 });
+  }
+  if (scenario.fixture === "while") wardrobe.items = wardrobe.items.map(item => ({ ...item, last_worn: item.id.endsWith("old") ? item.last_worn : new Date(Date.parse(`${today}T12:00:00Z`) - 10 * 86400000).toISOString().slice(0, 10) }));
+  return parseWardrobe(wardrobe);
 }

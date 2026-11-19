@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseScenarios, scoreScenario, summarize } from "../eval/stylist/scoring.ts";
-import { fixtureWardrobe } from "../eval/stylist/fixture.ts";
+import { fixtureWardrobe, scenarioWardrobe } from "../eval/stylist/fixture.ts";
 import { makeReport, markdownReport } from "../eval/stylist/report.mjs";
 import { startEvaluationModel } from "../eval/stylist/mock.mjs";
 import { createChatHandler } from "../lib/stylist/chat.ts";
@@ -75,20 +75,42 @@ for (const hidden of ["PRIVATE_ERROR", "PRIVATE_PROMPT", "PRIVATE_REPLY", "PRIVA
 const root = await mkdtemp(path.join(os.tmpdir(), "stylist-eval-test-")), servers = [];
 try {
   await mkdir(path.join(root, "wardrobe"));
-  const model = await startEvaluationModel(scenarios); servers.push(model);
+  const allScenarios = parseScenarios([...scenarios, ...JSON.parse(await readFile(path.join(app, "eval/stylist/hard-scenarios.json"), "utf8"))]);
+  const model = await startEvaluationModel(allScenarios); servers.push(model);
   const handler = createChatHandler({ outputs: root, environment: "development", evaluation: true, weather: evaluationWeather, settings: () => ({ model: "eval-fixture", baseUrl: model.baseUrl }) });
-  for (const s of scenarios) {
-    const fixture = fixtureWardrobe(s.date); await writeFile(path.join(root, "wardrobe/wardrobe.json"), JSON.stringify(fixture));
-    const result = await request(handler, { body: { messages: [{ role: "user", content: s.message }], context: { date: s.date, city: s.city } } });
-    assert.equal(scoreScenario(s, fixture, result.body, result.code, 0).status, "PASS", s.id);
+  for (const s of allScenarios) {
+    const fixture = scenarioWardrobe(s); await writeFile(path.join(root, "wardrobe/wardrobe.json"), JSON.stringify(fixture));
+    const result = await request(handler, { body: { messages: [{ role: "user", content: s.message }], context: { date: s.reference_date ?? s.date, city: s.city, ...(s.forecast ? { forecast: s.forecast } : {}) } } });
+    const evaluated = scoreScenario(s, fixture, result.body, result.code, 0);
+    assert.equal(evaluated.quality_status, "PASS", s.id + JSON.stringify(evaluated.quality_checks));
+    assert.equal(evaluated.first_try_pass, true, s.id);
+    if (!s.id.startsWith("hard-")) assert.equal(evaluated.status, "PASS", s.id);
     assert.equal(result.body.evaluation.tool_validity.invalid, 0);
+    const altered = structuredClone(result.body);
+    altered.structured.date = "2000-01-01";
+    assert.equal(scoreScenario(s, fixture, altered, 200, 0).quality_checks.find(c=>c.id==="date_handled").status,"FAIL");
+    altered.structured.reason = s.language === "en" ? "\u062f\u0647 \u0637\u0642\u0645." : "English only.";
+    assert.equal(scoreScenario(s, fixture, altered, 200, 0).quality_checks.find(c=>c.id==="reply_language").status,"FAIL");
+    if(s.fixture === "gap") {
+      altered.structured.gap_note=null;
+      assert.equal(scoreScenario(s, fixture, altered, 200, 0).quality_checks.find(c=>c.id==="gap_note").status,"FAIL");
+    }
+    if(s.fixture === "cold") {
+      altered.structured.top_id="eval-top-4-fresh"; altered.structured.outer_id=null;
+      assert.equal(scoreScenario(s, fixture, altered, 200, 0).quality_checks.find(c=>c.id==="warmth_vs_forecast").status,"FAIL");
+    }
+    if(s.id === "en-office-weather") {
+      altered.structured.top_id="eval-top-3-fresh";
+      assert.equal(scoreScenario(s, fixture, altered, 200, 0).quality_checks.find(c=>c.id==="best_available_formality").status,"FAIL");
+    }
+
   }
   // Clock is genuinely frozen, not merely mentioned in the prompt. Old items
   // in 2030 must remain eligible even when this suite runs years earlier/later.
   const future = fixtureWardrobe("2030-01-01"); await writeFile(path.join(root, "wardrobe/wardrobe.json"), JSON.stringify(future));
   const clockModel = await startMockModel(body => {
     const p = body.response_format.json_schema.schema.properties;
-    return completion(JSON.stringify({ top_id: p.top_id.enum[0], bottom_id: p.bottom_id.enum[0], outer_id: null, occasion: "casual", formality: p.formality.enum[0], reason: "A simple look.", weather_note: null, language: "en" }));
+    return completion(JSON.stringify({ top_id: p.top_id.enum[0], bottom_id: p.bottom_id.enum[0], outer_id: null, occasion: "casual", formality: Number(p.top_id.enum[0].split("-")[2]), gap_note: null, date: "2030-01-01", reason: "A simple look.", weather_note: null, language: "en" }));
   }); servers.push(clockModel);
   const clockHandler = createChatHandler({ outputs: root, environment: "development", evaluation: true, settings: () => ({ model: "eval-clock", baseUrl: clockModel.baseUrl }) });
   const clockBody = { context: { date: "2030-01-01", city: "Cairo" }, messages: [{ role: "user", content: "Choose something not worn in the last 7 days." }] };
@@ -109,5 +131,5 @@ try {
     assert.equal(exit, 2, "CLI refuses occupied 3100, regardless of cwd");
     if (ownsPort) assert.equal(blocker.listening, true, "the pre-existing port owner survives");
   } finally { if (ownsPort) await new Promise(resolve => blocker.close(resolve)); }
-  console.log("PASS 30 bilingual scenarios, mock HTTP loop, positive/negative scoring, inclusive recency, Arabic cities, reports, frozen clock, eval opt-in, read-only tools and occupied-port refusal");
+  console.log("PASS 40 bilingual scenarios, mock HTTP loop, positive/negative scoring, inclusive recency, Arabic cities, reports, frozen clock, eval opt-in, read-only tools and occupied-port refusal");
 } finally { for (const server of servers) await server.close(); await rm(root, { recursive: true, force: true }); }

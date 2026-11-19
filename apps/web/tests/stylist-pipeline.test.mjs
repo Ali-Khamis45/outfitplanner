@@ -6,6 +6,7 @@ import { createChatHandler, localModelUrl } from "../lib/stylist/chat.ts";
 import { eligibleItems, lookSchema, requestIntent, validateLook } from "../lib/stylist/pipeline.ts";
 import { fixtureWardrobe } from "../eval/stylist/fixture.ts";
 import { evaluationWeather } from "../lib/stylist/evaluation.ts";
+import { requestDate, replyLanguage } from "../lib/stylist/dates.ts";
 import { request } from "./local-api.mjs";
 import { completion, startMockModel, toolCall } from "./mock-stylist-model.mjs";
 
@@ -16,7 +17,7 @@ const options = { outputs: root, environment: "development", evaluation: true, w
 async function model(script) { const server = await startMockModel(script); servers.push(server); return server; }
 const look = (body, changes = {}) => {
   const p = body.response_format.json_schema.schema.properties;
-  return { top_id: p.top_id.enum[0], bottom_id: p.bottom_id.enum[0], outer_id: null, occasion: "casual", formality: p.formality.enum[0], reason: "These pieces make a comfortable casual look.", weather_note: null, language: "en", ...changes };
+  return { top_id: p.top_id.enum[0], bottom_id: p.bottom_id.enum[0], outer_id: null, occasion: "casual", formality: Number(p.top_id.enum[0].split("-")[2]), gap_note: null, date, reason: "These pieces make a comfortable casual look.", weather_note: null, language: "en", ...changes };
 };
 const handlerFor = (server, extra = {}) => createChatHandler({ ...options, settings: () => ({ model: "local", baseUrl: server.baseUrl }), ...extra });
 try {
@@ -30,6 +31,16 @@ try {
   assert.deepEqual(result.body.calls.map(c => c.name), ["get_wardrobe", "get_weather"]);
   assert.deepEqual(result.body.evaluation.tool_validity, { valid: 0, invalid: 0 });
   const body = scripted.requests[0];
+  assert.equal(body.keep_alive, "30m");
+  assert.equal(scripted.warmups[0].keep_alive, "30m");
+  assert.equal(scripted.warmups[0].think, false);
+  const warmed = await request(handler, { query: { warmup: "1" }, body: {} });
+  assert.equal(warmed.body.status, "ready");
+  assert.equal(scripted.requests.length, 1, "warm-up generates no completion");
+  const defaultHandler = createChatHandler({ ...options, settings: () => ({ baseUrl: scripted.baseUrl, keepAlive: "1m" }) });
+  assert.equal((await request(defaultHandler, { query: { warmup: "1" }, body: {} })).body.status, "ready");
+  assert.equal(scripted.warmups.at(-1).model, "qwen3.5:4b");
+  assert.equal(scripted.warmups.at(-1).keep_alive, "1m");
   assert.equal(body.reasoning_effort, "none"); assert.ok(!body.tools && !body.tool_choice);
   assert.equal(body.response_format.type, "json_schema"); assert.equal(body.response_format.json_schema.strict, true);
   assert.match(body.messages[0].content, /worn_last_3_days/); assert.match(body.messages[0].content, /2030-01-01/);
@@ -72,7 +83,15 @@ try {
   const boundary = { ...casual[0], last_worn: "2029-12-29" }, fresh = { ...casual[0], id: "older", last_worn: "2029-12-28" };
   assert.deepEqual(eligibleItems([boundary, fresh], intent, "top").map(i => i.id), ["older"], "inclusive three-day cutoff");
   const schema = lookSchema(wardrobe.items, intent), outer = { ...casual[0], id: "outer", category: "outerwear", last_worn: null };
-  const valid = { top_id: schema.properties.top_id.enum[0], bottom_id: schema.properties.bottom_id.enum[0], outer_id: "outer", occasion: "casual", formality: 1, reason: "A simple look.", weather_note: null, language: "en" };
+  const valid = { gap_note: null, date, top_id: schema.properties.top_id.enum[0], bottom_id: schema.properties.bottom_id.enum[0], outer_id: "outer", occasion: "casual", formality: 1, reason: "A simple look.", weather_note: null, language: "en" };
+  const formalIntent = requestIntent("business presentation", date);
+  const closest = { ...valid, top_id: "eval-top-2-fresh", bottom_id: "eval-bottom-2-fresh", outer_id: null, formality: 2, gap_note: "You have no formal shirt; these casual pieces are the closest available." };
+  assert.equal(validateLook(closest, casual, formalIntent).formality, 2);
+  assert.throws(() => validateLook({ ...closest, formality: 4 }, casual, formalIntent));
+  assert.throws(() => validateLook({ ...closest, gap_note: null }, casual, formalIntent));
+  for (const [text, expected] of [["today", "2026-12-31"], ["tomorrow", "2027-01-01"], ["بكرة", "2027-01-01"], ["النهارده", "2026-12-31"], ["الاثنين", "2027-01-04"], ["next Thursday", "2027-01-07"], ["الخميس الجاي", "2027-01-07"], ["Friday", "2027-01-01"]]) assert.equal(requestDate(text, "2026-12-31").date, expected, text);
+  assert.equal(replyLanguage("Office في القاهرة reply in English"), "en");
+  assert.equal(replyLanguage("presentation Monday رد بالمصري"), "arz");
   assert.equal(validateLook(valid, [...wardrobe.items, outer], intent).outer_id, "outer");
   assert.throws(() => validateLook({ ...valid, outer_id: valid.top_id }, wardrobe.items, intent));
   assert.throws(() => validateLook({ ...valid, outer_id: undefined }, wardrobe.items, intent));

@@ -7,17 +7,18 @@ node apps/web/eval/stylist/run.mjs --mock
 node apps/web/eval/stylist/run.mjs
 ```
 
-Both commands run **all 30 scenarios through the real Next `/api/stylist/chat` route** on a server owned by the harness at `127.0.0.1:3100`. Port 3100 must be free. The harness refuses to borrow or stop an existing server and never connects to port 3000. It uses `.next-sprint-6d-eval` and a disposable synthetic wardrobe, not your personal wardrobe. Run sequentially; the shared port prevents overlapping runs. On Windows, the shell must be able to stop its own child process tree.
+Both commands run **all 40 scenarios through the real Next `/api/stylist/chat` route** on a server owned by the harness at `127.0.0.1:3100`. Port 3100 must be free. The harness refuses to borrow or stop an existing server and never connects to port 3000. It uses `.next-sprint-6d-eval` and a disposable synthetic wardrobe, not your personal wardrobe. Run sequentially; the shared port prevents overlapping runs. On Windows, the shell must be able to stop its own child process tree.
 
 Normal mode loads `apps/web/.env.local` using Next's environment loader (existing environment variables take precedence). Start your local inference service separately and configure:
 
 ```dotenv
 STYLIST_BASE_URL=http://localhost:11434/v1
-STYLIST_MODEL=your-local-model-name
+STYLIST_MODEL=qwen3.5:4b
 STYLIST_THINKING=off
+STYLIST_KEEP_ALIVE=30m
 ```
 
-Only loopback model endpoints are accepted by the existing chat route. Normal mode uses live Open-Meteo weather. Scenario dates are fixed for reproducibility; old dates may fall outside the provider's coverage. Edit the scenarios if you want current forecasts, keeping explicit dates in messages consistent. The report records the scenario-file hash. It scores a correctly targeted weather **call**, independently of whether the provider can serve that date.
+Only loopback model endpoints are accepted by the existing chat route. Normal mode uses live Open-Meteo weather for the original 30 scenarios and explicitly synthetic controlled forecasts for the cold/rain/future hard scenarios. Scenario dates are fixed for reproducibility; old dates may fall outside the provider's coverage. Edit the scenarios if you want current forecasts, keeping explicit dates in messages consistent. The report records the scenario-file hash. It scores a correctly targeted weather **call**, independently of whether the provider can serve that date.
 
 Thinking defaults to **off**: every completion request, including the single correction retry, sends `reasoning_effort: "none"`. `STYLIST_THINKING=on` omits that field and uses the local model's default thinking mode. Values are `on` or `off`. Provider reasoning fields are never returned, replayed, displayed or logged. Restart the app after changing its environment. For an A/B evaluation without editing `.env.local`, run sequentially from PowerShell:
 
@@ -63,15 +64,15 @@ Reports are checkpointed after each scenario in the git-ignored `eval/stylist/re
 - `report.md`: short per-scenario table, overall score, average tool calls and average latency.
 - `server.log`: owned Next server diagnostics. Infrastructure failures also create `harness-error.txt` when the report directory exists.
 
-A scenario passes only if all applicable checks pass. Overall score is passed checks divided by applicable checks; N/A checks are excluded. Scenario pass count is reported separately. Average tools and HTTP latency include failed attempts; latency excludes server startup. `completed: false` indicates a partial run. Exit codes: **0** all scenarios pass, **1** one or more scenario failures, **2** infrastructure/usage failure, **130** cancellation. A missing model generates 30 FAIL results and zero score, not a simulated reply. If cleanup is denied, the exact owned server PID is reported and its disposable runtime is preserved for diagnosis.
+A scenario passes only if all applicable checks pass. Overall score is passed checks divided by applicable checks; N/A checks are excluded. Scenario pass count is reported separately. Average tools and HTTP latency include failed attempts; latency excludes server startup. `completed: false` indicates a partial run. Exit codes: **0** all scenarios pass the new quality checks, **1** one or more quality failures, **2** infrastructure/usage failure, **130** cancellation. A missing model generates 40 FAIL results and zero score, not a simulated reply. If cleanup is denied, the exact owned server PID is reported and its disposable runtime is preserved for diagnosis.
 
-`tests/stylist-eval.test.mjs` exercises the 30 mock cases and negative scoring cases and is included in the full `npm test` suite. To change model instructions or tools for your experiments, change the usual chat implementation, run this harness again, and compare the JSON reports. The UI style is unaffected.
+`tests/stylist-eval.test.mjs` exercises the 40 mock cases and negative scoring cases and is included in the full `npm test` suite. To change model instructions or tools for your experiments, change the usual chat implementation, run this harness again, and compare the JSON reports. The UI style is unaffected.
 
 ## Pipeline v2
 
-The server reads the wardrobe before inference and requests weather for an explicit place/date or weather request. Date-only requests use the existing default city, Cairo, explicitly identified in the context. Common English/Egyptian Arabic occasions, cities, ISO dates, today/tomorrow/yesterday and numeric recency requests are parsed by application policy (`lib/stylist/pipeline.ts`), not by evaluation expectations. Unrecognized occasions use the full 1-5 formality range; this rule-based parser is not an unrestricted natural-language interpreter.
+The server reads the wardrobe before inference and requests weather for an explicit place/date or weather request. Date-only requests use the existing default city, Cairo, explicitly identified in the context. Common English/Egyptian Arabic occasions, cities, ISO dates, today/tomorrow/yesterday/weekdays and numeric recency requests are parsed by application policy (`lib/stylist/pipeline.ts`), not by evaluation expectations. Unrecognized occasions use the full 1-5 formality range; this rule-based parser is not an unrestricted natural-language interpreter.
 
-Every request includes `response_format: {type: "json_schema", json_schema: ...}`. Eligible top/bottom/outerwear IDs become per-category enums, formality has an allowed integer enum, and language follows the latest user message. The default three-day wear exclusion is inclusive and relative to server today; longer explicit exclusions are honored. A recent item is eligible only if its category has no fresh alternative meeting formality. Explicit exclusions longer than three days are never relaxed. A missing eligible pair produces a clear error without calling the model.
+Every request includes `response_format: {type: "json_schema", json_schema: ...}`. Eligible top/bottom/outerwear IDs become per-category enums, formality is the actual minimum saved rating of the selected top and bottom, and language follows the latest user message. The default three-day wear exclusion is inclusive and relative to server today; longer explicit exclusions are honored. A recent item is eligible only if its category has no fresh alternative meeting formality. Explicit exclusions longer than three days are never relaxed. A missing eligible pair produces a clear error without calling the model.
 
 The server re-reads the wardrobe before publication and checks category, ID, formality, wear history, required fields, language script and one/two-sentence reason length. One short validation-error retry is allowed, with an updated ID schema. Invalid drafts and reasoning are never replayed or logged. Language validation checks script, not Egyptian dialect fluency. Outerwear can be recommended/logged, but the existing avatar preview supports the top and bottom only.
 
@@ -90,3 +91,23 @@ Remove-Item Env:STYLIST_MODEL, Env:STYLIST_THINKING
 Each v2 Markdown report includes the same scenario table and failure categories plus a side-by-side comparison against the recorded qwen3.5:4b v1 baseline. This measures a complete pipeline change: read checks now use server reads and recommendation checks no longer require model-generated action calls. Scenario messages, fixture and nine scoring categories are unchanged. The fixed historical baseline is documented in `../../docs/stylist-qwen-baseline.md`.
 
 Implementation references: [Ollama structured outputs](https://docs.ollama.com/capabilities/structured-outputs), [OpenAI-compatible API](https://docs.ollama.com/api/openai-compatibility). No new runtime dependency was added.
+
+## Follow-up quality evaluation
+
+The unchanged original 30 messages/fixtures are retained as the legacy cohort. `hard-scenarios.json` adds ten cases with formality gaps, all-recent wear, cold/rain with controlled forecasts, mixed Arabic/English, an indirect 30-day wear preference, and future weekdays. Reference date and requested date are distinct. Synthetic forecasts can only be supplied to the evaluation-enabled route; ordinary chat rejects them. Fixture profiles are applied by the harness, never sent as expected answers to the model.
+
+| New check | Policy |
+| --- | --- |
+| best_available_formality | Highest eligible saved formality per slot within the occasion range, or closest available if the range is unreachable |
+| warmth_vs_forecast | Closest attainable warmth: target 4 for max <=15C, 1 for >=28C, otherwise 2; top plus optional outer layer capped at 5, bottom separately; use an available rain shell when probability >=50% |
+| gap_note | Disclose an unavoidable formality or recent-wear gap; report actual item formality |
+| date_handled | Requested date and future-plan/today-log action match independent scenario expectations |
+| reply_language | Declared language and dominant script in reason/notes match expectations |
+
+The new scorer is independent of production intent parsing and eligibility. Best formality and warmth are not enforced by ID enums, so valid published recommendations can fail quality. Missing forecasts produce N/A for warmth. These metadata heuristics do not assess fashion taste, fluent Egyptian dialect, or whether every prose claim is true. The old nine checks remain visible side by side: a correct below-range gap recommendation necessarily fails the old strict formality check.
+
+Reports show first-try server-validation pass rate, first-try quality pass rate, final quality pass rate and retry count separately. The first draft is whitelisted and evaluated in memory; neither drafts nor recommendation prose are written to reports. Warm-up/server startup are outside scenario latency; completion and lease refresh are included.
+
+`qwen3.5:4b` is the default model, thinking defaults off, and `STYLIST_KEEP_ALIVE` defaults to `30m`. Every completion sends `keep_alive`. The installed Ollama compatibility endpoint accepted it but retained a five-minute lease in a direct check, so a native empty `/api/chat` request also refreshes the lease after completions. `/stylist` sends the same native preload through the protected warm-up route. No warm-up content or reasoning is logged. See [Ollama preload and keep_alive](https://docs.ollama.com/faq).
+
+For future dates the explicit action saves an item-based plan through the existing version-checked planner API; it refuses to overwrite an existing day. Today can be logged worn, and past dates offer neither plan nor wear action. Neither recommendation nor plan creation changes wear history.
