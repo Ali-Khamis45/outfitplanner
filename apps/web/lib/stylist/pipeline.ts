@@ -3,7 +3,7 @@ import type { Selection } from "./selection.ts";
 import { InputError, object } from "./core.ts";
 import { normalize, replyLanguage, requestDate } from "./dates.ts";
 
-export type Intent = { today: string; date: string; city: string | null; weather: boolean; language: "en" | "arz"; occasion: string; range: [number, number]; days: number; explicitRecency: boolean; indoor_outdoor?: "indoor" | "outdoor" | "mixed" | "unknown" };
+export type Intent = { today: string; date: string; city: string | null; weather: boolean; language: "en" | "arz"; occasion: string; range: [number, number]; days: number; explicitRecency: boolean; warmer?: boolean; indoor_outdoor?: "indoor" | "outdoor" | "mixed" | "unknown" };
 export type StructuredLook = { top_id: string; bottom_id: string; outer_id: string | null; occasion: string; formality: number; reason: string; weather_note: string | null; gap_note: string | null; date: string; language: "en" | "arz" };
 
 // Application policy, shared by real chat and evaluation. No scenario IDs,
@@ -83,6 +83,7 @@ export function validateLook(value: unknown, items: WardrobeItem[], intent: Inte
   if (typeof look.gap_note === "string" && replyLanguage(look.gap_note) !== intent.language) throw new InputError("Use the requested language for gap_note.");
   if (typeof look.occasion !== "string" || !look.occasion.trim() || look.occasion.length > 100) throw new InputError("Provide a short occasion.");
   if (typeof look.reason !== "string" || !look.reason.trim() || look.reason.length > 600 || look.reason.split(/[.!?؟]+/u).filter(part => part.trim()).length > 2) throw new InputError("Reason must be one or two short sentences.");
+  if (typeof look.reason === "string" && /\b(formality|requirements?|ranges?|filters?|scores?)\b/i.test(look.reason)) throw new InputError("Describe the clothes naturally without policy terms or numbers.");
   if (look.language !== intent.language || (/[\u0600-\u06FF]/.test(look.reason) !== (intent.language === "arz"))) throw new InputError(`Reply in ${intent.language === "arz" ? "Egyptian Arabic" : "English"}, including the reason.`);
   if (!(look.weather_note === null || typeof look.weather_note === "string" && look.weather_note.length <= 300)) throw new InputError("Weather note must be short text or null.");
   if (typeof look.weather_note === "string" && look.weather_note.trim() && /[\u0600-\u06FF]/.test(look.weather_note) !== (intent.language === "arz")) throw new InputError("Use the requested language for the weather note.");

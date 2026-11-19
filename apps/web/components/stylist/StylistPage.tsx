@@ -33,7 +33,7 @@ export function StylistPage() {
     messages.push({ role: "user", content: question });
     setTurns(current => [...current.filter(turn => turn.state !== "failed" || turn.question !== question), { id, question, state: "pending", result: null }]);
     try {
-      const response = await fetch("/api/stylist/chat", { method: "POST", signal: controller.signal, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages }) });
+      const response = await fetch("/api/stylist/chat", { method: "POST", signal: controller.signal, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages, ...(turns.findLast(turn => turn.state === "complete" && turn.result?.intent && turn.result?.structured) ? { previous: { intent: turns.findLast(turn => turn.state === "complete" && turn.result?.intent && turn.result?.structured)!.result!.intent, ids: turns.findLast(turn => turn.state === "complete" && turn.result?.intent && turn.result?.structured)!.result!.recommendations[0].items.map(item => item.id) } } : {}) }) });
       const data = await response.json();
       setDisconnected(data.status === "not_connected");
       if (!response.ok || data.status !== "ok") {

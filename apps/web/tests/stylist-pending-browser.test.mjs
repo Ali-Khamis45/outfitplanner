@@ -62,8 +62,9 @@ try {
   assert.ok(!(await evaluate("document.querySelector('[role=alert]') || document.querySelector('.stylist-pending')")));
   await input("Choose another look."); await submit();
   await waitFor("window.__stylistRequests.length===4", "structured recommendation request");
-  await evaluate(`window.__stylistReply(200,{status:'ok',message:'A comfortable look.',calls:[],structured:{top_id:'top',bottom_id:'bottom',outer_id:null,occasion:'casual',formality:2,reason:'A comfortable look.',weather_note:null,language:'en'},recommendations:[{url:'/try-on?top=top&bottom=bottom',reason:'A comfortable look.',items:[{id:'top',name:'Test top',category:'top',photo:'',template:null,colors:[{name:'white',hex:'#ffffff',share:1}]},{id:'bottom',name:'Test bottom',category:'bottom',photo:'',template:null,colors:[{name:'black',hex:'#000000',share:1}]}]}]})`);
+  await evaluate(`window.__stylistReply(200,{status:'ok',message:'A comfortable look.',calls:[],intent:{intent_kind:'recommend',occasion_type:'casual',formality_min:1,formality_max:2,date:'2030-01-01',indoor_outdoor:'unknown',language:'en'},structured:{top_id:'top',bottom_id:'bottom',outer_id:null,occasion:'casual',formality:2,reason:'A comfortable look.',weather_note:null,language:'en'},recommendations:[{url:'/try-on?top=top&bottom=bottom',reason:'A comfortable look.',items:[{id:'top',name:'Test top',category:'top',photo:'',template:null,colors:[{name:'white',hex:'#ffffff',share:1}]},{id:'bottom',name:'Test bottom',category:'bottom',photo:'',template:null,colors:[{name:'black',hex:'#000000',share:1}]}]}]})`);
   await waitFor("document.querySelector('.stylist-look-actions')", "explicit action controls");
+  assert.ok(await evaluate("[...document.querySelectorAll('.stylist-look-actions button')].every(b => b.type === 'button' && b.tabIndex === 0 && parseFloat(getComputedStyle(b).minHeight) >= 40 && parseFloat(getComputedStyle(b).borderRadius) >= 20)"), "actions are focusable pill buttons");
   assert.equal(await evaluate("window.__stylistActions.length"), 0, "recommendation never triggers an action automatically");
   await evaluate("document.querySelectorAll('.stylist-look-actions button')[1].click()");
   await waitFor("document.querySelector('.stylist-look-actions [role=status]')", "wear logged feedback");
@@ -75,6 +76,8 @@ try {
   assert.ok(await evaluate("[...document.querySelectorAll('.stylist-question,.stylist-answer,#stylist-message')].every(e=>e.getAttribute('dir')==='auto')"));
   await input("A presentation tomorrow."); await submit();
   await waitFor("window.__stylistRequests.length===5", "future request");
+  assert.deepEqual(await evaluate("window.__stylistRequests[4].previous.ids"), ['top','bottom'], "follow-up context carries the last shown IDs");
+  assert.equal(await evaluate("window.__stylistRequests[4].previous.intent.occasion_type"), 'casual');
   await evaluate(`(() => {
     const d=new Date();d.setDate(d.getDate()+1);window.__future=[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
     window.__stylistReply(200,{status:'ok',message:'The closest available look.',calls:[],structured:{top_id:'top',bottom_id:'bottom',outer_id:null,occasion:'business',formality:2,reason:'The closest available look.',gap_note:'You have no formal shirt.',date:window.__future,weather_note:null,language:'en'},recommendations:[{url:'/try-on?top=top&bottom=bottom',reason:'The closest available look.',items:[{id:'top',name:'Top',category:'top',photo:'',template:null,colors:[{name:'white',hex:'#ffffff',share:1}]},{id:'bottom',name:'Bottom',category:'bottom',photo:'',template:null,colors:[{name:'white',hex:'#ffffff',share:1}]}]}]});

@@ -39,9 +39,9 @@ export function LookActions({ card, arabic, look }: { card: Recommendation; arab
     finally { pending.current = false; setBusy(false); }
   }
   return <div className="stylist-look-actions" dir={arabic ? "rtl" : "ltr"}>
-    <button className="wardrobe-try" disabled={busy} onClick={() => void action("show_on_avatar")}>{arabic ? "جرب الطقم" : "Try it on"}</button>{" "}
-    {future ? <button className="wardrobe-try" disabled={busy || logged} onClick={() => void action("plan")}>{logged ? arabic ? "اتحفظ في الخطة" : "Saved to plan" : arabic ? `احفظ في الخطة ليوم ${date}` : `Save to plan for ${date}`}</button>
-      : today && <button className="wardrobe-try" disabled={busy || logged} onClick={() => void action("log_worn")}>{logged ? arabic ? "اتسجل لبسه النهارده" : "Logged for today" : arabic ? "سجل إني لبسته النهارده" : "Log worn today"}</button>}
+    <button type="button" className="stylist-action" disabled={busy} onClick={() => void action("show_on_avatar")}>{arabic ? "جرب الطقم" : "Try it on"}</button>{" "}
+    {future ? <button type="button" className="stylist-action" disabled={busy || logged} onClick={() => void action("plan")}>{logged ? arabic ? "اتحفظ في الخطة" : "Saved to plan" : arabic ? `احفظ في الخطة ليوم ${date}` : `Save to plan for ${date}`}</button>
+      : today && <button type="button" className="stylist-action" disabled={busy || logged} onClick={() => void action("log_worn")}>{logged ? arabic ? "اتسجل لبسه النهارده" : "Logged for today" : arabic ? "سجل إني لبسته النهارده" : "Log worn today"}</button>}
     {card.items.some(item => item.category === "outerwear") && <p>{arabic ? "المعاينة بتعرض التوب والبنطلون بس." : "The preview shows the top and bottom only."}</p>}
     {logged && <p role="status">{future ? arabic ? `اتحفظ في خطة ${date}.` : `Saved to your plan for ${date}.` : arabic ? "اتحفظ في سجل اللبس." : "Saved to wear history."}</p>}
     {error && <p role="alert" className="wardrobe-error">{error}</p>}

@@ -40,6 +40,7 @@ export function markdownReport(report) {
     "| Intent field | Correct | First attempt correct |", "| --- | --- | --- |",
     ...Object.entries(summary.intent_accuracy).map(([id, c]) => `| ${id} | ${c.correct}/${c.total} | ${c.first_try_correct}/${c.total} |`), "",
     "Formality and warmth now share server filter/scoring rules and are guaranteed for a published answer relative to the extracted intent. They are not evidence of model reasoning. The previous 35/40 used independent selection scoring. Intent labels never enter prompts; an incorrect intent is reported even when all filtered choices pass.");
+  lines.push("", "## Intent kind accuracy by class", "", "| Class | Correct |", "| --- | --- |", ...Object.entries(summary.intent_kind_by_class).map(([kind,c]) => `| ${kind} | ${c.correct}/${c.total} |`));
   lines.push("", "| Failure category | Scenarios |", "| --- | --- |", ...Object.entries(summary.failures_by_category).map(([category, count]) => `| ${cell(category)} | ${count} |`), "",
     "Status-only report: no prompts, model prose, reasoning fields, tool arguments, photos or personal fit values. Scoring checks structured tool traces and recommendations in memory, not prose quality. A correct weather call is scored independently of provider availability. Legacy v1 action attempts all count; v2 scores published recommendations and reports validation retries separately. Missing recommendations fail.", "");
   return lines.join("\n");

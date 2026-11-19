@@ -23,6 +23,7 @@ export function fixtureWardrobe(referenceDate: string): Wardrobe {
 }
 export function scenarioWardrobe(scenario: Scenario): Wardrobe {
   const today = scenario.reference_date ?? scenario.date, wardrobe = fixtureWardrobe(today);
+  if (scenario.id === "conversation-warmer") wardrobe.items = wardrobe.items.map(item => ({ ...item, warmth: item.id.endsWith("old") ? 4 : 2 }));
   if (scenario.fixture === "gap") wardrobe.items = wardrobe.items.filter(item => item.formality <= 2).map(item => ({ ...item, type: item.category === "top" ? "t-shirt" : "casual trousers", name: item.category === "top" ? `Cotton tee ${item.id}` : `Casual trousers ${item.id}` }));
   if (scenario.fixture === "recent") wardrobe.items = wardrobe.items.map(item => ({ ...item, last_worn: today }));
   if (["cold", "rain"].includes(scenario.fixture ?? "")) {

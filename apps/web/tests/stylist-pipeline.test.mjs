@@ -14,7 +14,7 @@ const root = await mkdtemp(path.join(os.tmpdir(), "stylist-pipeline-test-")), se
 const date = "2030-01-01", wardrobe = fixtureWardrobe(date), file = path.join(root, "wardrobe/wardrobe.json");
 const message = { context: { date, city: "Cairo" }, messages: [{ role: "user", content: "Choose a casual look in Cairo and log it worn today." }] };
 const options = { outputs: root, environment: "development", evaluation: true, weather: evaluationWeather };
-async function model(script) { const server = await startMockModel(script, body => { const i = requestIntent(body.messages.at(-1).content, date); return completion(JSON.stringify({occasion_type:i.occasion,formality_min:i.range[0],formality_max:i.range[1],date:i.date,indoor_outdoor:"unknown",language:i.language})); }); servers.push(server); return server; }
+async function model(script) { const server = await startMockModel(script, body => { const i = requestIntent(body.messages.at(-1).content, date); return completion(JSON.stringify({intent_kind:"recommend",occasion_type:i.occasion,formality_min:i.range[0],formality_max:i.range[1],date:i.date,indoor_outdoor:"unknown",language:i.language})); }); servers.push(server); return server; }
 const look = (body, changes = {}) => {
   const p = body.response_format.json_schema.schema.properties;
   return { top_id: p.top_id.enum[0], bottom_id: p.bottom_id.enum[0], outer_id: null, occasion: "casual", formality: Number(p.top_id.enum[0].split("-")[2]), gap_note: p.gap_note.enum?.[0] ?? null, date, reason: "These pieces make a comfortable casual look.", weather_note: null, language: "en", ...changes };
@@ -23,6 +23,28 @@ const handlerFor = (server, extra = {}) => createChatHandler({ ...options, setti
 try {
   wardrobe.items[0].photo = "outputs/wardrobe/photos/private.png"; wardrobe.items[0].notes = "PRIVATE MEASUREMENTS 123456";
   await mkdir(path.dirname(file), { recursive: true }); await writeFile(file, JSON.stringify(wardrobe));
+  for (const kind of ["greeting", "clarify", "off_topic"]) {
+    const conversational = await startMockModel(() => { throw new Error("No choice call allowed"); }, () => completion(JSON.stringify({ intent_kind: kind, occasion_type: "everyday", formality_min: 1, formality_max: 5, date, indoor_outdoor: "unknown", language: "en" })));
+    servers.push(conversational);
+    const answer = await request(handlerFor(conversational), { body: message });
+    assert.equal(answer.body.status, "ok"); assert.equal(answer.body.recommendations.length, 0);
+    assert.deepEqual(answer.body.calls, []); assert.equal(conversational.requests.length, 0);
+  }
+  const vagueModel = await startMockModel(() => { throw new Error("No choice for vague requests"); }, () => completion(JSON.stringify({ intent_kind: "recommend", occasion_type: "everyday", formality_min: 1, formality_max: 5, date, indoor_outdoor: "unknown", language: "en" })));
+  servers.push(vagueModel);
+  for (const text of ["Something nice, please", "What should I wear tomorrow?"]) {
+    const vague = await request(handlerFor(vagueModel), { body: { ...message, messages: [{ role: "user", content: text }] } });
+    assert.equal(vague.body.intent.intent_kind, "clarify"); assert.equal(vague.body.evaluation.intent.intent_kind, "recommend", "model mistake remains visible in evaluation");
+    assert.deepEqual(vague.body.calls, []); assert.equal(vague.body.recommendations.length, 0);
+  }
+  const followModel = await startMockModel(body => completion(JSON.stringify(look(body))), () => completion(JSON.stringify({ intent_kind: "follow_up", occasion_type: "casual", formality_min: 1, formality_max: 2, date, indoor_outdoor: "unknown", language: "en" })));
+  servers.push(followModel);
+  const prior = { intent: { intent_kind: "recommend", occasion_type: "casual", formality_min: 1, formality_max: 2, date, indoor_outdoor: "unknown", language: "en" }, ids: ["eval-top-2-fresh", "eval-bottom-2-fresh"] };
+  const follow = await request(handlerFor(followModel), { body: { ...message, previous: prior, messages: [{ role: "user", content: "Casual coffee today" }, { role: "assistant", content: "Here is a look." }, { role: "user", content: "Show another" }] } });
+  assert.equal(follow.body.status, "ok"); assert.equal(follow.body.recommendations.length, 1);
+  assert.ok(follow.body.recommendations[0].items.every(item => !prior.ids.includes(item.id)));
+  const missingPrior = await request(handlerFor(followModel), { body: message });
+  assert.equal(missingPrior.body.recommendations.length, 0); assert.deepEqual(missingPrior.body.calls, []);
   const scripted = await model(body => completion(JSON.stringify(look(body)))), handler = handlerFor(scripted);
   assert.equal((await request(handler, { method: "GET" })).body.status, "configured");
   const result = await request(handler, { body: message });
@@ -49,7 +71,7 @@ try {
   assert.match(body.messages[0].content, /worn_last_3_days/); assert.match(body.messages[0].content, /2030-01-01/);
   for (const secret of ["private.png", "PRIVATE MEASUREMENTS", "123456", "ease_mm", "delta_mm"]) assert.ok(!JSON.stringify(scripted.requests).includes(secret));
   assert.deepEqual(JSON.parse(await readFile(file, "utf8")), wardrobe, "chat cannot log wear even when asked");
-  const intentRetry = await startMockModel(body => completion(JSON.stringify(look(body))), (_body, index) => completion(JSON.stringify(index ? { occasion_type: "business", formality_min: 4, formality_max: 5, date, indoor_outdoor: "unknown", language: "en" } : { date: "invalid" })));
+  const intentRetry = await startMockModel(body => completion(JSON.stringify(look(body))), (_body, index) => completion(JSON.stringify(index ? { intent_kind: "recommend", occasion_type: "business", formality_min: 4, formality_max: 5, date, indoor_outdoor: "unknown", language: "en" } : { date: "invalid" })));
   servers.push(intentRetry);
   const intentResult = await request(handlerFor(intentRetry), { body: message });
   assert.equal(intentResult.body.status, "ok");

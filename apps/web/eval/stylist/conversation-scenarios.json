@@ -1,0 +1,300 @@
+[
+  {
+    "id": "conversation-hi-en",
+    "language": "en",
+    "message": "hi",
+    "date": "2026-11-19",
+    "city": "Cairo",
+    "expect": {
+      "must_call_get_wardrobe": true,
+      "must_call_get_weather": false,
+      "recommended_items_exist": true,
+      "categories": {
+        "top": "top",
+        "bottom": "bottom"
+      },
+      "occasion": "casual",
+      "formality_range": [
+        1,
+        2
+      ],
+      "not_worn_days": null
+    },
+    "intent_labels": {
+      "intent_kind": "greeting",
+      "occasion_type": "everyday",
+      "formality_min": 1,
+      "formality_max": 5,
+      "date": "2026-11-19",
+      "indoor_outdoor": "unknown",
+      "language": "en"
+    }
+  },
+  {
+    "id": "conversation-hi-ar",
+    "language": "arz",
+    "message": "أهلا",
+    "date": "2026-11-19",
+    "city": "Cairo",
+    "expect": {
+      "must_call_get_wardrobe": true,
+      "must_call_get_weather": false,
+      "recommended_items_exist": true,
+      "categories": {
+        "top": "top",
+        "bottom": "bottom"
+      },
+      "occasion": "casual",
+      "formality_range": [
+        1,
+        2
+      ],
+      "not_worn_days": null
+    },
+    "intent_labels": {
+      "intent_kind": "greeting",
+      "occasion_type": "everyday",
+      "formality_min": 1,
+      "formality_max": 5,
+      "date": "2026-11-19",
+      "indoor_outdoor": "unknown",
+      "language": "arz"
+    }
+  },
+  {
+    "id": "conversation-vague",
+    "language": "en",
+    "message": "Something nice, please",
+    "date": "2026-11-19",
+    "city": "Cairo",
+    "expect": {
+      "must_call_get_wardrobe": true,
+      "must_call_get_weather": false,
+      "recommended_items_exist": true,
+      "categories": {
+        "top": "top",
+        "bottom": "bottom"
+      },
+      "occasion": "casual",
+      "formality_range": [
+        1,
+        2
+      ],
+      "not_worn_days": null
+    },
+    "intent_labels": {
+      "intent_kind": "clarify",
+      "occasion_type": "everyday",
+      "formality_min": 1,
+      "formality_max": 5,
+      "date": "2026-11-19",
+      "indoor_outdoor": "unknown",
+      "language": "en"
+    }
+  },
+  {
+    "id": "conversation-off-topic",
+    "language": "en",
+    "message": "Explain quantum physics",
+    "date": "2026-11-19",
+    "city": "Cairo",
+    "expect": {
+      "must_call_get_wardrobe": true,
+      "must_call_get_weather": false,
+      "recommended_items_exist": true,
+      "categories": {
+        "top": "top",
+        "bottom": "bottom"
+      },
+      "occasion": "casual",
+      "formality_range": [
+        1,
+        2
+      ],
+      "not_worn_days": null
+    },
+    "intent_labels": {
+      "intent_kind": "off_topic",
+      "occasion_type": "everyday",
+      "formality_min": 1,
+      "formality_max": 5,
+      "date": "2026-11-19",
+      "indoor_outdoor": "unknown",
+      "language": "en"
+    }
+  },
+  {
+    "id": "conversation-another",
+    "language": "en",
+    "message": "Show another",
+    "date": "2026-11-19",
+    "city": "Cairo",
+    "expect": {
+      "must_call_get_wardrobe": true,
+      "must_call_get_weather": false,
+      "recommended_items_exist": true,
+      "categories": {
+        "top": "top",
+        "bottom": "bottom"
+      },
+      "occasion": "casual",
+      "formality_range": [
+        1,
+        2
+      ],
+      "not_worn_days": null
+    },
+    "intent_labels": {
+      "intent_kind": "follow_up",
+      "occasion_type": "casual",
+      "formality_min": 1,
+      "formality_max": 2,
+      "date": "2026-11-19",
+      "indoor_outdoor": "unknown",
+      "language": "en"
+    },
+    "previous": {
+      "intent": {
+        "intent_kind": "recommend",
+        "occasion_type": "casual",
+        "formality_min": 1,
+        "formality_max": 2,
+        "date": "2026-11-19",
+        "indoor_outdoor": "unknown",
+        "language": "en"
+      },
+      "ids": [
+        "eval-top-2-fresh",
+        "eval-bottom-2-fresh"
+      ]
+    },
+    "history": [
+      {
+        "role": "user",
+        "content": "Choose a casual outfit for coffee today."
+      },
+      {
+        "role": "assistant",
+        "content": "Here is a comfortable look."
+      }
+    ]
+  },
+  {
+    "id": "conversation-warmer",
+    "language": "en",
+    "message": "Something warmer please",
+    "date": "2026-11-19",
+    "city": "Cairo",
+    "expect": {
+      "must_call_get_wardrobe": true,
+      "must_call_get_weather": false,
+      "recommended_items_exist": true,
+      "categories": {
+        "top": "top",
+        "bottom": "bottom"
+      },
+      "occasion": "casual",
+      "formality_range": [
+        1,
+        2
+      ],
+      "not_worn_days": null
+    },
+    "intent_labels": {
+      "intent_kind": "follow_up",
+      "occasion_type": "casual",
+      "formality_min": 1,
+      "formality_max": 2,
+      "date": "2026-11-19",
+      "indoor_outdoor": "unknown",
+      "language": "en"
+    },
+    "previous": {
+      "intent": {
+        "intent_kind": "recommend",
+        "occasion_type": "casual",
+        "formality_min": 1,
+        "formality_max": 2,
+        "date": "2026-11-19",
+        "indoor_outdoor": "unknown",
+        "language": "en"
+      },
+      "ids": [
+        "eval-top-2-fresh",
+        "eval-bottom-2-fresh"
+      ]
+    },
+    "history": [
+      {
+        "role": "user",
+        "content": "Choose a casual outfit for coffee today."
+      },
+      {
+        "role": "assistant",
+        "content": "Here is a comfortable look."
+      }
+    ]
+  },
+  {
+    "id": "conversation-thanks",
+    "language": "en",
+    "message": "Thanks!",
+    "date": "2026-11-19",
+    "city": "Cairo",
+    "expect": {
+      "must_call_get_wardrobe": true,
+      "must_call_get_weather": false,
+      "recommended_items_exist": true,
+      "categories": {
+        "top": "top",
+        "bottom": "bottom"
+      },
+      "occasion": "casual",
+      "formality_range": [
+        1,
+        2
+      ],
+      "not_worn_days": null
+    },
+    "intent_labels": {
+      "intent_kind": "greeting",
+      "occasion_type": "everyday",
+      "formality_min": 1,
+      "formality_max": 5,
+      "date": "2026-11-19",
+      "indoor_outdoor": "unknown",
+      "language": "en"
+    }
+  },
+  {
+    "id": "conversation-date-only",
+    "language": "en",
+    "message": "What should I wear tomorrow?",
+    "date": "2026-11-19",
+    "city": "Cairo",
+    "expect": {
+      "must_call_get_wardrobe": true,
+      "must_call_get_weather": false,
+      "recommended_items_exist": true,
+      "categories": {
+        "top": "top",
+        "bottom": "bottom"
+      },
+      "occasion": "casual",
+      "formality_range": [
+        1,
+        2
+      ],
+      "not_worn_days": null
+    },
+    "intent_labels": {
+      "intent_kind": "clarify",
+      "occasion_type": "everyday",
+      "formality_min": 1,
+      "formality_max": 5,
+      "date": "2026-11-20",
+      "indoor_outdoor": "unknown",
+      "language": "en"
+    }
+  }
+]

@@ -113,7 +113,7 @@ try {
   // in 2030 must remain eligible even when this suite runs years earlier/later.
   const future = fixtureWardrobe("2030-01-01"); await writeFile(path.join(root, "wardrobe/wardrobe.json"), JSON.stringify(future));
   const clockModel = await startMockModel(body => {
-    if(body.response_format.json_schema.name==="stylist_intent") return completion(JSON.stringify({occasion_type:"everyday",formality_min:1,formality_max:5,date:"2030-01-01",indoor_outdoor:"unknown",language:"en"}));
+    if(body.response_format.json_schema.name==="stylist_intent") return completion(JSON.stringify({intent_kind:"recommend",occasion_type:"everyday",formality_min:1,formality_max:5,date:"2030-01-01",indoor_outdoor:"unknown",language:"en"}));
     const p = body.response_format.json_schema.schema.properties;
     return completion(JSON.stringify({ top_id: p.top_id.enum[0], bottom_id: p.bottom_id.enum[0], outer_id: null, occasion: "casual", formality: Number(p.top_id.enum[0].split("-")[2]), gap_note: null, date: "2030-01-01", reason: "A simple look.", weather_note: null, language: "en" }));
   }); servers.push(clockModel);
