@@ -28,6 +28,6 @@ export function markdownReport(report) {
     `| Item-existence failures | 29/30 | ${summary.failures_by_category.recommended_items_exist ?? 0}/${summary.scenarios} |`, "",
     "The scenario messages, fixture and nine scoring categories are unchanged. In v2, server context reads satisfy read checks and a structured recommendation replaces the show_on_avatar tool prerequisite. Rejected drafts never become recommendations; their retry count is reported separately. This compares complete pipelines, not isolated model quality.");
   lines.push("", "| Failure category | Scenarios |", "| --- | --- |", ...Object.entries(summary.failures_by_category).map(([category, count]) => `| ${cell(category)} | ${count} |`), "",
-    "Status-only report: no prompts, model prose, reasoning fields, tool arguments, photos or personal fit values. Scoring checks structured tool traces and recommendations in memory, not prose quality. A correct weather call is scored independently of provider availability. All recommendation attempts count, including rejected IDs. No recommendation is a failure.", "");
+    "Status-only report: no prompts, model prose, reasoning fields, tool arguments, photos or personal fit values. Scoring checks structured tool traces and recommendations in memory, not prose quality. A correct weather call is scored independently of provider availability. Legacy v1 action attempts all count; v2 scores published recommendations and reports validation retries separately. Missing recommendations fail.", "");
   return lines.join("\n");
 }
