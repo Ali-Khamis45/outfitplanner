@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AI stylist</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#49392D}a:hover{color:#211C18}
+</style>
+</helmet>
+<div style="font-family: Manrope, system-ui, sans-serif; background: #F7F4EF; color: #211C18; min-height: 100vh; display: flex; flex-direction: column">
+
+<header style="border-bottom: 1px solid #E5DDD3">
+<div style="max-width: 1360px; margin: 0 auto; padding: 18px 40px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px">
+<a href="Home.dc.html" style="font-family: 'Instrument Serif', serif; font-size: 28px; color: #211C18; text-decoration: none">Virtual Wardrobe</a>
+<nav aria-label="Main" style="display: flex; flex-wrap: wrap; gap: 4px; font-size: 14px; font-weight: 500">
+<a href="Home.dc.html" style="color: #211C18; text-decoration: none; padding: 9px 14px; border-radius: 999px">Home</a>
+<a href="Closet.dc.html" style="color: #211C18; text-decoration: none; padding: 9px 14px; border-radius: 999px">Wardrobe</a>
+<a href="FittingRoom.dc.html" style="color: #211C18; text-decoration: none; padding: 9px 14px; border-radius: 999px">Fitting room</a>
+<a href="Outfits.dc.html" style="color: #211C18; text-decoration: none; padding: 9px 14px; border-radius: 999px">Outfits</a>
+<a href="StylistChat.dc.html" aria-current="page" style="background: #211C18; color: #F7F4EF; text-decoration: none; padding: 9px 14px; border-radius: 999px">Stylist</a>
+<a href="Planner.dc.html" style="color: #211C18; text-decoration: none; padding: 9px 14px; border-radius: 999px">Planner</a>
+</nav>
+</div>
+</header>
+
+<div style="flex: 1; width: 100%; max-width: 1360px; margin: 0 auto; padding: 32px 40px; box-sizing: border-box; display: flex; flex-wrap: wrap; gap: 28px">
+
+<main style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<p style="margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: #756B62">Your stylist · design preview</p>
+<h1 style="margin: 0; font-family: 'Instrument Serif', serif; font-weight: 400; font-size: 60px; line-height: 0.95">Where are you<br>headed today?</h1>
+</div>
+
+<div style="align-self: flex-end; max-width: 72%; background: #49392D; color: #F7F4EF; border-radius: 24px 24px 6px 24px; padding: 16px 20px; font-size: 15px; line-height: 1.55">Dinner with friends in Zamalek tonight at 8. Nothing too formal.</div>
+
+<div style="align-self: flex-start; max-width: 88%; display: flex; gap: 12px">
+<span aria-hidden="true" style="flex: none; width: 36px; height: 36px; border-radius: 99px; background: #24201C; color: #F7F4EF; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', serif; font-size: 18px">V</span>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<ul aria-label="What the stylist checked" style="margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px">
+<li style="font-size: 12px; font-weight: 600; color: #49392D; background: #EEE8DF; border-radius: 99px; padding: 6px 12px">Wardrobe · 6 pieces</li>
+<li style="font-size: 12px; font-weight: 600; color: #49392D; background: #EEE8DF; border-radius: 99px; padding: 6px 12px">Weather · Cairo</li>
+<li style="font-size: 12px; font-weight: 600; color: #49392D; background: #EEE8DF; border-radius: 99px; padding: 6px 12px">Fit · your body</li>
+</ul>
+<div style="background: #FFFFFF; border: 1px solid #E5DDD3; border-radius: 24px 24px 24px 6px; padding: 18px 20px; font-size: 15px; line-height: 1.6; display: flex; flex-direction: column; gap: 10px">
+<p style="margin: 0">It cools to around 15° after dark. Go with the <strong>Chalk cotton tee</strong> and the <strong>Moss straight pants</strong>, both in L, your best fit.</p>
+<p style="margin: 0">Light on top for the warm start, the moss keeps it relaxed but put together. Bring a light layer for later.</p>
+</div>
+</div>
+</div>
+
+<div role="group" aria-label="Suggestions" style="display: flex; flex-wrap: wrap; gap: 8px">
+<button type="button" style="background: #FFFFFF; border: 1px solid #E5DDD3; color: #211C18; font: inherit; font-size: 14px; padding: 10px 16px; border-radius: 999px; min-height: 44px; cursor: pointer">What should I wear today?</button>
+<button type="button" style="background: #FFFFFF; border: 1px solid #E5DDD3; color: #211C18; font: inherit; font-size: 14px; padding: 10px 16px; border-radius: 999px; min-height: 44px; cursor: pointer">Help me dress for an interview</button>
+<button type="button" style="background: #FFFFFF; border: 1px solid #E5DDD3; color: #211C18; font: inherit; font-size: 14px; padding: 10px 16px; border-radius: 999px; min-height: 44px; cursor: pointer">Build an outfit for cold weather</button>
+<button type="button" style="background: #FFFFFF; border: 1px solid #E5DDD3; color: #211C18; font: inherit; font-size: 14px; padding: 10px 16px; border-radius: 999px; min-height: 44px; cursor: pointer">Create a casual outfit</button>
+</div>
+
+<form style="margin-top: auto; display: flex; align-items: center; gap: 10px; background: #FFFFFF; border: 1px solid #E5DDD3; border-radius: 999px; padding: 6px 6px 6px 22px">
+<label style="flex: 1; display: flex; min-width: 0">
+<span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Message the stylist</span>
+<input type="text" placeholder="Tell me the plan, in Arabic or English" style="border: 0; background: transparent; font: inherit; font-size: 15px; flex: 1; min-width: 0; color: #211C18; min-height: 44px">
+</label>
+<button type="button" aria-label="Speak" style="width: 46px; height: 46px; border-radius: 99px; border: 1px solid #E5DDD3; background: #FFFFFF; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#211C18" stroke-width="2" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11 Q5 18 12 18 Q19 18 19 11"></path><path d="M12 18 L12 21"></path></svg></button>
+<button type="submit" aria-label="Send" style="width: 46px; height: 46px; border-radius: 99px; border: 0; background: #49392D; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F7F4EF" stroke-width="2" aria-hidden="true"><path d="M5 12 L19 12"></path><path d="M13 6 L19 12 L13 18"></path></svg></button>
+</form>
+<p style="margin: 0; font-size: 12px; color: #756B62">Until the stylist model is connected, this screen shows a clear "not connected yet" state. Weather, wardrobe and fit already come from the real tools.</p>
+</main>
+
+<aside aria-label="Recommended outfit" style="flex: 1 1 360px; min-width: 0; background: #24201C; color: #F7F4EF; border-radius: 28px; padding: 26px; box-sizing: border-box; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 8px">
+<h2 style="margin: 0; font-family: 'Instrument Serif', serif; font-weight: 400; font-size: 34px; line-height: 1">Zamalek dinner</h2>
+<span style="font-size: 12px; color: #CFC5BA">Casual · tonight</span>
+</div>
+<div style="background: rgba(247,244,239,0.06); border-radius: 22px; display: flex; justify-content: center; padding: 14px">
+<svg width="170" height="360" viewBox="0 0 200 480" role="img" aria-label="Avatar in the chalk tee and moss pants">
+<circle cx="100" cy="40" r="24" fill="#E6D3C2"></circle>
+<rect x="90" y="60" width="20" height="18" fill="#E6D3C2"></rect>
+<path d="M36 126 L28 236 L40 238 L50 138 Z" fill="#E6D3C2"></path>
+<path d="M164 126 L172 236 L160 238 L150 138 Z" fill="#E6D3C2"></path>
+<path d="M54 226 L146 226 L150 440 L108 440 L100 292 L92 440 L50 440 Z" fill="#777F69"></path>
+<path d="M58 76 Q100 64 142 76 L170 118 L156 138 L146 124 L148 236 Q100 246 52 236 L54 124 L44 138 L30 118 Z" fill="#E7E2D6"></path>
+<ellipse cx="70" cy="446" rx="22" ry="7" fill="#E6D3C2"></ellipse>
+<ellipse cx="130" cy="446" rx="22" ry="7" fill="#E6D3C2"></ellipse>
+</svg>
+</div>
+<ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 14px">
+<li style="display: flex; justify-content: space-between; gap: 12px; background: rgba(247,244,239,0.06); border-radius: 14px; padding: 12px 14px"><span>Chalk cotton tee</span><span style="color: #B9D3A8; font-weight: 700">L · good</span></li>
+<li style="display: flex; justify-content: space-between; gap: 12px; background: rgba(247,244,239,0.06); border-radius: 14px; padding: 12px 14px"><span>Moss straight pants</span><span style="color: #B9D3A8; font-weight: 700">L · good</span></li>
+</ul>
+<a href="FittingRoom.dc.html" style="background: #F7F4EF; color: #211C18; text-decoration: none; text-align: center; padding: 14px; border-radius: 999px; font-weight: 700; font-size: 15px; min-height: 50px; box-sizing: border-box">Try it on</a>
+<div style="display: flex; gap: 10px">
+<button type="button" style="flex: 1; background: transparent; border: 1px solid rgba(247,244,239,0.3); color: #F7F4EF; font: inherit; font-size: 14px; padding: 12px; border-radius: 999px; min-height: 46px; cursor: pointer">Show another</button>
+<button type="button" style="flex: 1; background: transparent; border: 1px solid rgba(247,244,239,0.3); color: #F7F4EF; font: inherit; font-size: 14px; padding: 12px; border-radius: 999px; min-height: 46px; cursor: pointer">I wore this</button>
+</div>
+</aside>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

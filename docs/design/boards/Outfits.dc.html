@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Outfit builder</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#49392D}a:hover{color:#211C18}
+</style>
+</helmet>
+<div style="font-family: Manrope, system-ui, sans-serif; background: #F7F4EF; color: #211C18; min-height: 100vh">
+
+<header style="border-bottom: 1px solid #E5DDD3">
+<div style="max-width: 1360px; margin: 0 auto; padding: 18px 40px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px">
+<a href="Home.dc.html" style="font-family: 'Instrument Serif', serif; font-size: 28px; color: #211C18; text-decoration: none">Virtual Wardrobe</a>
+<nav aria-label="Main" style="display: flex; flex-wrap: wrap; gap: 4px; font-size: 14px; font-weight: 500">
+<a href="Home.dc.html" style="color: #211C18; text-decoration: none; padding: 9px 14px; border-radius: 999px">Home</a>
+<a href="Closet.dc.html" style="color: #211C18; text-decoration: none; padding: 9px 14px; border-radius: 999px">Wardrobe</a>
+<a href="FittingRoom.dc.html" style="color: #211C18; text-decoration: none; padding: 9px 14px; border-radius: 999px">Fitting room</a>
+<a href="Outfits.dc.html" aria-current="page" style="background: #211C18; color: #F7F4EF; text-decoration: none; padding: 9px 14px; border-radius: 999px">Outfits</a>
+<a href="StylistChat.dc.html" style="color: #211C18; text-decoration: none; padding: 9px 14px; border-radius: 999px">Stylist</a>
+<a href="Planner.dc.html" style="color: #211C18; text-decoration: none; padding: 9px 14px; border-radius: 999px">Planner</a>
+</nav>
+</div>
+</header>
+
+<div style="max-width: 1360px; margin: 0 auto; padding: 36px 40px 72px; display: flex; flex-direction: column; gap: 28px">
+<h1 style="margin: 0; font-family: 'Instrument Serif', serif; font-weight: 400; font-size: 72px; line-height: 0.95">Build a look</h1>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: stretch">
+<aside aria-label="Clothing library" style="flex: 1 1 260px; max-width: 320px; min-width: 0; background: #FFFFFF; border: 1px solid #E5DDD3; border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 14px; box-sizing: border-box">
+<div role="tablist" aria-label="Category" style="display: flex; flex-wrap: wrap; gap: 6px">
+<button type="button" role="tab" aria-selected="true" style="background: #211C18; color: #F7F4EF; border: 0; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 14px; border-radius: 999px; min-height: 38px">Tops</button>
+<button type="button" role="tab" aria-selected="false" style="background: #EEE8DF; color: #49392D; border: 0; font: inherit; font-size: 13px; padding: 8px 14px; border-radius: 999px; min-height: 38px">Bottoms</button>
+<button type="button" role="tab" aria-selected="false" aria-disabled="true" style="background: transparent; color: #8A8077; border: 1px dashed #D6CCBF; font: inherit; font-size: 13px; padding: 8px 14px; border-radius: 999px; min-height: 38px">Outerwear</button>
+</div>
+<p style="margin: 0; font-size: 12px; color: #756B62">Outerwear, shoes and accessories can be saved in an outfit but can't be shown in 3D yet.</p>
+<ul style="margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<li><button type="button" aria-pressed="false" style="width: 100%; aspect-ratio: 1; border-radius: 16px; border: 1px solid #E5DDD3; background: #F7F4EF; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="60" height="54" viewBox="0 0 36 32" role="img" aria-label="Navy everyday tee"><path d="M10 2 Q18 0 26 2 L35 9 L30 14 L27 11 L27 30 L9 30 L9 11 L6 14 L1 9 Z" fill="#1F2A44"></path></svg></button></li>
+<li><button type="button" aria-pressed="true" style="width: 100%; aspect-ratio: 1; border-radius: 16px; border: 2px solid #211C18; background: #F7F4EF; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="60" height="54" viewBox="0 0 36 32" role="img" aria-label="Chalk cotton tee, selected"><path d="M10 2 Q18 0 26 2 L35 9 L30 14 L27 11 L27 30 L9 30 L9 11 L6 14 L1 9 Z" fill="#E7E2D6" stroke="#D6CCBF" stroke-width="0.6"></path></svg></button></li>
+<li><button type="button" aria-pressed="false" style="width: 100%; aspect-ratio: 1; border-radius: 16px; border: 1px solid #E5DDD3; background: #F7F4EF; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="60" height="54" viewBox="0 0 36 32" role="img" aria-label="Sand cotton tee"><path d="M10 2 Q18 0 26 2 L35 9 L30 14 L27 11 L27 30 L9 30 L9 11 L6 14 L1 9 Z" fill="#C3AE92"></path></svg></button></li>
+<li><a href="Closet.dc.html" style="width: 100%; aspect-ratio: 1; border-radius: 16px; border: 1.5px dashed #D6CCBF; display: flex; flex-direction: column; gap: 4px; align-items: center; justify-content: center; text-decoration: none; font-size: 12px; font-weight: 700; box-sizing: border-box">+<span>Add</span></a></li>
+</ul>
+</aside>
+
+<section aria-label="Outfit preview" style="flex: 999 1 420px; min-width: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; min-height: 620px">
+<div style="grid-column: span 3; background: #24201C; border-radius: 28px; display: flex; align-items: center; justify-content: center; position: relative">
+<span style="position: absolute; top: 18px; left: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #CFC5BA">On you</span>
+<svg width="230" height="500" viewBox="0 0 200 480" role="img" aria-label="Your avatar in the chalk tee and moss pants">
+<circle cx="100" cy="40" r="24" fill="#E6D3C2"></circle>
+<rect x="90" y="60" width="20" height="18" fill="#E6D3C2"></rect>
+<path d="M36 126 L28 236 L40 238 L50 138 Z" fill="#E6D3C2"></path>
+<path d="M164 126 L172 236 L160 238 L150 138 Z" fill="#E6D3C2"></path>
+<path d="M54 226 L146 226 L150 440 L108 440 L100 292 L92 440 L50 440 Z" fill="#777F69"></path>
+<path d="M58 76 Q100 64 142 76 L170 118 L156 138 L146 124 L148 236 Q100 246 52 236 L54 124 L44 138 L30 118 Z" fill="#E7E2D6"></path>
+<ellipse cx="70" cy="446" rx="22" ry="7" fill="#E6D3C2"></ellipse>
+<ellipse cx="130" cy="446" rx="22" ry="7" fill="#E6D3C2"></ellipse>
+</svg>
+<a href="FittingRoom.dc.html" style="position: absolute; bottom: 18px; right: 18px; background: #F7F4EF; color: #211C18; text-decoration: none; font-size: 13px; font-weight: 700; padding: 10px 16px; border-radius: 999px; min-height: 40px; box-sizing: border-box">Open in fitting room</a>
+</div>
+<div style="grid-column: span 2; display: flex; flex-direction: column; gap: 14px">
+<div style="flex: 1; background: #EEE8DF; border-radius: 28px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; position: relative">
+<svg width="120" height="107" viewBox="0 0 36 32" role="img" aria-label="Chalk cotton tee"><path d="M10 2 Q18 0 26 2 L35 9 L30 14 L27 11 L27 30 L9 30 L9 11 L6 14 L1 9 Z" fill="#E7E2D6" stroke="#D6CCBF" stroke-width="0.6"></path></svg>
+<span style="font-size: 13px; font-weight: 700">Chalk cotton tee · L</span>
+<button type="button" aria-label="Remove chalk cotton tee" style="position: absolute; top: 12px; right: 12px; width: 36px; height: 36px; border-radius: 99px; border: 0; background: #FFFFFF; cursor: pointer; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#49392D" stroke-width="2" aria-hidden="true"><path d="M5 5 L19 19 M19 5 L5 19"></path></svg></button>
+</div>
+<div style="flex: 1; background: #E6E1D2; border-radius: 28px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; position: relative">
+<svg width="76" height="110" viewBox="0 0 26 34" role="img" aria-label="Moss straight pants"><path d="M2 1 L24 1 L25 33 L16 33 L13 12 L10 33 L1 33 Z" fill="#777F69"></path></svg>
+<span style="font-size: 13px; font-weight: 700">Moss straight pants · L</span>
+<button type="button" aria-label="Remove moss straight pants" style="position: absolute; top: 12px; right: 12px; width: 36px; height: 36px; border-radius: 99px; border: 0; background: #FFFFFF; cursor: pointer; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#49392D" stroke-width="2" aria-hidden="true"><path d="M5 5 L19 19 M19 5 L5 19"></path></svg></button>
+</div>
+</div>
+</section>
+
+<aside aria-label="Outfit details" style="flex: 1 1 280px; max-width: 340px; min-width: 0; background: #FFFFFF; border: 1px solid #E5DDD3; border-radius: 24px; padding: 22px; display: flex; flex-direction: column; gap: 18px; box-sizing: border-box">
+<label style="display: flex; flex-direction: column; gap: 8px; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #756B62">Name
+<input type="text" value="Zamalek dinner" style="font-family: 'Instrument Serif', serif; font-size: 30px; border: 0; border-bottom: 1px solid #E5DDD3; padding: 6px 0; background: transparent; color: #211C18; letter-spacing: 0; text-transform: none">
+</label>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #756B62">Style</span>
+<div role="group" aria-label="Style" style="display: flex; flex-wrap: wrap; gap: 6px">
+<button type="button" aria-pressed="true" style="background: #211C18; color: #F7F4EF; border: 1px solid #211C18; font: inherit; font-size: 13px; font-weight: 700; padding: 8px 14px; border-radius: 999px; min-height: 40px">Casual</button>
+<button type="button" aria-pressed="false" style="background: transparent; color: #211C18; border: 1px solid #D6CCBF; font: inherit; font-size: 13px; padding: 8px 14px; border-radius: 999px; min-height: 40px">Smart</button>
+<button type="button" aria-pressed="false" style="background: transparent; color: #211C18; border: 1px solid #D6CCBF; font: inherit; font-size: 13px; padding: 8px 14px; border-radius: 999px; min-height: 40px">Formal</button>
+<button type="button" aria-pressed="false" style="background: transparent; color: #211C18; border: 1px solid #D6CCBF; font: inherit; font-size: 13px; padding: 8px 14px; border-radius: 999px; min-height: 40px">Streetwear</button>
+<button type="button" aria-pressed="false" style="background: transparent; color: #211C18; border: 1px solid #D6CCBF; font: inherit; font-size: 13px; padding: 8px 14px; border-radius: 999px; min-height: 40px">Minimal</button>
+</div>
+</div>
+<div style="background: #F7F4EF; border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 6px; font-size: 13px">
+<span style="font-weight: 700">Fit check</span>
+<span style="display: flex; align-items: center; gap: 8px; color: #2F5A26"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 99px; background: #6E9A5B"></span>Both pieces in your best-fit size</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px; margin-top: auto">
+<button type="button" style="background: #49392D; color: #F7F4EF; border: 0; font: inherit; font-weight: 700; font-size: 15px; padding: 15px; border-radius: 999px; min-height: 50px; cursor: pointer">Save outfit</button>
+<a href="FittingRoom.dc.html" style="text-align: center; border: 1px solid #49392D; color: #49392D; text-decoration: none; font-weight: 700; font-size: 15px; padding: 14px; border-radius: 999px; min-height: 50px; box-sizing: border-box">Try before saving</a>
+</div>
+</aside>
+</div>
+
+<section style="display: flex; flex-direction: column; gap: 16px">
+<h2 style="margin: 0; font-family: 'Instrument Serif', serif; font-weight: 400; font-size: 40px; line-height: 1">Saved looks</h2>
+<div style="border: 1.5px dashed #CFC4B6; border-radius: 24px; padding: 32px; font-size: 15px; color: #756B62">Nothing saved yet. Saved looks appear here with the last day you wore them, ready to reopen and edit.</div>
+</section>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1100}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>
