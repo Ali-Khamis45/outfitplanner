@@ -25,8 +25,8 @@ GARMENTS = PROJECT / "outputs" / "garments"
 
 # Measured maximum over the 18 candidate GLBs when layout v3 was introduced (Sprint 3.5 report) + 0.5 deg.
 UP_ANGLE_LIMIT_DEG: dict[tuple[str, str], float] = {
-    ("tshirt", "front"): 7.81 + 0.5,  # S personal (the most pushed-out hem)
-    ("tshirt", "back"): 8.82 + 0.5,  # S personal; 2.36 on the neutral base garment
+    ("tshirt", "front"): 7.66 + 0.5,  # S personal (the most pushed-out hem)
+    ("tshirt", "back"): 8.72 + 0.5,  # S personal; 2.36 on the neutral base garment
     ("tshirt", "sleeve_left"): 9.91 + 0.5,  # XL personal
     ("tshirt", "sleeve_right"): 7.96 + 0.5,  # XL personal
     ("pants", "left_front"): 7.30 + 0.5,
