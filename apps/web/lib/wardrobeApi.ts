@@ -51,7 +51,16 @@ export function createWardrobeHandler(outputs = path.resolve(process.cwd(), "../
           await mkdir(photos, { recursive: true }); const directory = await checkedPhotos();
           const photoTemp = path.join(directory, `.${randomUUID()}.tmp`), alignmentTemp = path.join(directory, `.${randomUUID()}.tmp`);
           await writeFile(photoTemp, bytes, { flag: "wx" });
-          await writeFile(alignmentTemp, JSON.stringify({ version: 1, item, view, matrix: alignment, convention: "guide-normalized-to-photo-normalized; x'=a*x+c*y+e, y'=b*x+d*y+f" }, null, 2) + "\n", { flag: "wx" });
+          // Sprint 4A (version 2): the outline is the producer's flat-lay layout at its real aspect; the guide is that layout
+          // scaled by its width and the photo is scaled by its width, so one scale keeps the aspect. Clients that send no
+          // photo size or outline still save version 1.
+          const { photoSize, outline } = body as { photoSize?: unknown; outline?: unknown };
+          const validSize = Array.isArray(photoSize) && photoSize.length === 2 && photoSize.every(v => Number.isInteger(v) && v > 0 && v <= 20000);
+          const validOutline = !!outline && typeof outline === "object" && ["tshirt-v5.3", "pants-v3"].includes((outline as { template?: unknown }).template as string) && Number.isInteger((outline as { version?: unknown }).version);
+          const document = validSize && validOutline
+            ? { version: 2, item, view, matrix: alignment, convention: "guide (layout metres / layout width) to photo pixels / photo width; x'=a*x+c*y+e, y'=b*x+d*y+f", photo_size: photoSize, outline: { template: (outline as { template: string }).template, version: (outline as { version: number }).version } }
+            : { version: 1, item, view, matrix: alignment, convention: "guide-normalized-to-photo-normalized; x'=a*x+c*y+e, y'=b*x+d*y+f" };
+          await writeFile(alignmentTemp, JSON.stringify(document, null, 2) + "\n", { flag: "wx" });
           await rename(photoTemp, path.join(directory, `${item}-${view}.jpg`));
           await rename(alignmentTemp, path.join(directory, `${item}-${view}.align.json`));
           return res.status(201).json({ ok: true });

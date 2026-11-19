@@ -51,6 +51,13 @@ try {
   assert.equal((await request(handler, "POST", capture)).code, 201);
   const align = JSON.parse(await readFile(path.join(root, "wardrobe/photos/test-1-front.align.json"), "utf8"));
   assert.deepEqual(align.matrix, capture.alignment);
+  assert.equal(align.version, 1, "a capture without photo size and outline stays version 1");
+  // Sprint 4A: the aspect-true outline saves version 2 with the photo's pixel size and the outline it was aligned to
+  assert.equal((await request(handler, "POST", { ...capture, item: "test-2", photoSize: [3024, 4032], outline: { template: "tshirt-v5.3", version: 1 } })).code, 201);
+  const aligned = JSON.parse(await readFile(path.join(root, "wardrobe/photos/test-2-front.align.json"), "utf8"));
+  assert.deepEqual([aligned.version, aligned.photo_size, aligned.outline, aligned.matrix], [2, [3024, 4032], { template: "tshirt-v5.3", version: 1 }, capture.alignment]);
+  assert.equal((await request(handler, "POST", { ...capture, item: "test-3", photoSize: [3024, 4032], outline: { template: "someone-else", version: 1 } })).code, 201);
+  assert.equal(JSON.parse(await readFile(path.join(root, "wardrobe/photos/test-3-front.align.json"), "utf8")).version, 1, "an unknown outline falls back to version 1");
   assert.equal((await request(handler, "POST", { ...capture, item: "../escape" })).code, 400);
   assert.equal((await request(handler, "POST", { ...capture, alignment: [1, 2] })).code, 400);
   await mkdir(path.join(root, "wardrobe/textures"), { recursive: true });
