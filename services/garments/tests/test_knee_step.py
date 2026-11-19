@@ -1,4 +1,4 @@
-"""Pants v3.1 (candidate): no step in the garment-to-body gap at the knee (leg_profile.py).
+"""Pants v3.1 (the default bottom since 2026-11-19): no step in the garment-to-body gap at the knee (leg_profile.py).
 
 pants v2 / v3 build the leg as the thigh offset cut by a plane at knee + 5 cm, united with a straight tube whose flat
 top sits at knee + 10 cm: the gap jumps 7-12 mm within 1 cm there. v3.1 morphs one into the other over 10 cm.
@@ -39,7 +39,7 @@ def avatar(body_id: str) -> Path | None:
 
 def v3_1_glbs() -> list[tuple[Path, str]]:
     found = [(GARMENTS / "pants-basic-v3.1-mhr-neutral.glb", "neutral")]
-    found += [(p, p.name[: -len(".glb")].split("-", 3)[3]) for p in sorted((GARMENTS / "sizes-pants-v3.1").glob("pants-v3.1-*.glb"))]
+    found += [(p, p.name[: -len(".glb")].split("-", 3)[3]) for p in sorted((GARMENTS / "sizes").glob("pants-v3.1-*.glb"))]
     return [(p, body) for p, body in found if p.is_file() and avatar(body) is not None and avatar(body).is_file()]
 
 
@@ -66,7 +66,7 @@ class KneeStepTests(unittest.TestCase):
 
     def test_the_straight_tube_is_no_worse_than_v3(self) -> None:
         for path, body in v3_1_glbs():
-            v3 = GARMENTS / "pants-basic-v3-mhr-neutral.glb" if path.parent == GARMENTS else next((d / path.name.replace("pants-v3.1-", "pants-v3-") for d in (GARMENTS / "sizes", GARMENTS / "sizes-withheld") if (d / path.name.replace("pants-v3.1-", "pants-v3-")).is_file()), GARMENTS / "sizes" / path.name.replace("pants-v3.1-", "pants-v3-"))  # Sprint 3.6: a withheld v3 size is still the reference
+            v3 = GARMENTS / "pants-basic-v3-mhr-neutral.glb" if path.parent == GARMENTS else next((d / path.name.replace("pants-v3.1-", "pants-v3-") for d in (GARMENTS / "sizes-3.6-v3", GARMENTS / "sizes-3.6-v3-withheld") if (d / path.name.replace("pants-v3.1-", "pants-v3-")).is_file()), GARMENTS / "sizes" / path.name.replace("pants-v3.1-", "pants-v3-"))  # Sprint 3.6: a withheld v3 size is still the reference
             if not v3.is_file():
                 continue
             new, old = (profile(p, avatar(body), self.trees[body]) for p in (path, v3))

@@ -93,7 +93,7 @@ def evaluate(glb: Path, body_id: str) -> dict[str, Any]:
     return {"poses": results, "beyond_3mm_total": int(sum(r["beyond_3mm"] for r in results.values())), "worst_max_depth_mm": worst["max_depth_mm"], "pass": all(r["beyond_3mm"] == 0 for r in results.values())}
 
 
-def base_pants(body_id: str, pants_version: str = "v3") -> Path | None:
+def base_pants(body_id: str, pants_version: str = "v3.1") -> Path | None:
     """The body's base pants of the shirt's generation (pants v3 under tshirt-v5.3, v2 under v5.2); None for a calibrated
     body (its manifest pants were fitted to the uncalibrated body)."""
     if calibrated_avatar(body_id) is not None:
@@ -116,7 +116,7 @@ def layering(directory: Path) -> dict[str, Any]:
     for shirt_path in sorted(directory.glob("tshirt-*.glb")):
         body_id = shirt_path.name[: -len(".glb")].split("-", 3)[3]
         body, shirt = load_asset(avatar_for(body_id)), load_asset(shirt_path)
-        pants_version = "v2" if shirt_path.name.startswith("tshirt-v5.2-") else "v3"
+        pants_version = "v2" if shirt_path.name.startswith("tshirt-v5.2-") else "v3.1"  # the default bottom under tshirt-v5.3
         base = base_pants(body_id, pants_version)
         for pants_path in [*([base] if base else []), *sorted(directory.glob(f"pants-{pants_version}-*-{body_id}.glb"))]:
             r = shirt_layering(load_asset(pants_path), shirt, body)

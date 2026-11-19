@@ -14,7 +14,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   res.setHeader("X-Content-Type-Options", "nosniff");
   if (req.method !== "GET") return res.status(404).end();
   const { body, slot, size, asset } = req.query;
-  const generation = parseGeneration(req.query.gen, req.query.pants), { top, bottom, topSizesDir, bottomSizesDir } = GENERATIONS[generation], sizesDir = slot === "top" ? topSizesDir : bottomSizesDir;
+  const generation = parseGeneration(req.query.gen), { top, bottom, topSizesDir, bottomSizesDir } = GENERATIONS[generation], sizesDir = slot === "top" ? topSizesDir : bottomSizesDir;
   if (typeof body !== "string" || !/^[a-zA-Z0-9_-]+$/.test(body) || (slot !== "top" && slot !== "bottom")) return res.status(404).end();
   if (body !== "neutral" && (process.env.NODE_ENV !== "development" || !localRequest(req))) return res.status(404).end();
   try {

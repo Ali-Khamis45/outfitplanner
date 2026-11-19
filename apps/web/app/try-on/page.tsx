@@ -4,8 +4,8 @@ import { parseGeneration } from "../../lib/garment/generation";
 import "./try-on.css";
 
 export const metadata: Metadata = { title: "Try on | Virtual Wardrobe", description: "Explore your outfit in 3D." };
-export default async function TryOnPage({ searchParams }: { searchParams: Promise<{ gen?: string; pants?: string; fixtures?: string; "texture-fixture"?: string; outfit?: string; top?: string; bottom?: string; pose?: string }> }) {
+export default async function TryOnPage({ searchParams }: { searchParams: Promise<{ gen?: string; fixtures?: string; "texture-fixture"?: string; outfit?: string; top?: string; bottom?: string; pose?: string }> }) {
   const params = await searchParams;
   const fixtures = process.env.NODE_ENV === "development" && params.fixtures === "1";
-  return <TryOn generation={parseGeneration(params.gen, params.pants)} textureFixture={process.env.NODE_ENV === "development" && params["texture-fixture"] === "1"} fixtures={fixtures} outfitId={params.outfit ?? null} topId={params.top ?? null} bottomId={params.bottom ?? null} initialPose={params.pose ?? null} />;
+  return <TryOn generation={parseGeneration(params.gen)} textureFixture={process.env.NODE_ENV === "development" && params["texture-fixture"] === "1"} fixtures={fixtures} outfitId={params.outfit ?? null} topId={params.top ?? null} bottomId={params.bottom ?? null} initialPose={params.pose ?? null} />;
 }

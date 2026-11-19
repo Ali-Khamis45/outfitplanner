@@ -13,7 +13,7 @@ const missing = () => new Response(null, { status: 404, headers });
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const body = params.get("body"), slot = params.get("slot"), size = params.get("size"), asset = params.get("asset");
-  const generation = parseGeneration(params.get("gen"), params.get("pants")), { top, bottom, topSizesDir, bottomSizesDir } = GENERATIONS[generation], sizesDir = slot === "top" ? topSizesDir : bottomSizesDir;
+  const generation = parseGeneration(params.get("gen")), { top, bottom, topSizesDir, bottomSizesDir } = GENERATIONS[generation], sizesDir = slot === "top" ? topSizesDir : bottomSizesDir;
   const fixtures = params.get("fixtures") === "1";
   if (!body || !/^[a-zA-Z0-9_-]+$/.test(body) || (slot !== "top" && slot !== "bottom")) return missing();
   if (fixtures && (process.env.NODE_ENV !== "development" || body !== "neutral")) return missing();

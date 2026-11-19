@@ -78,7 +78,7 @@ The T-shirt **v5.2** (`tshirt-v5.2-mhr-neutral.glb`, Sprint 2.2A, version 2 side
 | 6 | `corr_L_add20` | `l_uparm` → `l_lowarm` | `signed_swing_deg`, left abduction axis | [0, −20] | `l_uparm` [0,0,1] −20, also clearing the arm at ±10° about X |
 | 7 | `corr_R_add20` | `r_uparm` → `r_lowarm` | `signed_swing_deg`, right abduction axis | [0, −20] | `r_uparm` [0,0,1] +20, also clearing the arm at ±10° about X |
 
-**Pants sizes (Sprint 3.6)** (`outputs/garments/sizes/pants-v3-<size>-<bodyId>.glb`, version 2 sidecar) and the v3 personal fits add a 60° hip key before each 90° one. The 90° target then holds only the correction beyond the 60° shape, as `abd120` does beyond `abd90`. The ramps meet at 60°, so the garment takes exactly its solved shape at 60° and at 90°. With the single 90° key, `l-hip-60` showed 56 % of the 90° shape, and the groin crease of the L and XL sizes folded.
+**Pants sizes (Sprint 3.6)** (`outputs/garments/sizes/pants-v3.1-<size>-<bodyId>.glb`, the default since 2026-11-19; pants-v3 sizes before) and the v3 / v3.1 personal fits, version 2 sidecars, add a 60° hip key before each 90° one. The 90° target then holds only the correction beyond the 60° shape, as `abd120` does beyond `abd90`. The ramps meet at 60°, so the garment takes exactly its solved shape at 60° and at 90°. With the single 90° key, `l-hip-60` showed 56 % of the 90° shape, and the groin crease of the L and XL sizes folded.
 
 | Index | Target | `joint` → `child` | `ramp` | Solved at |
 | --- | --- | --- | --- | --- |

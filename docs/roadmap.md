@@ -10,6 +10,6 @@ Ordered, near-term only. Each sprint's report (`docs/sprint-*/`) holds what was 
 
 ## Open decisions
 
-- **Pants v3.1** (no knee step, branch `pants-v3.1-knee`): a candidate until the heatmap band is checked in the browser; not promoted.
+- **Pants v3.1** (no knee step): the default bottom since 2026-11-19, after the browser check of the heatmap band and the Sprint 3.6 gates (`docs/sprint-3/pants-v3.1-report.md`).
 - **`?gen=v5.2`** (tshirt-v5.2 / pants-v2): a development-only comparison set, labelled "legacy, ungated", until Sprint 3.7 removes it.
 - **`sprint-6e-stylist-pipeline`** (Codex) is merged after its follow-up.

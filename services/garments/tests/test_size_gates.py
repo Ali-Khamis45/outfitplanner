@@ -67,7 +67,7 @@ class ShippedGarmentGateTests(unittest.TestCase):
 
     def test_only_the_gated_default_generation_is_in_the_shipped_folder(self) -> None:
         for glb in sorted(SIZES_DIR.glob("*.glb")):
-            self.assertTrue(glb.name.startswith(("tshirt-v5.3-", "pants-v3-")), f"{glb.name}: not the gated default generation")
+            self.assertTrue(glb.name.startswith(("tshirt-v5.3-", "pants-v3.1-")), f"{glb.name}: not the gated default generation")
 
     @classmethod
     def setUpClass(cls) -> None:

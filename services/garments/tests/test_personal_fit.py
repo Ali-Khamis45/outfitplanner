@@ -104,7 +104,7 @@ class PersonalManifestTests(unittest.TestCase):
                 self.assertTrue(glb.endswith(".glb") and sidecar.endswith(".correctives.json"), glb)
                 if glb.startswith("outputs/garments/sizes/"):  # a body without a base fit wears its own size files
                     self.assertTrue(glb.endswith(f"-{entry['id']}.glb"), glb)
-                    self.assertTrue(glb.split("/")[-1].startswith("tshirt-v5.3-" if part == "top" else "pants-v3-"), glb)  # the default generation
+                    self.assertTrue(glb.split("/")[-1].startswith("tshirt-v5.3-" if part == "top" else "pants-v3.1-"), glb)  # the default generation
                     self.assertEqual(sidecar, glb[: -len(".glb")] + ".correctives.json")
                 else:
                     self.assertTrue(glb.startswith("outputs/garments/personal/") and sidecar.startswith("outputs/garments/personal/"), glb)

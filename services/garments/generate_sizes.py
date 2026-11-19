@@ -42,7 +42,7 @@ SIZES_DIR = PROJECT / "outputs" / "garments" / "sizes"
 MANIFEST = PROJECT / "outputs" / "garments" / "personal" / "manifest.json"
 MEASUREMENTS = AVATAR_DIR / "measurements.json"
 RECONSTRUCTION = PROJECT / "outputs" / "sam3d-person-front-sprint03-run2" / "reconstruction.npz"
-GARMENT_TAGS = {"tshirt": "tshirt-v5.3", "pants": "pants-v3"}
+GARMENT_TAGS = {"tshirt": "tshirt-v5.3", "pants": "pants-v3.1"}
 # --revision: 3.5 = tshirt-v5.3 / pants-v3 (pattern panels, UV layout v3, smooth push falloff), the default generation;
 # 3a = tshirt-v5.2 / pants-v2 (UV layout v2, linear push), the previous default, reachable for one sprint.
 # "clean_all": Sprint 3.6 runs the degenerate clean-up (personal_fit.collapse_degenerate) on every body, not only on
@@ -52,9 +52,10 @@ GARMENT_TAGS = {"tshirt": "tshirt-v5.3", "pants": "pants-v3"}
 # Sprint 3.6 adds a 60 deg key. "shoulder_search_all": every body searches the shoulder corrective settings against its
 # own gates (shoulder_morphs). 3a keeps its Sprint 3A behaviour, so the v5.2 / pants-v2 sizes still regenerate byte for byte.
 REVISIONS = {"3a": {"tshirt": "v5.2", "pants": "v2", "dir": SIZES_DIR.parent / "sizes-v5.2", "clean_all": False, "hip_keys_deg": (90.0,), "shoulder_search_all": False},
-             "3.5": {"tshirt": "v5.3", "pants": "v3", "dir": SIZES_DIR, "clean_all": True, "hip_keys_deg": (60.0, 90.0), "shoulder_search_all": True},
-             # candidate: pants v3.1 (no knee step) under the v5.3 shirts, on the Sprint 3.6 pipeline; generate with --garments pants
-             "3.5-knee": {"tshirt": "v5.3", "pants": "v3.1", "dir": SIZES_DIR.parent / "sizes-pants-v3.1", "clean_all": True, "hip_keys_deg": (60.0, 90.0), "shoulder_search_all": True}}
+             # 3.5: the v5.3 / pants-v3 sizes of Sprint 3.6, the default until pants-v3.1 replaced pants-v3 (2026-11-19); archived
+             "3.5": {"tshirt": "v5.3", "pants": "v3", "dir": SIZES_DIR.parent / "sizes-3.6-v3", "clean_all": True, "hip_keys_deg": (60.0, 90.0), "shoulder_search_all": True},
+             # 3.6: the default, tshirt-v5.3 / pants-v3.1 (pants v3 without the knee step)
+             "3.6": {"tshirt": "v5.3", "pants": "v3.1", "dir": SIZES_DIR, "clean_all": True, "hip_keys_deg": (60.0, 90.0), "shoulder_search_all": True}}
 CRASH_LOG = PROJECT / "outputs" / "garment-tests" / "sizes-crash.log"  # faulthandler + per-stage peak memory
 ENTRIES_DIR = PROJECT / "outputs" / "garment-tests" / "sizes"  # per-size report entries (resume)
 
@@ -388,7 +389,7 @@ def main() -> int:
     parser.add_argument("--out-dir", type=Path, default=None, help="default: the revision's sizes folder")
     parser.add_argument("--entries-dir", type=Path, default=ENTRIES_DIR, help="per-size report entries, written as each size finishes (resume)")
     parser.add_argument("--report", type=Path, default=None, help="default: outputs/garment-tests/sizes-sprint-<revision>.json")
-    parser.add_argument("--revision", choices=sorted(REVISIONS), default="3.5", help="3.5: tshirt-v5.3 / pants-v3 (default); 3a: tshirt-v5.2 / pants-v2; 3.5-knee: candidate pants-v3.1")
+    parser.add_argument("--revision", choices=sorted(REVISIONS), default="3.6", help="3.6: tshirt-v5.3 / pants-v3.1 (default); 3.5: tshirt-v5.3 / pants-v3 (archived); 3a: tshirt-v5.2 / pants-v2 (legacy)")
     args = parser.parse_args()
     args.out_dir = args.out_dir or REVISIONS[args.revision]["dir"]
     withheld_dir = args.out_dir.with_name(args.out_dir.name + "-withheld")  # Sprint 3.6: sizes that fail their gates

@@ -31,7 +31,7 @@ PERSONAL_DIR = PROJECT / "outputs" / "garments" / "personal"
 SIZES_DIR = PROJECT / "outputs" / "garments" / "sizes"
 AVATARS = PROJECT / "outputs" / "avatars"
 MEASUREMENTS = AVATARS / "measurements.json"
-SHIRT_REVISION, PANTS_REVISION = "v5.3", "v3"
+SHIRT_REVISION, PANTS_REVISION = "v5.3", "v3.1"
 SCALED, IDENTITY = "rest-identity-scale-floor", "rest-identity"
 
 

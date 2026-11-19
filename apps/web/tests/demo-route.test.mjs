@@ -12,7 +12,7 @@ const sidecarPresent = existsSync(new URL("../../../outputs/garments/experiments
 const v5 = await GET(request("v5", "&sidecar=1"));
 assert.equal(v5.status, sidecarPresent ? 200 : 404);
 if (sidecarPresent) assert.equal((await v5.json()).version, 1);
-for (const [variant, path] of [["v5.1", "garments/experiments/tshirt-v5.1-mhr-neutral.glb"], ["v5.2", "garments/experiments/tshirt-v5.2-mhr-neutral.glb"], ["pants-v2", "garments/pants-basic-v2-mhr-neutral.glb"], ["v5.3", "garments/experiments/tshirt-v5.3-mhr-neutral.glb"], ["pants-v3", "garments/pants-basic-v3-mhr-neutral.glb"]]) {
+for (const [variant, path] of [["v5.1", "garments/experiments/tshirt-v5.1-mhr-neutral.glb"], ["v5.2", "garments/experiments/tshirt-v5.2-mhr-neutral.glb"], ["pants-v2", "garments/pants-basic-v2-mhr-neutral.glb"], ["v5.3", "garments/experiments/tshirt-v5.3-mhr-neutral.glb"], ["pants-v3", "garments/pants-basic-v3-mhr-neutral.glb"], ["pants-v3.1", "garments/pants-basic-v3.1-mhr-neutral.glb"]]) {
   const exists = existsSync(new URL(`../../../outputs/${path}`, import.meta.url));
   assert.equal((await HEAD(request(variant))).status, exists ? 200 : 404);
   const sidecar = await GET(request(variant, "&sidecar=1"));

@@ -12,7 +12,7 @@ outputs/garments/sizes/<garment>-<size>-<bodyId>.correctives.json   (corrective-
 outputs/garments/sizes/<garment>-<size>-<bodyId>.fit.json           (§3)
 ```
 
-- `<garment>`: `tshirt-v5.3` or `pants-v3`, the default generation since Sprint 3.5 was accepted (pattern panels, UV layout v3; the GLBs also carry the `_PANEL` attribute, garment-texture.md). The previous generation, `tshirt-v5.2` / `pants-v2`, is a **development-only comparison set, labelled "legacy, ungated"**, in `outputs/garments/sizes-v5.2/` (same file names and schema). Its sizes were never gated (12 of 16 fail the Sprint 3.6 gates). The web app serves it only in development with `?gen=v5.2` and shows the label in the lab selector and on the try-on page; elsewhere `?gen=v5.2` gets the default (`apps/web/lib/garment/generation.ts`). It is removed in Sprint 3.7. `generate_sizes.py --revision 3a` writes there, `--revision 3.5` (default) to `outputs/garments/sizes/`.
+- `<garment>`: `tshirt-v5.3` or `pants-v3.1`, the default generation (Sprint 3.5 accepted tshirt-v5.3 / pants-v3; pants-v3.1, the same pants without the knee step, replaced pants-v3 on 2026-11-19) (pattern panels, UV layout v3; the GLBs also carry the `_PANEL` attribute, garment-texture.md). The previous generation, `tshirt-v5.2` / `pants-v2`, is a **development-only comparison set, labelled "legacy, ungated"**, in `outputs/garments/sizes-v5.2/` (same file names and schema). Its sizes were never gated (12 of 16 fail the Sprint 3.6 gates). The web app serves it only in development with `?gen=v5.2` and shows the label in the lab selector and on the try-on page; elsewhere `?gen=v5.2` gets the default (`apps/web/lib/garment/generation.ts`). It is removed in Sprint 3.7. `generate_sizes.py --revision 3a` writes there, `--revision 3.5` (default) to `outputs/garments/sizes/`.
 - `<size>`: `S`, `M`, `L` or `XL`.
 - `<bodyId>`: `neutral` (`outputs/avatars/mhr-neutral.glb`), or a personal manifest id such as `personal-scaled`, whose body GLB is listed in `outputs/garments/personal/manifest.json`.
 
@@ -27,7 +27,7 @@ Every GLB is bound to its body's MHR skeleton, as all garments are. Personal siz
 - **A size that fails is withheld.** Its `.glb`, `.correctives.json` and `.fit.json` move to `outputs/garments/sizes-withheld/`, with a note `<garment>-<size>-<bodyId>.withheld.json`:
 
   ```json
-  {"version": 1, "size": "pants-v3-XL-neutral", "reason": "failed its deformation gates", "failed_gates": "l-hip-60:flips; walk:flips", "gates": "pants-v3-XL-neutral.gates.json"}
+  {"version": 1, "size": "pants-v3.1-XL-neutral", "reason": "failed its deformation gates", "failed_gates": "l-hip-60:flips; walk:flips", "gates": "pants-v3.1-XL-neutral.gates.json"}
   ```
 
 - **The recommendation** (§6) is still computed over all four sizes. The recommended size must pass its gates; if it fails, the run stops instead of withholding it.

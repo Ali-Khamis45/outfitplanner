@@ -39,7 +39,7 @@ VERSIONS: dict[str, dict[str, Any]] = {
 }
 # Sprint 3.5 (the default since its acceptance): pants v2 cut into pattern panels, one UV island per panel (layout v3)
 VERSIONS["v3"] = {**VERSIONS["v2"], "rules": PANTS_V3_RULES, "strategy": VERSIONS["v2"]["strategy"] + "; Sprint 3.5: left/right front/back panels and gusset cut by centre, outer-leg and inner-leg seams, UV layout v3"}
-# Candidate (not the default): pants v3 with the thigh offset blended into the straight tube over 10 cm at the knee
+# The default bottom since 2026-11-19 (pants-v3.1): pants v3 with the thigh offset blended into the straight tube over 10 cm at the knee
 VERSIONS["v3.1"] = {**VERSIONS["v3"], "rules": PANTS_V3_1_RULES, "strategy": VERSIONS["v3"]["strategy"] + "; v3.1: thigh offset morphs into the straight tube over 10 cm above the knee (no cut planes, no knee step)"}
 
 
