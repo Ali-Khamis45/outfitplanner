@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fitting room</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#49392D}a:hover{color:#211C18}
+</style>
+</helmet>
+<div style="font-family: Manrope, system-ui, sans-serif; background: #F7F4EF; color: #211C18; min-height: 100vh; display: flex; flex-direction: column">
+
+<header style="border-bottom: 1px solid #E5DDD3; padding: 14px 28px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px">
+<a href="Home.dc.html" style="font-family: 'Instrument Serif', serif; font-size: 26px; color: #211C18; text-decoration: none">Virtual Wardrobe</a>
+<nav aria-label="Main" style="display: flex; flex-wrap: wrap; gap: 4px; font-size: 14px; font-weight: 500">
+<a href="Home.dc.html" style="color: #211C18; text-decoration: none; padding: 9px 14px; border-radius: 999px">Home</a>
+<a href="Closet.dc.html" style="color: #211C18; text-decoration: none; padding: 9px 14px; border-radius: 999px">Wardrobe</a>
+<a href="FittingRoom.dc.html" aria-current="page" style="background: #211C18; color: #F7F4EF; text-decoration: none; padding: 9px 14px; border-radius: 999px">Fitting room</a>
+<a href="Outfits.dc.html" style="color: #211C18; text-decoration: none; padding: 9px 14px; border-radius: 999px">Outfits</a>
+<a href="StylistChat.dc.html" style="color: #211C18; text-decoration: none; padding: 9px 14px; border-radius: 999px">Stylist</a>
+<a href="Planner.dc.html" style="color: #211C18; text-decoration: none; padding: 9px 14px; border-radius: 999px">Planner</a>
+</nav>
+</header>
+
+<div style="flex: 1; display: flex; flex-wrap: wrap; gap: 16px; padding: 16px; box-sizing: border-box">
+
+<aside aria-label="Choose garments" style="flex: 1 1 250px; max-width: 300px; min-width: 0; background: #FFFFFF; border: 1px solid #E5DDD3; border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 16px; box-sizing: border-box">
+<h2 style="margin: 0; font-family: 'Instrument Serif', serif; font-weight: 400; font-size: 30px; line-height: 1">Wearing</h2>
+<div role="tablist" aria-label="Category" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; background: #EEE8DF; border-radius: 999px; padding: 4px">
+<button type="button" role="tab" aria-selected="true" style="border: 0; background: #FFFFFF; border-radius: 999px; font: inherit; font-size: 13px; font-weight: 700; padding: 9px; min-height: 40px; color: #211C18; cursor: pointer">Tops</button>
+<button type="button" role="tab" aria-selected="false" style="border: 0; background: transparent; border-radius: 999px; font: inherit; font-size: 13px; font-weight: 500; padding: 9px; min-height: 40px; color: #49392D; cursor: pointer">Bottoms</button>
+</div>
+<ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px">
+<li><button type="button" aria-pressed="true" style="width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 16px; border: 1.5px solid #211C18; background: #F7F4EF; font: inherit; text-align: left; cursor: pointer"><span style="width: 48px; height: 48px; border-radius: 12px; background: #EEE8DF; display: flex; align-items: center; justify-content: center"><svg width="30" height="27" viewBox="0 0 36 32" aria-hidden="true"><path d="M10 2 Q18 0 26 2 L35 9 L30 14 L27 11 L27 30 L9 30 L9 11 L6 14 L1 9 Z" fill="#4E7A9A"></path></svg></span><span style="display: flex; flex-direction: column"><span style="font-weight: 700; font-size: 14px; color: #211C18">Everyday tee</span><span style="font-size: 12px; color: #756B62">On you now</span></span></button></li>
+<li><button type="button" aria-pressed="false" style="width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 16px; border: 1px solid #E5DDD3; background: #FFFFFF; font: inherit; text-align: left; cursor: pointer"><span style="width: 48px; height: 48px; border-radius: 12px; background: #EEE8DF; display: flex; align-items: center; justify-content: center"><svg width="30" height="27" viewBox="0 0 36 32" aria-hidden="true"><path d="M10 2 Q18 0 26 2 L35 9 L30 14 L27 11 L27 30 L9 30 L9 11 L6 14 L1 9 Z" fill="#E7E2D6"></path></svg></span><span style="display: flex; flex-direction: column"><span style="font-weight: 700; font-size: 14px; color: #211C18">Chalk cotton tee</span><span style="font-size: 12px; color: #756B62">Example</span></span></button></li>
+<li><button type="button" aria-pressed="false" style="width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 16px; border: 1px solid #E5DDD3; background: #FFFFFF; font: inherit; text-align: left; cursor: pointer"><span style="width: 48px; height: 48px; border-radius: 12px; background: #EEE8DF; display: flex; align-items: center; justify-content: center"><svg width="30" height="27" viewBox="0 0 36 32" aria-hidden="true"><path d="M10 2 Q18 0 26 2 L35 9 L30 14 L27 11 L27 30 L9 30 L9 11 L6 14 L1 9 Z" fill="#C3AE92"></path></svg></span><span style="display: flex; flex-direction: column"><span style="font-weight: 700; font-size: 14px; color: #211C18">Sand cotton tee</span><span style="font-size: 12px; color: #756B62">Example</span></span></button></li>
+</ul>
+<div style="margin-top: auto; border-top: 1px solid #E5DDD3; padding-top: 14px; display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #756B62">Layers</span>
+<div style="display: flex; justify-content: space-between; font-size: 13px"><span>Top</span><span style="color: #756B62">Everyday tee</span></div>
+<div style="display: flex; justify-content: space-between; font-size: 13px"><span>Bottom</span><span style="color: #756B62">Ink everyday pants</span></div>
+</div>
+</aside>
+
+<section aria-label="3D fitting stage" style="flex: 999 1 520px; min-width: 0; background: #24201C; color: #F7F4EF; border-radius: 28px; position: relative; display: flex; flex-direction: column; min-height: 760px; overflow: hidden">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding: 20px 24px">
+<div role="group" aria-label="Avatar" style="display: flex; gap: 4px; background: rgba(247,244,239,0.08); border-radius: 999px; padding: 4px">
+<button type="button" aria-pressed="false" style="border: 0; background: transparent; color: #CFC5BA; font: inherit; font-size: 13px; padding: 9px 14px; border-radius: 999px; min-height: 40px; cursor: pointer">Demo body</button>
+<button type="button" aria-pressed="true" style="border: 0; background: #F7F4EF; color: #211C18; font: inherit; font-size: 13px; font-weight: 700; padding: 9px 14px; border-radius: 999px; min-height: 40px; cursor: pointer">My avatar</button>
+</div>
+<label style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #E7D9C9; cursor: pointer">
+<input type="checkbox" checked="{{heat}}" onChange="{{toggleHeat}}" style="width: 18px; height: 18px; accent-color: #E7D9C9">
+Fit map
+</label>
+</div>
+
+<div style="flex: 1; display: flex; align-items: center; justify-content: center; position: relative">
+<span aria-hidden="true" style="position: absolute; bottom: 70px; width: 360px; height: 40px; border-radius: 50%; background: rgba(0,0,0,0.35)"></span>
+<svg width="280" height="600" viewBox="0 0 200 480" role="img" aria-label="Your avatar wearing the selected tee and pants" style="position: relative">
+<defs>
+<linearGradient id="frS" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#D9733A"></stop><stop offset="0.6" stop-color="#E39A5E"></stop><stop offset="1" stop-color="#D9733A"></stop></linearGradient>
+<linearGradient id="frM" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6E9A5B"></stop><stop offset="0.3" stop-color="#E39A5E"></stop><stop offset="0.7" stop-color="#6E9A5B"></stop><stop offset="1" stop-color="#E39A5E"></stop></linearGradient>
+<linearGradient id="frL" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6E9A5B"></stop><stop offset="0.5" stop-color="#6E9A5B"></stop><stop offset="1" stop-color="#6B97C2"></stop></linearGradient>
+<linearGradient id="frXL" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6B97C2"></stop><stop offset="1" stop-color="#3D72B8"></stop></linearGradient>
+</defs>
+<circle cx="100" cy="40" r="24" fill="#E6D3C2"></circle>
+<rect x="90" y="60" width="20" height="18" fill="#E6D3C2"></rect>
+<path d="M36 126 L28 236 L40 238 L50 138 Z" fill="#E6D3C2"></path>
+<path d="M164 126 L172 236 L160 238 L150 138 Z" fill="#E6D3C2"></path>
+<path d="M54 226 L146 226 L150 440 L108 440 L100 292 L92 440 L50 440 Z" fill="#2E3238"></path>
+<path d="M58 76 Q100 64 142 76 L170 118 L156 138 L146 124 L148 236 Q100 246 52 236 L54 124 L44 138 L30 118 Z" fill="{{shirtFill}}"></path>
+<ellipse cx="70" cy="446" rx="22" ry="7" fill="#E6D3C2"></ellipse>
+<ellipse cx="130" cy="446" rx="22" ry="7" fill="#E6D3C2"></ellipse>
+</svg>
+<sc-if value="{{heat}}" hint-placeholder-val="{{ true }}">
+<div style="position: absolute; right: 24px; top: 16px; display: flex; flex-direction: column; gap: 8px; font-size: 12px; color: #E7D9C9">
+<span style="display: flex; align-items: center; gap: 8px"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 99px; background: #D9733A"></span>Tight</span>
+<span style="display: flex; align-items: center; gap: 8px"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 99px; background: #6E9A5B"></span>Good</span>
+<span style="display: flex; align-items: center; gap: 8px"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 99px; background: #3D72B8"></span>Loose</span>
+</div>
+</sc-if>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding: 18px 24px 22px">
+<div role="group" aria-label="Pose" style="display: flex; gap: 6px">
+<sc-for list="{{poses}}" as="p" hint-placeholder-count="3">
+<button type="button" aria-pressed="{{p.pressed}}" onClick="{{p.pick}}" style="{{p.style}}">{{p.label}}</button>
+</sc-for>
+</div>
+<div role="group" aria-label="Camera" style="display: flex; gap: 2px; background: rgba(247,244,239,0.08); border-radius: 999px; padding: 4px">
+<button type="button" style="border: 0; background: transparent; color: #F7F4EF; font: inherit; font-size: 13px; padding: 9px 13px; border-radius: 999px; min-height: 40px; cursor: pointer">Front</button>
+<button type="button" style="border: 0; background: transparent; color: #F7F4EF; font: inherit; font-size: 13px; padding: 9px 13px; border-radius: 999px; min-height: 40px; cursor: pointer">Side</button>
+<button type="button" style="border: 0; background: transparent; color: #F7F4EF; font: inherit; font-size: 13px; padding: 9px 13px; border-radius: 999px; min-height: 40px; cursor: pointer">Back</button>
+<button type="button" style="border: 0; background: transparent; color: #F7F4EF; font: inherit; font-size: 13px; padding: 9px 13px; border-radius: 999px; min-height: 40px; cursor: pointer">360°</button>
+</div>
+</div>
+</section>
+
+<aside aria-label="Fit and customisation" style="flex: 1 1 340px; max-width: 400px; min-width: 0; display: flex; flex-direction: column; gap: 14px">
+<section style="background: #FFFFFF; border: 1px solid #E5DDD3; border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; justify-content: space-between; align-items: baseline">
+<h2 style="margin: 0; font-family: 'Instrument Serif', serif; font-weight: 400; font-size: 30px; line-height: 1">Everyday tee</h2>
+<span style="font-size: 12px; color: #756B62">Cotton</span>
+</div>
+<div role="group" aria-label="Size" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+<sc-for list="{{sizes}}" as="s" hint-placeholder-count="4">
+<button type="button" aria-pressed="{{s.pressed}}" aria-label="{{s.aria}}" onClick="{{s.pick}}" style="{{s.style}}">
+<span style="font-size: 15px; font-weight: 700">{{s.id}}</span>
+<sc-if value="{{s.best}}" hint-placeholder-val="{{ false }}"><span style="font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase">Best fit</span></sc-if>
+</button>
+</sc-for>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #756B62">Colour · {{colourName}}</span>
+<div role="group" aria-label="Colour" style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+<sc-for list="{{colours}}" as="c" hint-placeholder-count="6">
+<button type="button" aria-pressed="{{c.pressed}}" aria-label="{{c.name}}" onClick="{{c.pick}}" style="{{c.style}}"></button>
+</sc-for>
+<button type="button" style="border: 1px solid #E5DDD3; background: #F7F4EF; color: #49392D; font: inherit; font-size: 12px; font-weight: 600; padding: 8px 12px; border-radius: 999px; min-height: 36px; cursor: pointer">Original</button>
+</div>
+</div>
+</section>
+
+<section style="background: #FFFFFF; border: 1px solid #E5DDD3; border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 8px">
+<h3 style="margin: 0; font-size: 15px; font-weight: 700">Fit analysis · {{size}}</h3>
+<span style="font-size: 11px; color: #756B62">Estimate, from body scan</span>
+</div>
+<sc-if value="{{tooSmall}}" hint-placeholder-val="{{ false }}">
+<p style="margin: 0; background: #FBE7DA; color: #7A3A12; border-radius: 12px; padding: 10px 12px; font-size: 13px; font-weight: 600">Too small for this body. Shown at the closest wearable fit.</p>
+</sc-if>
+<ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px">
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="5">
+<li style="display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; justify-content: space-between; font-size: 13px"><span style="font-weight: 600">{{r.label}}</span><span style="{{r.badge}}">{{r.status}} · {{r.value}}</span></div>
+<span aria-hidden="true" style="height: 6px; border-radius: 99px; background: #EEE8DF; position: relative; overflow: hidden"><span style="{{r.bar}}"></span></span>
+</li>
+</sc-for>
+</ul>
+<a href="#measure" style="font-size: 13px; font-weight: 600">Make it exact: add 5 measurements</a>
+</section>
+
+<div style="display: flex; gap: 10px; margin-top: auto">
+<a href="Outfits.dc.html" style="flex: 1; background: #49392D; color: #F7F4EF; text-decoration: none; text-align: center; padding: 14px; border-radius: 999px; font-weight: 700; font-size: 14px; min-height: 48px; box-sizing: border-box">Save as outfit</a>
+<a href="StylistChat.dc.html" style="flex: 1; border: 1px solid #49392D; color: #49392D; text-decoration: none; text-align: center; padding: 14px; border-radius: 999px; font-weight: 700; font-size: 14px; min-height: 48px; box-sizing: border-box">Ask stylist</a>
+</div>
+</aside>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+constructor(props) {
+super(props);
+this.state = { size: 'L', heat: true, colour: 'Ocean', pose: 'Stand' };
+}
+renderVals() {
+const fit = {
+S: [['Chest', '-7.6 cm', 'tight', 8], ['Shoulders', '-1.2 cm', 'tight', 18], ['Waist', '8.4 cm', 'good', 52], ['Hips', '-8.4 cm', 'tight', 8], ['Length', '2.5 cm short', 'good', 46]],
+M: [['Chest', '2.4 cm', 'tight', 26], ['Shoulders', '1.9 cm', 'good', 50], ['Waist', '18.4 cm', 'good', 60], ['Hips', '1.6 cm', 'tight', 24], ['Length', '[fit.json]', 'good', 50]],
+L: [['Chest', '12.4 cm', 'good', 56], ['Shoulders', '3.8 cm', 'good', 54], ['Waist', '28.4 cm', 'good', 66], ['Hips', '11.6 cm', 'good', 56], ['Length', '2.5 cm long', 'good', 58]],
+XL: [['Chest', '[fit.json]', 'loose', 90], ['Shoulders', '[fit.json]', 'loose', 86], ['Waist', '[fit.json]', 'loose', 92], ['Hips', '[fit.json]', 'loose', 90], ['Length', '[fit.json]', 'loose', 84]]
+};
+const tone = {
+tight: { c: '#D9733A', bg: '#FBE7DA', fg: '#7A3A12', t: 'Tight' },
+good: { c: '#6E9A5B', bg: '#E6EFDF', fg: '#2F5A26', t: 'Good' },
+loose: { c: '#3D72B8', bg: '#DFE9F5', fg: '#1F4677', t: 'Loose' }
+};
+const palette = [['Ocean', '#4E7A9A'], ['Ink', '#2E3238'], ['Chalk', '#E7E2D6'], ['Sand', '#C3AE92'], ['Moss', '#777F69'], ['Clay', '#A8644A']];
+const size = this.state.size;
+const sizes = ['S', 'M', 'L', 'XL'].map((id) => {
+const on = id === size;
+return {
+id,
+best: id === 'L',
+aria: id === 'L' ? id + ', best fit' : id,
+pressed: on ? 'true' : 'false',
+pick: () => this.setState({ size: id }),
+style: 'display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 58px; border-radius: 16px; font: inherit; cursor: pointer; ' + (on ? 'background: #211C18; color: #F7F4EF; border: 1px solid #211C18;' : 'background: #F7F4EF; color: #211C18; border: 1px solid #E5DDD3;')
+};
+});
+const colours = palette.map(([name, hex]) => ({
+name,
+pressed: name === this.state.colour ? 'true' : 'false',
+pick: () => this.setState({ colour: name, heat: false }),
+style: 'width: 36px; height: 36px; border-radius: 99px; cursor: pointer; background: ' + hex + '; border: ' + (name === this.state.colour ? '2px solid #211C18; box-shadow: inset 0 0 0 3px #FFFFFF' : '1px solid #E5DDD3')
+}));
+const rows = fit[size].map(([label, value, s, pct]) => ({
+label,
+value,
+status: tone[s].t,
+badge: 'font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 99px; background: ' + tone[s].bg + '; color: ' + tone[s].fg,
+bar: 'position: absolute; left: 0; top: 0; bottom: 0; border-radius: 99px; width: ' + pct + '%; background: ' + tone[s].c
+}));
+const poses = ['Stand', 'Walk', 'Arms out'].map((label) => {
+const on = label === this.state.pose;
+return {
+label,
+pressed: on ? 'true' : 'false',
+pick: () => this.setState({ pose: label }),
+style: 'font: inherit; font-size: 13px; padding: 9px 16px; border-radius: 999px; min-height: 42px; cursor: pointer; ' + (on ? 'background: #F7F4EF; color: #211C18; border: 1px solid #F7F4EF; font-weight: 700' : 'background: transparent; color: #F7F4EF; border: 1px solid rgba(247,244,239,0.25)')
+};
+});
+const hex = palette.find(([n]) => n === this.state.colour)[1];
+return {
+heat: this.state.heat,
+toggleHeat: () => this.setState({ heat: !this.state.heat }),
+shirtFill: this.state.heat ? 'url(#fr' + size + ')' : hex,
+size,
+sizes,
+colours,
+colourName: this.state.heat ? 'fit map on' : this.state.colour,
+rows,
+poses,
+tooSmall: size === 'S'
+};
+}
+}
+</script>
+</body>
+</html>

@@ -17,3 +17,8 @@
 .stylist-compose { display:flex; gap:20px; align-items:end; border-top:1px solid var(--line); padding-top:25px; }.stylist-compose label { flex:1; }.stylist-compose textarea { min-height:90px; resize:vertical; }.stylist-privacy { font-size:12px; line-height:1.6; color:#737d70; margin-top:20px; }
 @media(max-width:1100px) { .planner-week { grid-template-columns:repeat(4,minmax(0,1fr)); }.planner-day { border-bottom:1px solid var(--line); } }
 @media(max-width:650px) { .planner-week { grid-template-columns:repeat(2,minmax(0,1fr)); }.planner-week-nav { gap:12px; }.planner-week-nav h2 { font-size:20px; }.planner-editor { padding:20px; }.stylist-compose { align-items:stretch; flex-direction:column; }.stylist-compose button { align-self:start; } }
+.stylist-question { background: var(--secondary); border: 1px solid var(--border); border-radius: 18px 18px 4px 18px; padding: 16px 20px; max-width: 80%; margin: 0 0 18px auto; }
+.stylist-pending { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-secondary); padding: 16px 0; }
+.stylist-pending span { letter-spacing: .2em; color: var(--olive); }
+.stylist-failed { color: var(--fit-tight); font-size: 13px; }
+@media(max-width:650px) { .stylist-question { max-width: 100%; } }

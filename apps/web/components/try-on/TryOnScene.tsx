@@ -39,7 +39,7 @@ function StageResize({ stageRef }: { stageRef: RefObject<HTMLElement | null> }) 
   return null;
 }
 
-function TryOnCamera({ model, command, turntable, pose }: { model: ModelInfo | null; command: { view: CameraView; id: number }; turntable: boolean; pose: PoseName }) {
+function TryOnCamera({ model, command, turntable, pose, preview }: { model: ModelInfo | null; command: { view: CameraView; id: number }; turntable: boolean; pose: PoseName; preview: boolean }) {
   const controls = useRef<OrbitControlsImpl>(null);
   const { camera, size } = useThree();
   useEffect(() => {
@@ -47,12 +47,13 @@ function TryOnCamera({ model, command, turntable, pose }: { model: ModelInfo | n
     const center = new Vector3(...model.center), height = Math.max(model.size[1], 0.01);
     // Stacked screens use the taller framing; desktop reserves room for the caption.
     const stacked = window.matchMedia("(max-width: 800px), (max-height: 500px)").matches;
-    const { distance, targetYOffset } = tryOnFraming(height, model.size[0], size.width, size.height, camera instanceof PerspectiveCamera ? camera.fov : 40, pose === "both-90", stacked);
-    center.y += targetYOffset;
+    const framing = tryOnFraming(height, model.size[0], size.width, size.height, camera instanceof PerspectiveCamera ? camera.fov : 40, pose === "both-90", stacked);
+    const distance = preview ? Math.max(height / (2 * Math.tan(40 * Math.PI / 360) * 0.84), model.size[0] / (2 * Math.tan(40 * Math.PI / 360) * 0.85 * size.width / size.height)) : framing.distance;
+    center.y += preview ? 0 : framing.targetYOffset;
     const directions: Record<CameraView, [number, number, number]> = { front: [0, 0, 1], back: [0, 0, -1], left: [-1, 0, 0], right: [1, 0, 0], reset: [0, 0, 1] };
     camera.position.copy(center).addScaledVector(new Vector3(...directions[command.view]), distance);
     controls.current.target.copy(center); controls.current.minDistance = height * 0.6; controls.current.maxDistance = height * 6; controls.current.update();
-  }, [camera, command, model, pose, size.width, size.height]);
+  }, [camera, command, model, pose, preview, size.width, size.height]);
   return <OrbitControls ref={controls} makeDefault enableDamping dampingFactor={0.12} autoRotate={turntable} autoRotateSpeed={4} />;
 }
 
@@ -97,7 +98,8 @@ function FpsLogger() {
   return null;
 }
 
-export function TryOnScene({ stageRef, avatarUrl, pose, top, bottom, heatmap, view, turntable, onAvatarReady, onTopReady, onBottomReady, onTopError, onBottomError }: {
+export function TryOnScene({ preview = false, stageRef, avatarUrl, pose, top, bottom, heatmap, view, turntable, onAvatarReady, onTopReady, onBottomReady, onTopError, onBottomError }: {
+  preview?: boolean;
   stageRef: RefObject<HTMLElement | null>;
   avatarUrl: string; pose: PoseName; top: OutfitItem | null; bottom: OutfitItem | null; heatmap: boolean;
   view: { view: CameraView; id: number }; turntable: boolean; onAvatarReady: () => void;
@@ -108,16 +110,16 @@ export function TryOnScene({ stageRef, avatarUrl, pose, top, bottom, heatmap, vi
   const [model, setModel] = useState<ModelInfo | null>(null);
   const onReady = useCallback((info: ModelInfo) => { setModel(info); onAvatarReady(); }, [onAvatarReady]);
   return <Canvas shadows dpr={[1, 1.5]} camera={{ position: [0, 1, 3], fov: 40 }} gl={{ antialias: true }} fallback={<div className="try-stage-message">3D viewing is unavailable in this browser.</div>}>
-    <color attach="background" args={["#202321"]} />
+    <color attach="background" args={["#24201c"]} />
     <ambientLight intensity={0.8} /><hemisphereLight args={["#f8eee3", "#313a33", 1.1]} />
     <directionalLight position={[3, 5, 4]} intensity={2.6} castShadow shadow-mapSize={[2048, 2048]} shadow-camera-left={-2} shadow-camera-right={2} shadow-camera-top={2} shadow-camera-bottom={-2} shadow-normalBias={0.02} />
     <directionalLight position={[-3, 2, -3]} intensity={1.1} color="#d2dfd3" />
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.003, 0]} receiveShadow><circleGeometry args={[8, 64]} /><meshStandardMaterial color="#202321" roughness={1} /></mesh>
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.003, 0]} receiveShadow><circleGeometry args={[8, 64]} /><meshStandardMaterial color="#24201c" roughness={1} /></mesh>
     <Suspense fallback={null}><AvatarModel url={avatarUrl} pose="rest" wireframe={false} inspection={false} skeleton={false} onReady={onReady} onRig={setRig} /></Suspense>
     {rig && (avatarUrl === "/api/demo-avatar" || avatarUrl === "/api/personal-fit?asset=body") && <WarmSkin rig={rig} />}
     {rig && <PoseMotion rig={rig} pose={pose} />}
     {rig && top && <GarmentErrorBoundary key={`top|${top.url}|${rig.id}`} onError={onTopError}><Suspense fallback={null}><GarmentModel layer="upper" url={top.url} rig={rig} color={top.color} texture={top.texture} visible wireframe={false} inspection={false} onReady={onTopReady} sidecar={top.sidecar} correctives onWeights={ignoreWeights} heatmap={heatmap} /></Suspense></GarmentErrorBoundary>}
     {rig && bottom && <GarmentErrorBoundary key={`bottom|${bottom.url}|${rig.id}`} onError={onBottomError}><Suspense fallback={null}><GarmentModel layer="lower" url={bottom.url} rig={rig} color={bottom.color} texture={bottom.texture} visible wireframe={false} inspection={false} onReady={onBottomReady} sidecar={bottom.sidecar} correctives onWeights={ignoreWeights} heatmap={heatmap} /></Suspense></GarmentErrorBoundary>}
-    <StageResize stageRef={stageRef} /><TryOnCamera model={model} command={view} turntable={turntable} pose={pose} /><FpsLogger />
+    <StageResize stageRef={stageRef} /><TryOnCamera preview={preview} model={model} command={view} turntable={turntable} pose={pose} /><FpsLogger />
   </Canvas>;
 }

@@ -67,10 +67,10 @@ function OutfitSlot({ number, name, description, enabled, onEnabled, color, onCo
   </section>;
 }
 
-export function TryOn({ textureFixture = false, fixtures = false, outfitId = null, topId = null, bottomId = null, initialPose = null }: { initialPose?: string | null; textureFixture?: boolean; fixtures?: boolean; outfitId?: string | null; topId?: string | null; bottomId?: string | null }) {
+export function TryOn({ candidate = false, textureFixture = false, fixtures = false, outfitId = null, topId = null, bottomId = null, initialPose = null }: { candidate?: boolean; initialPose?: string | null; textureFixture?: boolean; fixtures?: boolean; outfitId?: string | null; topId?: string | null; bottomId?: string | null }) {
   const [topEnabled, setTopEnabled] = useState(true), [bottomEnabled, setBottomEnabled] = useState(true);
   const [topColor, setTopColor] = useState(colors[4].value), [bottomColor, setBottomColor] = useState(colors[1].value);
-  const [topTexture, setTopTexture] = useState<string | null>(textureFixture ? "fixture:/shirt.png" : null), [bottomTexture, setBottomTexture] = useState<string | null>(textureFixture ? "fixture:/pants.png" : null);
+  const [topTexture, setTopTexture] = useState<string | null>(textureFixture ? (candidate ? "fixture:/shirt-v3.png" : "fixture:/shirt.png") : null), [bottomTexture, setBottomTexture] = useState<string | null>(textureFixture ? (candidate ? "fixture:/pants-v3.png" : "fixture:/pants.png") : null);
   const [topOriginal, setTopOriginal] = useState(true), [bottomOriginal, setBottomOriginal] = useState(true);
   const [topSidecar, setTopSidecar] = useState<Sidecar | null | undefined>(undefined), [bottomSidecar, setBottomSidecar] = useState<Sidecar | null | undefined>(undefined);
   const [bottomAvailability, setBottomAvailability] = useState<"checking" | "available" | "missing" | "error">("checking");
@@ -84,16 +84,16 @@ export function TryOn({ textureFixture = false, fixtures = false, outfitId = nul
   const selection = useRef(0);
   const stageRef = useRef<HTMLElement>(null);
   const activeFit = avatar === "personal" && personalSource === "manifest" ? personalFit : null;
-  const bodyId = textureFixture ? null : avatar === "neutral" ? "neutral" : activeFit?.bodyId ?? null;
+  const bodyId = textureFixture && !candidate ? null : avatar === "neutral" ? "neutral" : activeFit?.bodyId ?? null;
   const [outfitSizes, setOutfitSizes] = useState({ top: "", bottom: "" });
-  const topSizes = useSizes(bodyId, "top", fixtures && bodyId === "neutral", outfitSizes.top), bottomSizes = useSizes(bodyId, "bottom", fixtures && bodyId === "neutral", outfitSizes.bottom);
+  const topSizes = useSizes(bodyId, "top", fixtures && bodyId === "neutral", outfitSizes.top, candidate), bottomSizes = useSizes(bodyId, "bottom", fixtures && bodyId === "neutral", outfitSizes.bottom, candidate);
   const [heatmap, setHeatmap] = useState(false);
   useEffect(() => {
-    if (!outfitId && !(topId && bottomId)) return;
+    if (!outfitId && !topId && !bottomId) return;
     let active = true;
     fetch("/api/wardrobe", { cache: "no-store" }).then(response => { if (!response.ok) throw new Error("This outfit is only available on the local development server."); return response.json(); }).then(value => {
       if (!active) return;
-      const wardrobe = parseWardrobe(value), outfit = outfitId ? wardrobe.outfits.find(item => item.id === outfitId) : { name: "selected pieces", items: [topId!, bottomId!] };
+      const wardrobe = parseWardrobe(value), outfit = outfitId ? wardrobe.outfits.find(item => item.id === outfitId) : { name: "selected pieces", items: [topId, bottomId].filter((id): id is string => !!id) };
       if (!outfit) throw new Error("Outfit not found in your wardrobe.");
       const items = outfit.items.map(id => wardrobe.items.find(item => item.id === id)).filter(item => item !== undefined);
       const topItem = items.find(item => item.category === "top"), bottomItem = items.find(item => item.category === "bottom");
@@ -103,7 +103,7 @@ export function TryOn({ textureFixture = false, fixtures = false, outfitId = nul
       const mainColor = (item: NonNullable<typeof topItem>) => item.colors.reduce((best, color) => color.share > best.share ? color : best).hex;
       if (topSupported) { setTopColor(mainColor(topItem)); setTopTexture(topItem.texture ?? null); setTopOriginal(true); }
       if (bottomSupported) { setBottomColor(mainColor(bottomItem)); setBottomTexture(bottomItem.texture ?? null); setBottomOriginal(true); }
-      if (!topSupported || !bottomSupported) setMessage("Some pieces have no supported 3D template. Add tshirt-v5.2 for a top or pants-basic-v2 for a bottom to preview them.");
+      if ((topItem && !topSupported) || (bottomItem && !bottomSupported) || !items.length) setMessage("Some pieces have no supported 3D template. Add tshirt-v5.2 for a top or pants-basic-v2 for a bottom to preview them.");
       else setMessage(`Showing ${outfit.name} from your wardrobe.`);
     }).catch(error => { if (active) setMessage(error instanceof Error ? error.message : "Could not load the outfit."); });
     return () => { active = false; };
@@ -127,8 +127,8 @@ export function TryOn({ textureFixture = false, fixtures = false, outfitId = nul
   const onBottomReady = useCallback(() => setBottomReady(true), []);
   const onTopError = useCallback(() => { setTopReady(true); setMessage("This top could not be fitted to the selected avatar."); }, []);
   const onBottomError = useCallback(() => { setBottomReady(true); setMessage("These pants could not be fitted to the selected avatar."); }, []);
-  const top: OutfitItem | null = topEnabled && topSizes.resolved && (!topSizes.selected || topSizes.garment) && (topSizes.garment || activeFit || topSidecar !== undefined) ? { url: topSizes.garment?.url ?? activeFit?.shirt ?? TOP_URL, color: topColor, texture: topOriginal ? topTexture : null, sidecar: topSizes.garment ? topSizes.garment.sidecar : (activeFit ? activeFit.shirtSidecar : topSidecar!) } : null;
-  const bottom: OutfitItem | null = bottomEnabled && bottomSizes.resolved && (!bottomSizes.selected || bottomSizes.garment) && (bottomSizes.garment || activeFit || (bottomAvailability === "available" && bottomSidecar !== undefined)) ? { url: bottomSizes.garment?.url ?? activeFit?.pants ?? BOTTOM_URL, color: bottomColor, texture: bottomOriginal ? bottomTexture : null, sidecar: bottomSizes.garment ? bottomSizes.garment.sidecar : (activeFit ? activeFit.pantsSidecar : bottomSidecar!) } : null;
+  const top: OutfitItem | null = topEnabled && (!candidate || !!topSizes.selected) && topSizes.resolved && (!topSizes.selected || topSizes.garment) && (topSizes.garment || activeFit || topSidecar !== undefined) ? { url: topSizes.garment?.url ?? activeFit?.shirt ?? TOP_URL, color: topColor, texture: topOriginal ? topTexture : null, sidecar: topSizes.garment ? topSizes.garment.sidecar : (activeFit ? activeFit.shirtSidecar : topSidecar!) } : null;
+  const bottom: OutfitItem | null = bottomEnabled && (!candidate || !!bottomSizes.selected) && bottomSizes.resolved && (!bottomSizes.selected || bottomSizes.garment) && (bottomSizes.garment || activeFit || (bottomAvailability === "available" && bottomSidecar !== undefined)) ? { url: bottomSizes.garment?.url ?? activeFit?.pants ?? BOTTOM_URL, color: bottomColor, texture: bottomOriginal ? bottomTexture : null, sidecar: bottomSizes.garment ? bottomSizes.garment.sidecar : (activeFit ? activeFit.pantsSidecar : bottomSidecar!) } : null;
   const outfitReady = avatarReady && (!topEnabled || topReady) && (!bottomEnabled || (!activeFit && (bottomAvailability === "missing" || bottomAvailability === "error")) || bottomReady);
   const showTop = (enabled: boolean) => { if (enabled) setTopReady(false); setTopEnabled(enabled); };
   const showBottom = (enabled: boolean) => { if (enabled) setBottomReady(false); setBottomEnabled(enabled); };
@@ -171,13 +171,13 @@ export function TryOn({ textureFixture = false, fixtures = false, outfitId = nul
         <OutfitSlot number="02" name="Bottom" description="The essential pants" enabled={bottomEnabled} onEnabled={showBottom} color={bottomColor} onColor={value => { setBottomColor(value); setBottomOriginal(false); }} hasOriginal={!!bottomTexture} original={!!bottomTexture && bottomOriginal} onOriginal={() => setBottomOriginal(true)} available={!!activeFit || bottomAvailability === "available" || bottomAvailability === "checking"} />
         <FitPicker title="Bottom" options={bottomSizes.options} selected={bottomSizes.size} onSize={bottomSizes.setSize} />
         {outfitSizes.bottom && bottomSizes.resolved && !bottomSizes.options.some(option => option.size === outfitSizes.bottom) && <p className="try-hint">Saved bottom size {outfitSizes.bottom} is unavailable for this avatar; showing the available default.</p>}
-        <label className="fit-heatmap"><input type="checkbox" checked={heatmap} onChange={event => setHeatmap(event.target.checked)} /> Fit heatmap <span>Red: tight · Green: good · Blue: loose</span></label>
+        <label className="fit-heatmap"><input type="checkbox" checked={heatmap} onChange={event => setHeatmap(event.target.checked)} /> Fit heatmap <span>Orange: tight · Green: good · Blue: loose</span></label>
         <div className="try-divider" />
         <div className="try-section-heading compact"><div><span className="try-eyebrow">SEE THE FIT</span><h2>Strike a pose<span>.</span></h2></div><span className="try-section-label">02 / 03</span></div>
         <div className="try-pose-group" role="group" aria-label="Pose">{poses.map(item => <button key={item.value} type="button" aria-pressed={pose === item.value} className={pose === item.value ? "selected" : ""} onClick={() => setPose(item.value)}>{item.label}</button>)}</div>
         <div className="try-divider" />
         <div className="try-section-heading compact"><div><span className="try-eyebrow">MADE PERSONAL</span><h2>Your avatar<span>.</span></h2></div><span className="try-section-label">03 / 03</span></div>
-        <div className="try-avatar-options"><button type="button" className={avatar === "neutral" ? "selected" : ""} onClick={() => { selection.current++; if (avatar !== "neutral") switchAvatar("neutral"); }}><span>Neutral avatar</span>{avatar === "neutral" && <Check size={16} />}</button><button type="button" className={avatar === "personal" ? "selected" : ""} onClick={() => { if (avatar !== "personal" || personalSource !== "manifest") void selectPersonalFit(); }}><span>My avatar</span>{avatar === "personal" && <Check size={16} />}</button></div>
+        <div className="try-avatar-options" id="avatar"><button type="button" className={avatar === "neutral" ? "selected" : ""} onClick={() => { selection.current++; if (avatar !== "neutral") switchAvatar("neutral"); }}><span>Neutral avatar</span>{avatar === "neutral" && <Check size={16} />}</button><button type="button" className={avatar === "personal" ? "selected" : ""} onClick={() => { if (avatar !== "personal" || personalSource !== "manifest") void selectPersonalFit(); }}><span>My avatar</span>{avatar === "personal" && <Check size={16} />}</button></div>
         <label htmlFor="try-avatar-file" className="try-upload"><UploadSimple size={17} /> {personal ? "Choose a different avatar" : "Choose your avatar file"}</label><input className="try-sr-only" id="try-avatar-file" type="file" accept=".glb,model/gltf-binary" onChange={chooseAvatar} />
         <p className="try-hint">Your GLB stays on this device. Garments need a matching avatar fit.</p>
         <MeasurementsForm />

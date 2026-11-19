@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fitting room on phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#49392D}a:hover{color:#211C18}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; font-family: Manrope, system-ui, sans-serif; background: #F7F4EF; color: #211C18; display: flex; flex-direction: column; overflow: hidden">
+
+<div style="display: flex; justify-content: space-between; align-items: center; padding: 14px 18px">
+<span style="font-family: 'Instrument Serif', serif; font-size: 24px">Fitting room</span>
+<button type="button" aria-label="Choose avatar" style="border: 1px solid #E5DDD3; background: #FFFFFF; border-radius: 999px; font: inherit; font-size: 12px; font-weight: 700; padding: 8px 12px; min-height: 36px">My avatar</button>
+</div>
+
+<div style="flex: 1; margin: 0 12px; background: #24201C; border-radius: 26px; position: relative; display: flex; align-items: center; justify-content: center; min-height: 0">
+<div role="group" aria-label="Wearing" style="position: absolute; top: 12px; left: 12px; display: flex; gap: 6px">
+<button type="button" aria-pressed="true" style="border: 0; background: #F7F4EF; color: #211C18; font: inherit; font-size: 12px; font-weight: 700; padding: 8px 12px; border-radius: 999px; min-height: 36px">Top</button>
+<button type="button" aria-pressed="false" style="border: 0; background: rgba(247,244,239,0.12); color: #F7F4EF; font: inherit; font-size: 12px; padding: 8px 12px; border-radius: 999px; min-height: 36px">Bottom</button>
+</div>
+<svg width="150" height="330" viewBox="0 0 200 480" role="img" aria-label="Your avatar with the fit map on the tee">
+<defs>
+<linearGradient id="pHeat" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6E9A5B"></stop><stop offset="0.5" stop-color="#6E9A5B"></stop><stop offset="1" stop-color="#6B97C2"></stop></linearGradient>
+</defs>
+<circle cx="100" cy="40" r="24" fill="#E6D3C2"></circle>
+<rect x="90" y="60" width="20" height="18" fill="#E6D3C2"></rect>
+<path d="M36 126 L28 236 L40 238 L50 138 Z" fill="#E6D3C2"></path>
+<path d="M164 126 L172 236 L160 238 L150 138 Z" fill="#E6D3C2"></path>
+<path d="M54 226 L146 226 L150 440 L108 440 L100 292 L92 440 L50 440 Z" fill="#2E3238"></path>
+<path d="M58 76 Q100 64 142 76 L170 118 L156 138 L146 124 L148 236 Q100 246 52 236 L54 124 L44 138 L30 118 Z" fill="url(#pHeat)"></path>
+<ellipse cx="70" cy="446" rx="22" ry="7" fill="#E6D3C2"></ellipse>
+<ellipse cx="130" cy="446" rx="22" ry="7" fill="#E6D3C2"></ellipse>
+</svg>
+<div role="group" aria-label="Camera" style="position: absolute; bottom: 12px; display: flex; gap: 2px; background: rgba(247,244,239,0.12); border-radius: 999px; padding: 3px">
+<button type="button" style="border: 0; background: #F7F4EF; color: #211C18; font: inherit; font-size: 12px; font-weight: 700; padding: 8px 12px; border-radius: 999px; min-height: 36px">Front</button>
+<button type="button" style="border: 0; background: transparent; color: #F7F4EF; font: inherit; font-size: 12px; padding: 8px 12px; border-radius: 999px; min-height: 36px">Side</button>
+<button type="button" style="border: 0; background: transparent; color: #F7F4EF; font: inherit; font-size: 12px; padding: 8px 12px; border-radius: 999px; min-height: 36px">Back</button>
+<button type="button" style="border: 0; background: transparent; color: #F7F4EF; font: inherit; font-size: 12px; padding: 8px 12px; border-radius: 999px; min-height: 36px">360°</button>
+</div>
+</div>
+
+<section aria-label="Size and fit" style="margin-top: 10px; background: #FFFFFF; border-radius: 26px 26px 0 0; padding: 12px 18px 0; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 -8px 24px rgba(33,28,24,0.06)">
+<span aria-hidden="true" style="width: 40px; height: 4px; border-radius: 99px; background: #D6CCBF; align-self: center"></span>
+<div style="display: flex; justify-content: space-between; align-items: center">
+<span style="font-weight: 700; font-size: 15px">Everyday tee</span>
+<span style="font-size: 12px; font-weight: 700; background: #E6EFDF; color: #2F5A26; border-radius: 99px; padding: 5px 10px">Good fit</span>
+</div>
+<div role="group" aria-label="Size" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+<button type="button" aria-pressed="false" style="min-height: 46px; border-radius: 14px; border: 1px solid #E5DDD3; background: #F7F4EF; font: inherit; font-weight: 700; font-size: 14px; color: #211C18">S</button>
+<button type="button" aria-pressed="false" style="min-height: 46px; border-radius: 14px; border: 1px solid #E5DDD3; background: #F7F4EF; font: inherit; font-weight: 700; font-size: 14px; color: #211C18">M</button>
+<button type="button" aria-pressed="true" aria-label="L, best fit" style="min-height: 46px; border-radius: 14px; border: 1px solid #211C18; background: #211C18; font: inherit; font-weight: 700; font-size: 14px; color: #F7F4EF">L</button>
+<button type="button" aria-pressed="false" style="min-height: 46px; border-radius: 14px; border: 1px solid #E5DDD3; background: #F7F4EF; font: inherit; font-weight: 700; font-size: 14px; color: #211C18">XL</button>
+</div>
+<div style="display: flex; gap: 6px; font-size: 12px">
+<span style="flex: 1; background: #F7F4EF; border-radius: 12px; padding: 8px 10px; display: flex; flex-direction: column"><span style="color: #756B62">Chest</span><strong>Good</strong></span>
+<span style="flex: 1; background: #F7F4EF; border-radius: 12px; padding: 8px 10px; display: flex; flex-direction: column"><span style="color: #756B62">Shoulders</span><strong>Good</strong></span>
+<span style="flex: 1; background: #F7F4EF; border-radius: 12px; padding: 8px 10px; display: flex; flex-direction: column"><span style="color: #756B62">Length</span><strong>2.5 cm long</strong></span>
+</div>
+<nav aria-label="Main" style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-top: 1px solid #E5DDD3; margin: 0 -18px; padding: 4px 6px 6px">
+<a href="Home.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 0; min-height: 48px; box-sizing: border-box; color: #756B62; text-decoration: none; font-size: 11px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#756B62" stroke-width="1.8" aria-hidden="true"><path d="M4 11 L12 4 L20 11 L20 20 L4 20 Z"></path></svg>Home</a>
+<a href="Closet.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 0; min-height: 48px; box-sizing: border-box; color: #756B62; text-decoration: none; font-size: 11px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#756B62" stroke-width="1.8" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"></rect><path d="M12 3 L12 21"></path></svg>Wardrobe</a>
+<a href="PhoneFitting.dc.html" aria-current="page" style="display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 0; min-height: 48px; box-sizing: border-box; color: #211C18; text-decoration: none; font-size: 11px; font-weight: 700"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#211C18" stroke-width="2" aria-hidden="true"><circle cx="12" cy="5" r="2.5"></circle><path d="M7 9 L17 9 L15 15 L15 21 M9 21 L9 15 L7 9"></path></svg>Try-on</a>
+<a href="Outfits.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 0; min-height: 48px; box-sizing: border-box; color: #756B62; text-decoration: none; font-size: 11px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#756B62" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2"></rect><rect x="13" y="3" width="8" height="8" rx="2"></rect><rect x="3" y="13" width="18" height="8" rx="2"></rect></svg>Outfits</a>
+<a href="StylistChat.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 0; min-height: 48px; box-sizing: border-box; color: #756B62; text-decoration: none; font-size: 11px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#756B62" stroke-width="1.8" aria-hidden="true"><path d="M4 5 L20 5 L20 16 L10 16 L5 20 L5 16 L4 16 Z"></path></svg>Stylist</a>
+</nav>
+</section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

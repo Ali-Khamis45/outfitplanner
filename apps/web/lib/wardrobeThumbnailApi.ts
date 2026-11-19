@@ -17,7 +17,7 @@ export function createThumbnailHandler(outputs = path.resolve(process.cwd(), "..
       const assetPath = await realpath(/*turbopackIgnore: true*/ path.join(/*turbopackIgnore: true*/ outputRoot, assets[template]));
       if (!assetPath.startsWith(`${outputRoot}${path.sep}`)) return res.status(404).end();
       const asset = await stat(assetPath);
-      const key = createHash("sha256").update(`v1:${assetPath}:${asset.size}:${asset.mtimeMs}:${color.toLowerCase()}`).digest("hex");
+      const key = createHash("sha256").update(`v2-editorial:${assetPath}:${asset.size}:${asset.mtimeMs}:${color.toLowerCase()}`).digest("hex");
       const wardrobeDir = path.join(outputRoot, "wardrobe");
       if (req.method === "POST") await mkdir(wardrobeDir, { recursive: true });
       const wardrobeRoot = await realpath(wardrobeDir);

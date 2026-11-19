@@ -30,6 +30,7 @@ try {
   assert.equal((await request(handler, { method: "GET" })).body.status, "configured");
   const response = await request(handler, { body: message }); assert.equal(response.code, 200); assert.equal(response.body.status, "ok");
   assert.equal(scripted.requests.length, 4); assert.equal(response.body.calls.length, 5); assert.ok(response.body.calls.some(c => c.label === "Weather: Cairo"));
+  assert.ok(scripted.requests.every(body => body.reasoning_effort === "none"), "thinking defaults off on every tool round and final reply");
   assert.equal(response.body.recommendations.length, 1); assert.equal(response.body.recommendations[0].items[0].photo, wardrobe.items[0].photo);
   assert.equal(response.body.recommendations[0].url, "/try-on?top=example-1&bottom=example-3"); assert.match(response.body.recommendations[0].reason, /relaxed/);
   const outbound = JSON.stringify(scripted.requests);
@@ -51,6 +52,20 @@ try {
   const capModel = await model(() => completion(null, [toolCall("get_wardrobe", {})])); let executions = 0;
   const capped = await request(createChatHandler({ ...options, settings: () => ({ model: "local", baseUrl: capModel.baseUrl }), execute: async () => { executions++; return []; } }), { body: message });
   assert.equal(capped.body.status, "limit"); assert.equal(executions, 6); assert.equal(capModel.requests.length, 7); assert.equal(capModel.requests[6].tool_choice, "none");
+  assert.ok(capModel.requests.every(body => body.reasoning_effort === "none"), "round-cap request also disables thinking");
+  for (const thinking of ["on", "off"]) {
+    const reasoningModel = await model((body, index) => {
+      const value = index ? completion("A brief visible answer.") : completion(null, [toolCall("get_wardrobe", {})]);
+      value.choices[0].message.reasoning = "PRIVATE_REASONING_SENTINEL";
+      value.choices[0].message.reasoning_content = "PRIVATE_REASONING_SENTINEL";
+      return value;
+    });
+    const reasoningResult = await request(createChatHandler({ ...options, settings: () => ({ model: "local", baseUrl: reasoningModel.baseUrl, thinking }) }), { body: message });
+    assert.equal(reasoningResult.body.status, "ok");
+    assert.ok(reasoningModel.requests.every(body => thinking === "off" ? body.reasoning_effort === "none" : !Object.hasOwn(body, "reasoning_effort")));
+    assert.ok(!JSON.stringify(reasoningResult.body).includes("PRIVATE_REASONING_SENTINEL"), "reasoning never returned to the UI");
+    assert.ok(!JSON.stringify(reasoningModel.requests).includes("PRIVATE_REASONING_SENTINEL"), "reasoning never replayed into later model requests");
+  }
   const badModel = await model((body, index) => index ? completion("That tool is unavailable.") : completion(null, [toolCall("read_private_file", {})]));
   const bad = await request(createChatHandler({ ...options, settings: () => ({ model: "local", baseUrl: badModel.baseUrl }) }), { body: message }); assert.equal(bad.body.calls[0].ok, false);
   const destination = await model(() => completion("must not receive requests"));

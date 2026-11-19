@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Outfit planner</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#49392D}a:hover{color:#211C18}
+</style>
+</helmet>
+<div style="font-family: Manrope, system-ui, sans-serif; background: #F7F4EF; color: #211C18; min-height: 100vh">
+
+<header style="border-bottom: 1px solid #E5DDD3">
+<div style="max-width: 1360px; margin: 0 auto; padding: 18px 40px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px">
+<a href="Home.dc.html" style="font-family: 'Instrument Serif', serif; font-size: 28px; color: #211C18; text-decoration: none">Virtual Wardrobe</a>
+<nav aria-label="Main" style="display: flex; flex-wrap: wrap; gap: 4px; font-size: 14px; font-weight: 500">
+<a href="Home.dc.html" style="color: #211C18; text-decoration: none; padding: 9px 14px; border-radius: 999px">Home</a>
+<a href="Closet.dc.html" style="color: #211C18; text-decoration: none; padding: 9px 14px; border-radius: 999px">Wardrobe</a>
+<a href="FittingRoom.dc.html" style="color: #211C18; text-decoration: none; padding: 9px 14px; border-radius: 999px">Fitting room</a>
+<a href="Outfits.dc.html" style="color: #211C18; text-decoration: none; padding: 9px 14px; border-radius: 999px">Outfits</a>
+<a href="StylistChat.dc.html" style="color: #211C18; text-decoration: none; padding: 9px 14px; border-radius: 999px">Stylist</a>
+<a href="Planner.dc.html" aria-current="page" style="background: #211C18; color: #F7F4EF; text-decoration: none; padding: 9px 14px; border-radius: 999px">Planner</a>
+</nav>
+</div>
+</header>
+
+<div style="max-width: 1360px; margin: 0 auto; padding: 36px 40px 72px; display: flex; flex-direction: column; gap: 24px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<p style="margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: #756B62">15 to 21 November</p>
+<h1 style="margin: 0; font-family: 'Instrument Serif', serif; font-weight: 400; font-size: 72px; line-height: 0.95">This week</h1>
+</div>
+<div role="group" aria-label="Week" style="display: flex; gap: 8px">
+<button type="button" aria-label="Previous week" style="width: 46px; height: 46px; border-radius: 99px; border: 1px solid #D6CCBF; background: #FFFFFF; cursor: pointer; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#211C18" stroke-width="2" aria-hidden="true"><path d="M15 5 L8 12 L15 19"></path></svg></button>
+<button type="button" aria-label="Next week" style="width: 46px; height: 46px; border-radius: 99px; border: 1px solid #D6CCBF; background: #FFFFFF; cursor: pointer; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#211C18" stroke-width="2" aria-hidden="true"><path d="M9 5 L16 12 L9 19"></path></svg></button>
+</div>
+</div>
+
+<p style="margin: 0; background: #EEE8DF; border-radius: 16px; padding: 14px 18px; font-size: 14px; color: #49392D"><strong>Coming soon.</strong> Planned days aren't saved yet. Saved outfits and the weather tool are ready; the calendar plugs into them next.</p>
+
+<ol style="margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px">
+<sc-for list="{{days}}" as="d" hint-placeholder-count="7">
+<li style="{{d.card}}">
+<div style="display: flex; justify-content: space-between; align-items: baseline">
+<span style="font-size: 13px; font-weight: 700">{{d.day}}</span>
+<span style="font-family: 'Instrument Serif', serif; font-size: 34px; line-height: 1">{{d.date}}</span>
+</div>
+<sc-if value="{{d.today}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="height: 150px; background: rgba(247,244,239,0.08); border-radius: 14px; display: flex; align-items: center; justify-content: center">
+<svg width="64" height="136" viewBox="0 0 200 480" role="img" aria-label="Chalk tee and moss pants">
+<path d="M54 226 L146 226 L150 440 L108 440 L100 292 L92 440 L50 440 Z" fill="#777F69"></path>
+<path d="M58 76 Q100 64 142 76 L170 118 L156 138 L146 124 L148 236 Q100 246 52 236 L54 124 L44 138 L30 118 Z" fill="#E7E2D6"></path>
+</svg>
+</div>
+<span style="font-size: 14px; font-weight: 700">Zamalek dinner</span>
+<span style="font-size: 12px; color: #CFC5BA">Casual · 15° to 29°</span>
+</div>
+</sc-if>
+<sc-if value="{{d.empty}}" hint-placeholder-val="{{ true }}">
+<button type="button" style="flex: 1; min-height: 150px; border: 1.5px dashed #D6CCBF; border-radius: 14px; background: transparent; font: inherit; font-size: 13px; font-weight: 600; color: #756B62; cursor: pointer">Assign a look</button>
+<span style="font-size: 12px; color: #756B62">Forecast when it's in range</span>
+</sc-if>
+</li>
+</sc-for>
+</ol>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const days = names.map((day, i) => {
+const today = i === 0;
+return {
+day,
+date: String(15 + i),
+today,
+empty: !today,
+card: 'border-radius: 22px; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-height: 280px; ' + (today ? 'background: #24201C; color: #F7F4EF;' : 'background: #FFFFFF; border: 1px solid #E5DDD3;')
+};
+});
+return { days };
+}
+}
+</script>
+</body>
+</html>

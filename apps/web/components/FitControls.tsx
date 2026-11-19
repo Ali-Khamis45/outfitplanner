@@ -4,8 +4,8 @@ import { emptyMeasurements, measurementError, measurementFields, names, serializ
 import { parseSidecar, type Sidecar } from "../lib/garment/correctives";
 import { formatRegion, isFullyClampedAndTight, parseFitMap, regionEstimateNote, SIZES, type Size, type SizeOption, type Slot } from "../lib/garment/fitMap";
 
-export function useSizes(body: string | null, slot: Slot, fixtures = false, preferredSize = "") {
-  const key = JSON.stringify([body, slot, fixtures, preferredSize]);
+export function useSizes(body: string | null, slot: Slot, fixtures = false, preferredSize = "", candidate = false) {
+  const key = JSON.stringify([body, slot, fixtures, preferredSize, candidate]);
   const [discovery, setDiscovery] = useState<{ key: string; options: SizeOption[]; initial: Size | null } | null>(null);
   const [choice, setChoice] = useState<{ key: string; size: Size } | null>(null);
   const [loaded, setLoaded] = useState<{ url: string; sidecar: Sidecar | null } | null>(null);
@@ -13,6 +13,7 @@ export function useSizes(body: string | null, slot: Slot, fixtures = false, pref
     let active = true;
     if (!body) return;
     const query = new URLSearchParams({ body, slot });
+    if (candidate) query.set("gen", "v5.3");
     if (fixtures) query.set("fixtures", "1");
     fetch(`/api/size-garment?${query}`, { cache: "no-store" })
       .then(response => response.ok ? response.json() : [])
@@ -23,7 +24,7 @@ export function useSizes(body: string | null, slot: Slot, fixtures = false, pref
         setDiscovery({ key, options, initial });
       }).catch(() => { if (active) setDiscovery({ key, options: [], initial: null }); });
     return () => { active = false; };
-  }, [body, slot, fixtures, preferredSize, key]);
+  }, [body, slot, fixtures, preferredSize, candidate, key]);
   const resolved = !body || discovery?.key === key;
   const options = resolved && body ? discovery?.options ?? [] : [];
   const size = resolved ? (choice?.key === key ? choice.size : discovery?.initial ?? null) : null;
@@ -43,7 +44,7 @@ export function FitPicker({ title, options, selected, onSize }: { title: string;
   return <section className="fit-picker" aria-label={`${title} fit`}>
     <div className="fit-heading"><strong>{title} size</strong>{options.some(option => option.fit.recommended) && <span>● Recommended</span>}</div>
     <div className="fit-sizes" role="group" aria-label={`${title} size`}>{SIZES.map(size => { const recommended = options.some(option => option.size === size && option.fit.recommended); return <button type="button" key={size} disabled={!options.some(option => option.size === size)} aria-label={recommended ? `${size}, Recommended` : size} aria-pressed={selected === size} onClick={() => onSize(size)}>{size}{recommended && <span className="fit-recommended-dot" aria-hidden="true" title="Recommended" />}</button>; })}</div>
-    {fit ? <div className="fit-summary">{isFullyClampedAndTight(fit) && <p className="fit-clamped-warning">Too small for this body. Shown at the closest wearable fit.</p>}<strong>Fit summary</strong>{Object.entries(fit.regions).map(([name, region]) => <p key={name}>{formatRegion(name, region, fit.garment)}{regionEstimateNote(region) && <small className="fit-estimate-note"> {regionEstimateNote(region)}</small>}</p>)}</div> : <p className="fit-unavailable">Size fits are not available yet.</p>}
+    {fit ? <div className="fit-summary">{isFullyClampedAndTight(fit) && <p className="fit-clamped-warning">Too small for this body. Shown at the closest wearable fit.</p>}<strong>Fit summary</strong>{Object.entries(fit.regions).map(([name, region]) => <p key={name} className="fit-label" data-fit={region.status}>{formatRegion(name, region, fit.garment)}{regionEstimateNote(region) && <small className="fit-estimate-note"> {regionEstimateNote(region)}</small>}</p>)}</div> : <p className="fit-unavailable">Size fits are not available yet.</p>}
   </section>;
 }
 
