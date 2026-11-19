@@ -22,6 +22,18 @@ Plan and decisions: `docs/sprint-4/sprint-4a-plan.md`.
 
 `--link` also sets the item's `texture` in `outputs/wardrobe/wardrobe.json` to the one value the schema accepts. Nothing set it before. The file is written like the web's own `writeWardrobe`, and every other field stays unchanged.
 
+## From the app (development only)
+
+A wardrobe piece with template `tshirt-v5.3` or `pants-v3` and a saved front capture shows **Create texture from photos** in its details, in development only.
+
+- The button calls `POST /api/wardrobe-texture {item}` (`apps/web/lib/wardrobeTextureApi.ts`), which runs the producer on the piece's captures.
+- The texture is linked through the web's own serialized wardrobe writer, not the Python `--link`, so it never races another save. The page then reloads the wardrobe.
+- Only localhost may call it, one run at a time; the route checks the template and the capture first.
+- Covered by `tests/wardrobe-texture.test.mjs`, with the producer stubbed.
+- Run once end to end with the real producer, on synthetic captures in a temporary outputs folder: 200 in 3.4 s, coverage 0.987, the piece's texture linked.
+
+The real-photo check therefore goes through the app: capture, **Create texture from photos**, then try on.
+
 ## How it works
 
 1. **Flat-lay model** (`services/texture/flatlay.py`).
@@ -67,7 +79,10 @@ No styling or layout change; the redesign phases restyle this screen later.
   - `saveCaptures` now takes the item's category (`pants`).
   - The markup, class names, slider, buttons and text are unchanged.
 - **`apps/web/lib/wardrobeApi.ts`:** with a valid `photoSize` and a known outline, the capture's `.align.json` is written as version 2. Otherwise it is written as version 1, exactly as before.
-- **`apps/web/components/wardrobe/WardrobePage.tsx`:** passes the category to `saveCaptures`.
+- **`apps/web/components/wardrobe/WardrobePage.tsx`:** passes the category to `saveCaptures`. In development only, it also passes the details panel a texture action (see below).
+- **New, development only:**
+  - `WardrobeDetails.tsx` gains an optional **Create texture from photos** button in a second `detail-actions` row, with a status line. It uses the existing `button-secondary` and `muted` classes and no new styles.
+  - New files: the route `pages/api/wardrobe-texture.ts`, `lib/wardrobeTextureApi.ts`, `lib/garment/photoTexture.ts` and `tests/wardrobe-texture.test.mjs`, which is part of `npm test`.
 
 **Alignment version 2** (`<item>-<view>.align.json`):
 
@@ -82,7 +97,6 @@ No styling or layout change; the redesign phases restyle this screen later.
 ## Not done
 
 - **A real photograph, end to end.** Capture in the web, run the producer, and look at the 3D garment: does the texture sit upright on the chest, and how good are the background separation and the placement on real cloth? This needs photos of an actual garment.
-- **No trigger from the web.** The producer is a command (`produce.py`), not yet started by the web app.
 - **Landmark-based refinement.** A spline anchored on matched landmarks (armpits, shoulder points, hem corners) for drape the similarity cannot follow.
 - **Pants gusset, and back panels without a back photo.** These take `fallback_hex`.
 - **Sleeves.** The sleeve halves hang in a fixed pose (30° below horizontal). Real flat lays vary, so the sleeve placement relies on the silhouette fit.
