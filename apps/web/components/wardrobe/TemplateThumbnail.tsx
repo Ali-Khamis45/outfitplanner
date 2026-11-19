@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 import { loadGarmentTexture } from "../../lib/garment/texture";
 import type { WardrobeItem } from "../../lib/wardrobe/schema";
 
-const knownTemplates: Record<string, string> = { "tshirt-v5.2": "v5.2", "pants-v2": "pants-v2", "pants-basic-v2": "pants-v2" };
+// Each template renders on its own generation's mesh: its texture is painted in that generation's UV layout.
+const knownTemplates: Record<string, string> = { "tshirt-v5.3": "v5.3", "pants-v3": "pants-v3", "tshirt-v5.2": "v5.2", "pants-v2": "pants-v2", "pants-basic-v2": "pants-v2" };
 const pending = new Map<string, Promise<string | null>>();
 let queue: Promise<unknown> = Promise.resolve();
 let rendererState: Promise<RendererState> | null = null;

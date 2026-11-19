@@ -19,7 +19,8 @@ from tshirt import OuterGarment, assemble  # noqa: E402
 PROJECT = Path(__file__).resolve().parents[3]
 MANIFEST = PROJECT / "outputs" / "garments" / "personal" / "manifest.json"
 MEASUREMENTS = PROJECT / "outputs" / "avatars" / "measurements.json"
-SIZES_DIR = PROJECT / "outputs" / "garments" / "sizes"
+SIZES_DIR = PROJECT / "outputs" / "garments" / "sizes"  # default generation (tshirt-v5.3 / pants-v3)
+SIZE_DIRS = (SIZES_DIR, PROJECT / "outputs" / "garments" / "sizes-v5.2")  # + the previous generation, for one sprint
 
 
 def inverse_binds(path: Path) -> np.ndarray:
@@ -103,6 +104,7 @@ class PersonalManifestTests(unittest.TestCase):
                 self.assertTrue(glb.endswith(".glb") and sidecar.endswith(".correctives.json"), glb)
                 if glb.startswith("outputs/garments/sizes/"):  # a body without a base fit wears its own size files
                     self.assertTrue(glb.endswith(f"-{entry['id']}.glb"), glb)
+                    self.assertTrue(glb.split("/")[-1].startswith("tshirt-v5.3-" if part == "top" else "pants-v3-"), glb)  # the default generation
                     self.assertEqual(sidecar, glb[: -len(".glb")] + ".correctives.json")
                 else:
                     self.assertTrue(glb.startswith("outputs/garments/personal/") and sidecar.startswith("outputs/garments/personal/"), glb)
@@ -119,7 +121,7 @@ class PersonalManifestTests(unittest.TestCase):
         inverse bind matrices: a garment bound to another body (e.g. the uncalibrated one) would be skinned wrongly."""
         for entry in self.entries:
             body = inverse_binds(PROJECT / entry["body"])
-            garments = {PROJECT / entry["top"]["glb"], PROJECT / entry["bottom"]["glb"], *SIZES_DIR.glob(f"*-{entry['id']}.glb")}
+            garments = {PROJECT / entry["top"]["glb"], PROJECT / entry["bottom"]["glb"], *(p for d in SIZE_DIRS for p in d.glob(f"*-{entry['id']}.glb"))}
             for garment in sorted(garments):
                 with self.subTest(body=entry["id"], garment=garment.name):
                     binds = inverse_binds(garment)
@@ -128,7 +130,7 @@ class PersonalManifestTests(unittest.TestCase):
             others = [e for e in self.entries if e is not entry]
             for other in others:  # and not to any other listed body (the bodies must differ for this to mean anything)
                 if np.abs(inverse_binds(PROJECT / other["body"]) - body).max() > 1e-4:
-                    for path in SIZES_DIR.glob(f"*-{entry['id']}.glb"):
+                    for path in (p for d in SIZE_DIRS for p in d.glob(f"*-{entry['id']}.glb")):
                         self.assertGreater(float(np.abs(inverse_binds(path) - inverse_binds(PROJECT / other["body"])).max()), 1e-4, f"{path.name} bound to {other['id']}")
 
     def test_every_sidecar_target_exists_in_its_glb(self) -> None:

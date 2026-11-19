@@ -4,6 +4,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { compressGlb } from "../../asset-compression/compress.mjs";
 import { localRequest } from "../../lib/personalFit.ts";
 import { parseFitMap, SIZES, type Size, type Slot } from "../../lib/garment/fitMap.ts";
+import { DEFAULT_GENERATION, GENERATIONS, parseGeneration } from "../../lib/garment/generation.ts";
 
 // Neutral sizes are public demo assets. Personal sizes retain the local-only,
 // development-only boundary used for the personal-fit endpoint.
@@ -12,19 +13,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   res.setHeader("X-Content-Type-Options", "nosniff");
   if (req.method !== "GET") return res.status(404).end();
   const { body, slot, size, asset } = req.query;
-  const candidate = req.query.gen === "v5.3";
-  if (candidate && process.env.NODE_ENV !== "development") return res.status(404).end();
+  const generation = parseGeneration(req.query.gen), { top, bottom, sizesDir } = GENERATIONS[generation];
   if (typeof body !== "string" || !/^[a-zA-Z0-9_-]+$/.test(body) || (slot !== "top" && slot !== "bottom")) return res.status(404).end();
   if (body !== "neutral" && (process.env.NODE_ENV !== "development" || !localRequest(req))) return res.status(404).end();
   try {
-    const directory = path.resolve(/*turbopackIgnore: true*/ process.cwd(), candidate ? "../../outputs/garments/sizes-v5.3" : "../../outputs/garments/sizes"), root = await realpath(/*turbopackIgnore: true*/ directory);
+    const directory = path.resolve(/*turbopackIgnore: true*/ process.cwd(), `../../outputs/garments/${sizesDir}`), root = await realpath(/*turbopackIgnore: true*/ directory);
     const files = await readdir(root);
     const suffix = `-${body}.fit.json`;
     const options = [];
     for (const name of files.sort()) {
       if (!name.endsWith(suffix)) continue;
       const stem = name.slice(0, -suffix.length), match = stem.match(/^(.*)-(S|M|L|XL)$/);
-      if (!match || match[1] !== (slot === "top" ? (candidate ? "tshirt-v5.3" : "tshirt-v5.2") : (candidate ? "pants-v3" : "pants-v2"))) continue;
+      if (!match || match[1] !== (slot === "top" ? top : bottom)) continue;
       const fileBase = `${stem}-${body}`;
       if (!files.includes(`${fileBase}.glb`) || !files.includes(`${fileBase}.correctives.json`)) continue;
       const fitFile = await realpath(path.join(root, name));
@@ -33,7 +33,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       try { fit = parseFitMap(JSON.parse(await readFile(fitFile, "utf8"))); } catch { continue; }
       if (fit.body !== body || fit.size !== match[2] || fit.garment !== match[1]) continue;
       const safe = new URLSearchParams({ slot: slot as Slot, body, size: fit.size });
-      if (candidate) safe.set("gen", "v5.3");
+      if (generation !== DEFAULT_GENERATION) safe.set("gen", generation);
       options.push({ size: fit.size, fit, glb: `/api/size-garment?${safe}&asset=glb`, sidecar: `/api/size-garment?${safe}&asset=sidecar`, fileBase });
     }
     options.sort((a, b) => SIZES.indexOf(a.size) - SIZES.indexOf(b.size));

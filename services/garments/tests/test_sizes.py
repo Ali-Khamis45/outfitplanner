@@ -16,7 +16,12 @@ from measure import girth  # noqa: E402
 from sizes import CHART_CM, LENGTH_GRADE_M, PANTS_HIP_EASE_M, SHIRT_CHEST_EASE_M, SIZES, recommend, status  # noqa: E402
 
 PROJECT = Path(__file__).resolve().parents[3]
-SIZES_DIR = PROJECT / "outputs" / "garments" / "sizes"
+SIZES_DIR = PROJECT / "outputs" / "garments" / "sizes"  # the default generation: tshirt-v5.3 / pants-v3
+LEGACY_SIZES_DIR = PROJECT / "outputs" / "garments" / "sizes-v5.2"  # tshirt-v5.2 / pants-v2, kept for one sprint
+SIZE_DIRS = [d for d in (SIZES_DIR, LEGACY_SIZES_DIR) if d.is_dir()]
+# per generation: its folder, the generate_sizes reports holding each size's ease levels, and the garment tags
+GENERATIONS = [(SIZES_DIR, ("sizes-sprint-3.5-neutral.json", "sizes-sprint-3.5-personal.json"), {"tshirt": "tshirt-v5.3", "pants": "pants-v3"}),
+               (LEGACY_SIZES_DIR, ("sizes-sprint-3a.json",), {"tshirt": "tshirt-v5.2", "pants": "pants-v2"})]
 MODEL_PRESENT = (PROJECT / "external").is_dir()
 
 
@@ -102,11 +107,11 @@ class HeightOnlyCalibrationTests(unittest.TestCase):
             self.assertLessEqual(abs(report["errors"][key]["after_cm"]), 0.2, key)
 
 
-@unittest.skipUnless(SIZES_DIR.is_dir() and any(SIZES_DIR.glob("*.fit.json")), "generate the sizes first")
+@unittest.skipUnless(any(any(d.glob("*.fit.json")) for d in SIZE_DIRS), "generate the sizes first")
 class GeneratedSizesTests(unittest.TestCase):
     def test_fit_json_schema_and_one_recommendation_per_garment_and_body(self) -> None:
         recommended: dict[tuple[str, str], int] = {}
-        for path in SIZES_DIR.glob("*.fit.json"):
+        for path in (p for d in SIZE_DIRS for p in d.glob("*.fit.json")):
             fit = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(set(fit), {"version", "garment", "size", "body", "regions", "recommended"}, path.name)
             self.assertEqual(fit["version"], 1)
@@ -127,10 +132,10 @@ class GeneratedSizesTests(unittest.TestCase):
         self.assertTrue(all(count == 1 for count in recommended.values()), recommended)
 
     def test_clamped_shoulders_report_the_spec_not_the_mesh(self) -> None:
-        for path in SIZES_DIR.glob("tshirt-*-S-*.fit.json"):
+        for path in (p for d in SIZE_DIRS for p in d.glob("tshirt-*-S-*.fit.json")):
             fit = json.loads(path.read_text(encoding="utf-8"))
             self.assertTrue(fit["regions"]["shoulders"].get("clamped"), path.name)  # S keeps the base armhole
-        for path in SIZES_DIR.glob("tshirt-*-L-*.fit.json"):
+        for path in (p for d in SIZE_DIRS for p in d.glob("tshirt-*-L-*.fit.json")):
             fit = json.loads(path.read_text(encoding="utf-8"))
             self.assertNotIn("clamped", fit["regions"]["shoulders"], path.name)  # L grades up: mesh follows the spec
 
@@ -139,41 +144,46 @@ class GeneratedSizesTests(unittest.TestCase):
         from garment_glb import accessor_array, read_glb
         from sizes import region_vertex_masks
 
-        report_path = PROJECT / "outputs" / "garment-tests" / "sizes-sprint-3a.json"
-        if not report_path.is_file():
-            self.skipTest("size report not generated")
-        report = json.loads(report_path.read_text(encoding="utf-8"))
-        checked = 0
-        for body_id, body in report["bodies"].items():
-            for garment, sizes in body["garments"].items():
-                tag = "tshirt-v5.2" if garment == "tshirt" else "pants-v2"
-                for size in SIZES:
-                    if size not in sizes:
+        def reported_sizes():
+            """(GLB, fit.json, size entry of the report, garment) for every size a generation's reports describe."""
+            for directory, report_names, tags in GENERATIONS:
+                for report_name in report_names:
+                    report_path = PROJECT / "outputs" / "garment-tests" / report_name
+                    if not (report_path.is_file() and directory.is_dir()):
                         continue
-                    glb = SIZES_DIR / f"{tag}-{size}-{body_id}.glb"
-                    fit = json.loads((SIZES_DIR / f"{tag}-{size}-{body_id}.fit.json").read_text(encoding="utf-8"))
-                    document, blob = read_glb(glb)
-                    attributes = document["meshes"][0]["primitives"][0]["attributes"]
-                    ease = accessor_array(document, blob, attributes["_EASE_MM"])
-                    positions = accessor_array(document, blob, attributes["POSITION"]).astype(np.float64)
-                    region = accessor_array(document, blob, attributes["_REGION"])
-                    masks = region_vertex_masks(positions, region, sizes[size]["levels"], "pants" if garment == "pants" else "shirt")
-                    for name, mask in masks.items():
-                        value = fit["regions"][name]["ease_mm"]
-                        self.assertGreater(int(mask.sum()), 20, f"{glb.name} {name}")
-                        if abs(value) < 5:  # within the fitting tolerance: no meaningful sign
-                            continue
-                        median = float(np.median(ease[mask]))
-                        self.assertEqual(np.sign(median), np.sign(value), f"{glb.name} {name}: median vertex ease {median:.1f} mm vs region {value} mm")
-                        checked += 1
-        self.assertGreater(checked, 0)
+                    for body_id, body in json.loads(report_path.read_text(encoding="utf-8"))["bodies"].items():
+                        for garment, sizes in body["garments"].items():
+                            for size in SIZES:
+                                if size in sizes:
+                                    stem = directory / f"{tags[garment]}-{size}-{body_id}"
+                                    yield stem.with_name(stem.name + ".glb"), stem.with_name(stem.name + ".fit.json"), sizes[size], garment
+
+        checked = 0
+        for glb, fit_path, entry, garment in reported_sizes():
+            fit = json.loads(fit_path.read_text(encoding="utf-8"))
+            document, blob = read_glb(glb)
+            attributes = document["meshes"][0]["primitives"][0]["attributes"]
+            ease = accessor_array(document, blob, attributes["_EASE_MM"])
+            positions = accessor_array(document, blob, attributes["POSITION"]).astype(np.float64)
+            region = accessor_array(document, blob, attributes["_REGION"])
+            masks = region_vertex_masks(positions, region, entry["levels"], "pants" if garment == "pants" else "shirt")
+            for name, mask in masks.items():
+                value = fit["regions"][name]["ease_mm"]
+                self.assertGreater(int(mask.sum()), 20, f"{glb.name} {name}")
+                if abs(value) < 5:  # within the fitting tolerance: no meaningful sign
+                    continue
+                median = float(np.median(ease[mask]))
+                self.assertEqual(np.sign(median), np.sign(value), f"{glb.name} {name}: median vertex ease {median:.1f} mm vs region {value} mm")
+                checked += 1
+        if not checked:
+            self.skipTest("size reports not generated")
 
     def test_vertex_ease_has_no_steps_along_the_torso(self) -> None:
         """No hard horizontal edge: the median ease of 1 cm torso slices never jumps by more than 8 mm between slices."""
         from garment_glb import accessor_array, read_glb
         from tshirt import REGION_TORSO
 
-        for glb in SIZES_DIR.glob("tshirt-*.glb"):
+        for glb in (p for d in SIZE_DIRS for p in d.glob("tshirt-*.glb")):
             document, blob = read_glb(glb)
             attributes = document["meshes"][0]["primitives"][0]["attributes"]
             ease = accessor_array(document, blob, attributes["_EASE_MM"])
@@ -187,7 +197,7 @@ class GeneratedSizesTests(unittest.TestCase):
     def test_glbs_carry_ease_and_matching_sidecars(self) -> None:
         from garment_glb import accessor_array, read_glb
 
-        for glb in SIZES_DIR.glob("*.glb"):
+        for glb in (p for d in SIZE_DIRS for p in d.glob("*.glb")):
             document, blob = read_glb(glb)
             primitive = document["meshes"][0]["primitives"][0]
             self.assertIn("_EASE_MM", primitive["attributes"], glb.name)

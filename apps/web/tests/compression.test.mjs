@@ -14,10 +14,10 @@ import { tryOnPose } from "../lib/garment/poseTransition.ts";
 
 const outputs = new URL("../../../outputs/", import.meta.url);
 const avatarPath = new URL("avatars/mhr-neutral.glb", outputs);
-const shirtPath = new URL("garments/experiments/tshirt-v5.2-mhr-neutral.glb", outputs);
-const sidecarPath = new URL("garments/experiments/tshirt-v5.2-mhr-neutral.correctives.json", outputs);
+const shirtPath = new URL("garments/experiments/tshirt-v5.3-mhr-neutral.glb", outputs);
+const sidecarPath = new URL("garments/experiments/tshirt-v5.3-mhr-neutral.correctives.json", outputs);
 if (![avatarPath, shirtPath, sidecarPath].every(existsSync)) {
-  console.log("Compression integration skipped: neutral avatar or v5.2 assets unavailable");
+  console.log("Compression integration skipped: neutral avatar or v5.3 assets unavailable");
 } else {
   async function load(bytes) {
     const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
@@ -103,6 +103,6 @@ if (![avatarPath, shirtPath, sidecarPath].every(existsSync)) {
       for (const name of Object.keys(original)) assert.ok(Math.abs(original[name] - compressed[name]) < 1e-6, `${label} ${name}`);
     }
     assert.equal(await readFile(sidecarPath, "utf8"), sidecarText, "compression does not modify sidecars");
-    console.log("Compressed v5.2 preserves morphs, joints, skin weights, binding and corrective weights");
+    console.log("Compressed v5.3 preserves morphs, joints, skin weights, binding and corrective weights");
   } finally { await rm(cache, { recursive: true, force: true }); }
 }

@@ -41,7 +41,7 @@ export async function GET(request: Request) {
     return new Response(new Uint8Array(bytes), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
   } catch (error) {
     const missing = (error as NodeJS.ErrnoException).code === "ENOENT";
-    if (!missing || (!sidecar && variant !== "pants" && variant !== "pants-v2")) console.error("Unable to read the local demo garment:", error);
-    return Response.json({ error: missing ? (variant === "pants" || variant === "pants-v2" ? "Pants not generated yet." : "Demo garment not found.") : "Unable to prepare the demo garment." }, { status: missing ? 404 : 500 });
+    if (!missing || (!sidecar && !variant.startsWith("pants"))) console.error("Unable to read the local demo garment:", error);
+    return Response.json({ error: missing ? (variant.startsWith("pants") ? "Pants not generated yet." : "Demo garment not found.") : "Unable to prepare the demo garment." }, { status: missing ? 404 : 500 });
   }
 }

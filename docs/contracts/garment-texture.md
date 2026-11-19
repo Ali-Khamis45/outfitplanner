@@ -1,6 +1,6 @@
 # Contract: garment UV layout (texture islands)
 
-**Status:** v2: UV layout v2 (Sprint 3A, the defaults) and UV layout v3 (Sprint 3.5 candidates, pattern panels). **Producer:** `services/garments` (`uv_layout.py`). **Consumers:** the web app (textures, fixtures), Sprint 4A (photo projection onto the islands). Any change bumps the version.
+**Status:** v3: UV layout v3 (pattern panels, `tshirt-v5.3` / `pants-v3`, the default since Sprint 3.5 was accepted) and UV layout v2 (Sprint 3A, `tshirt-v5.2` / `pants-v2`, kept for one sprint as `?gen=v5.2`). **Producer:** `services/garments` (`uv_layout.py`). **Consumers:** the web app (textures, fixtures), Sprint 4A (photo projection onto the islands). Any change bumps the version.
 
 ## Garments covered
 
@@ -81,9 +81,9 @@ Both limitations come from the seams. Each panel is a tube with a single cut (ce
 | `tshirt-v5.2-XL-neutral.glb` | underarm slivers | 9 (9.1) | 1.856% (torso) |
 | `tshirt-v5.2-XL-personal-scaled.glb` | underarm slivers | 12 (14.6) | 1.024% (sleeve_left) |
 
-## UV layout v3: pattern panels (Sprint 3.5 candidates `tshirt-v5.3`, `pants-v3`)
+## UV layout v3: pattern panels (`tshirt-v5.3`, `pants-v3`, the default)
 
-UV layout v3 is used by the Sprint 3.5 candidates only: `tshirt-v5.3` and `pants-v3`, the neutral base garments and every size in `outputs/garments/sizes-v5.3/`. The defaults (`tshirt-v5.2`, `pants-v2`, layout v2 above) are unchanged until the candidates are accepted.
+UV layout v3 is used by `tshirt-v5.3` and `pants-v3`: the neutral base garments and every size in `outputs/garments/sizes/`. It is the default generation; layout v2 above stays with `tshirt-v5.2` / `pants-v2` (`outputs/garments/sizes-v5.2/`) for one sprint. A texture is painted in one layout: the web app shows a wardrobe item's texture only on the mesh of its template's generation (`tshirt-v5.3` / `pants-v3` → layout v3; `tshirt-v5.2` / `pants-v2` / `pants-basic-v2` → layout v2) and its colour otherwise. Sprint 4A produces layout v3 textures.
 
 **Panels and seams.** Each garment is cut into the pieces of a real pattern (`services/garments/panels.py`). Seams run along mesh edges, as shortest paths between landmarks found on the garment, each held to its intended line:
 
@@ -114,7 +114,7 @@ The garment's shape, triangles, skinning and correctives are those of v5.2 / pan
 
 **Garment up.** This is world +Y for the torso and pants panels. For sleeves it is the sleeve axis towards the shoulder; world +Y has no direction on the top and underside of a sleeve. For the gusset it is its length, front to back.
 
-**Quality bounds** (`services/garments/tests/test_uv_v3.py`), STRICT on every panel of every candidate GLB:
+**Quality bounds** (`services/garments/tests/test_uv_v3.py`), STRICT on every panel of every v5.3 / pants-v3 GLB:
 - density within ±15% of the panel median for at least 99% of triangles;
 - anisotropy p99 ≤ 1.35;
 - **no folded triangles**;

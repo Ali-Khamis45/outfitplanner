@@ -17,7 +17,7 @@ try {
   const wardrobe = exampleWardrobe(); wardrobe.items[0].photo = "outputs/wardrobe/photos/private.png"; wardrobe.items[0].notes = "PRIVATE MEASUREMENTS 123456";
   await mkdir(path.join(root, "wardrobe"), { recursive: true }); await writeFile(path.join(root, "wardrobe/wardrobe.json"), JSON.stringify(wardrobe));
   await mkdir(path.join(root, "garments/sizes"), { recursive: true });
-  await writeFile(path.join(root, "garments/sizes/tshirt-v5.2-M-neutral.fit.json"), JSON.stringify({ version: 1, garment: "tshirt-v5.2", size: "M", body: "neutral", regions: { chest: { status: "good", ease_mm: 123456 } }, recommended: true }));
+  await writeFile(path.join(root, "garments/sizes/tshirt-v5.3-M-neutral.fit.json"), JSON.stringify({ version: 1, garment: "tshirt-v5.3", size: "M", body: "neutral", regions: { chest: { status: "good", ease_mm: 123456 } }, recommended: true }));
   const weather = async () => ({ city: "Cairo", date: "2026-11-16", temperature_min_c: 18, temperature_max_c: 27, condition: "Clear" });
   const scripted = await model((body, index) => [
     completion(null, [toolCall("get_wardrobe", {})]),

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowUpRight, Heart, PencilSimple, Plus } from "@phosphor-icons/react";
 import type { WardrobeItem } from "../../lib/wardrobe/schema";
 import { formatRegion, type Region } from "../../lib/garment/fitMap";
+import { garmentForTemplate } from "../../lib/garment/generation";
 import { Panel } from "../shell/Panel";
 import { PieceImage, canTryOn, itemTryOnUrl } from "./PieceImage";
 type Fit = { status: "available"; size: string; body: string; regions: Record<string, Region>; recommended_size: string | null } | { status: "unknown" };
@@ -24,7 +25,7 @@ function ItemFit({ item }: { item: WardrobeItem }) {
   return <section className="item-fit" aria-label="Item size fit"><div className="item-fit-heading"><h3>How it fits</h3><span>Size {item.size || "not set"}</span></div><label>Compare with<select value={body} onChange={event => setBody(event.target.value)}><option value="neutral">Neutral avatar</option><option value="personal-scaled">My avatar</option></select></label>
     {result?.key !== key ? <p role="status">Checking this size…</p> : fit?.status === "available" ? <>
       {tight && <p className="fit-warning" role="status">This size is tight in one or more areas. Check the fit before wearing.</p>}
-      {Object.entries(fit.regions).map(([name, region]) => <p className="fit-label" data-fit={region.status} key={name}><span className="fit-status">{region.status}</span>{formatRegion(name, region, item.template === "pants-basic-v2" ? "pants-v2" : item.template ?? "")}{region.clamped && <small>Estimated from size chart</small>}</p>)}
+      {Object.entries(fit.regions).map(([name, region]) => <p className="fit-label" data-fit={region.status} key={name}><span className="fit-status">{region.status}</span>{formatRegion(name, region, garmentForTemplate(item.template) ?? "")}{region.clamped && <small>Estimated from size chart</small>}</p>)}
       {fit.recommended_size && <p className="fit-recommendation">Recommended size: <strong>{fit.recommended_size}</strong></p>}
     </> : <p className="muted">{result?.fit === null ? "Fit could not be loaded. Try another avatar or reopen this piece." : "No fit map is available for this item, size and avatar. Fit is unknown."}</p>}
   </section>;

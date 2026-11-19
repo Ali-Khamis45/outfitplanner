@@ -92,17 +92,18 @@ def evaluate(glb: Path, body_id: str) -> dict[str, Any]:
     return {"poses": results, "beyond_3mm_total": int(sum(r["beyond_3mm"] for r in results.values())), "worst_max_depth_mm": worst["max_depth_mm"], "pass": all(r["beyond_3mm"] == 0 for r in results.values())}
 
 
-def base_pants(body_id: str) -> Path | None:
-    """The body's pants v2; None for a calibrated body (its manifest pants were fitted to the uncalibrated body)."""
+def base_pants(body_id: str, pants_version: str = "v3") -> Path | None:
+    """The body's base pants of the shirt's generation (pants v3 under tshirt-v5.3, v2 under v5.2); None for a calibrated
+    body (its manifest pants were fitted to the uncalibrated body)."""
     if calibrated_avatar(body_id) is not None:
         return None
     if body_id != "neutral":
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
         bottom = PROJECT / next(e for e in [manifest["primary"], *manifest["secondary"]] if e["id"] == body_id)["bottom"]["glb"]
-        if bottom.parent.resolve() == SIZES_DIR.resolve():
+        if bottom.parent.resolve() in {SIZES_DIR.resolve(), SIZES_DIR.with_name("sizes-v5.2").resolve()}:
             return None  # the manifest's bottom is one of the body's own size files, already in the size list
     if body_id == "neutral":
-        return PROJECT / "outputs" / "garments" / "pants-basic-v2-mhr-neutral.glb"
+        return PROJECT / "outputs" / "garments" / f"pants-basic-{pants_version}-mhr-neutral.glb"
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     return PROJECT / next(e for e in [manifest["primary"], *manifest["secondary"]] if e["id"] == body_id)["bottom"]["glb"]
 
@@ -114,7 +115,9 @@ def layering(directory: Path) -> dict[str, Any]:
     for shirt_path in sorted(directory.glob("tshirt-*.glb")):
         body_id = shirt_path.name[: -len(".glb")].split("-", 3)[3]
         body, shirt = load_asset(avatar_for(body_id)), load_asset(shirt_path)
-        for pants_path in [*([base_pants(body_id)] if base_pants(body_id) else []), *sorted(directory.glob(f"pants-v*-*-{body_id}.glb"))]:
+        pants_version = "v2" if shirt_path.name.startswith("tshirt-v5.2-") else "v3"
+        base = base_pants(body_id, pants_version)
+        for pants_path in [*([base] if base else []), *sorted(directory.glob(f"pants-{pants_version}-*-{body_id}.glb"))]:
             r = shirt_layering(load_asset(pants_path), shirt, body)
             ok = (r["pants_vertices_inside_shirt_shell"] == 0 and r["shirt_vertices_inside_pants_shell"] == 0 and r["shirt_pants_triangles_intersecting"] == 0
                   and r["shirt_vertices_under_pants"] == 0 and r["overlap_m"] >= MIN_OVERLAP_M)
@@ -128,7 +131,7 @@ def main() -> int:
     parser.add_argument("--dir", type=Path, default=SIZES_DIR)
     parser.add_argument("--skip-layering", action="store_true")
     parser.add_argument("--skip-poses", action="store_true", help="layering only")
-    parser.add_argument("--out", type=Path, default=PROJECT / "outputs" / "garment-tests" / "sizes-gates-sprint-3a.json")
+    parser.add_argument("--out", type=Path, default=PROJECT / "outputs" / "garment-tests" / "sizes-gates.json")
     args = parser.parse_args()
     report = {}
     for glb in [] if args.skip_poses else sorted(args.dir.glob("*.glb")):

@@ -4,7 +4,9 @@
 
 For each body, garment and size: design the size on the body (girths solved to the size spec), clean degenerate
 triangles (personal bodies), re-solve the corrective morphs for this size, and write
-outputs/garments/sizes/<garment>-<size>-<bodyId>.glb (+ _EASE_MM), .correctives.json and .fit.json. Personal bodies
+outputs/garments/sizes/<garment>-<size>-<bodyId>.glb (+ _EASE_MM), .correctives.json and .fit.json. --revision picks
+the garment generation: 3.5 (default since Sprint 3.5 was accepted: tshirt-v5.3 / pants-v3, into outputs/garments/sizes/)
+or 3a (tshirt-v5.2 / pants-v2, into outputs/garments/sizes-v5.2/, kept for one sprint as ?gen=v5.2). Personal bodies
 come from outputs/garments/personal/manifest.json. If outputs/avatars/measurements.json exists, the personal body is
 calibrated to it first (calibrate.py); otherwise calibration is skipped and reported. Nothing is overwritten.
 
@@ -40,10 +42,10 @@ SIZES_DIR = PROJECT / "outputs" / "garments" / "sizes"
 MANIFEST = PROJECT / "outputs" / "garments" / "personal" / "manifest.json"
 MEASUREMENTS = AVATAR_DIR / "measurements.json"
 RECONSTRUCTION = PROJECT / "outputs" / "sam3d-person-front-sprint03-run2" / "reconstruction.npz"
-GARMENT_TAGS = {"tshirt": "tshirt-v5.2", "pants": "pants-v2"}
-# --revision: 3a = tshirt-v5.2 / pants-v2 (UV layout v2, linear push); 3.5 = the Sprint 3.5 candidates tshirt-v5.3 /
-# pants-v3 (pattern panels, UV layout v3, smooth push falloff). The default stays 3a.
-REVISIONS = {"3a": {"tshirt": "v5.2", "pants": "v2"}, "3.5": {"tshirt": "v5.3", "pants": "v3"}}
+GARMENT_TAGS = {"tshirt": "tshirt-v5.3", "pants": "pants-v3"}
+# --revision: 3.5 = tshirt-v5.3 / pants-v3 (pattern panels, UV layout v3, smooth push falloff), the default generation;
+# 3a = tshirt-v5.2 / pants-v2 (UV layout v2, linear push), the previous default, reachable for one sprint.
+REVISIONS = {"3a": {"tshirt": "v5.2", "pants": "v2", "dir": SIZES_DIR.parent / "sizes-v5.2"}, "3.5": {"tshirt": "v5.3", "pants": "v3", "dir": SIZES_DIR}}
 CRASH_LOG = PROJECT / "outputs" / "garment-tests" / "sizes-crash.log"  # faulthandler + per-stage peak memory
 ENTRIES_DIR = PROJECT / "outputs" / "garment-tests" / "sizes"  # per-size report entries (resume)
 
@@ -124,7 +126,7 @@ def has_base_pants(body_id: str) -> bool:
         return True
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     entry = next(e for e in [manifest["primary"], *manifest["secondary"]] if e["id"] == body_id)
-    return (PROJECT / entry["bottom"]["glb"]).parent.resolve() != SIZES_DIR.resolve()
+    return (PROJECT / entry["bottom"]["glb"]).parent.resolve() not in {r["dir"].resolve() for r in REVISIONS.values()}
 
 
 def base_pants_outer(body_id: str) -> tuple[np.ndarray, np.ndarray]:
@@ -333,11 +335,13 @@ def main() -> int:
     parser.add_argument("--bodies", nargs="+", default=["neutral", "personal-scaled"])
     parser.add_argument("--garments", nargs="+", default=["tshirt", "pants"], choices=["tshirt", "pants"])
     parser.add_argument("--sizes", nargs="+", default=["S", "M", "L", "XL"], choices=["S", "M", "L", "XL"])
-    parser.add_argument("--out-dir", type=Path, default=SIZES_DIR)
+    parser.add_argument("--out-dir", type=Path, default=None, help="default: the revision's sizes folder")
     parser.add_argument("--entries-dir", type=Path, default=ENTRIES_DIR, help="per-size report entries, written as each size finishes (resume)")
-    parser.add_argument("--report", type=Path, default=PROJECT / "outputs" / "garment-tests" / "sizes-sprint-3a.json")
-    parser.add_argument("--revision", choices=sorted(REVISIONS), default="3a", help="3a: tshirt-v5.2 / pants-v2 (default); 3.5: the candidates tshirt-v5.3 / pants-v3")
+    parser.add_argument("--report", type=Path, default=None, help="default: outputs/garment-tests/sizes-sprint-<revision>.json")
+    parser.add_argument("--revision", choices=sorted(REVISIONS), default="3.5", help="3.5: tshirt-v5.3 / pants-v3 (default); 3a: tshirt-v5.2 / pants-v2")
     args = parser.parse_args()
+    args.out_dir = args.out_dir or REVISIONS[args.revision]["dir"]
+    args.report = args.report or PROJECT / "outputs" / "garment-tests" / f"sizes-sprint-{args.revision}.json"
     GARMENT_TAGS.update({"tshirt": "tshirt-" + REVISIONS[args.revision]["tshirt"], "pants": "pants-" + REVISIONS[args.revision]["pants"]})
     CRASH_LOG.parent.mkdir(parents=True, exist_ok=True)
     crash_log = open(CRASH_LOG, "a", encoding="utf-8")  # stays open for the process lifetime: faulthandler writes to it on a fatal signal

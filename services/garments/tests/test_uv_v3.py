@@ -39,8 +39,8 @@ UP_ANGLE_EXEMPT = {("pants", "gusset")}
 
 def v3_glbs() -> list[tuple[Path, str]]:
     found = [(GARMENTS / "experiments" / "tshirt-v5.3-mhr-neutral.glb", "tshirt"), (GARMENTS / "pants-basic-v3-mhr-neutral.glb", "pants")]
-    found += [(p, "tshirt") for p in sorted((GARMENTS / "sizes-v5.3").glob("tshirt-v5.3-*.glb"))]
-    found += [(p, "pants") for p in sorted((GARMENTS / "sizes-v5.3").glob("pants-v3-*.glb"))]
+    found += [(p, "tshirt") for p in sorted((GARMENTS / "sizes").glob("tshirt-v5.3-*.glb"))]
+    found += [(p, "pants") for p in sorted((GARMENTS / "sizes").glob("pants-v3-*.glb"))]
     return [(p, kind) for p, kind in found if p.is_file()]
 
 

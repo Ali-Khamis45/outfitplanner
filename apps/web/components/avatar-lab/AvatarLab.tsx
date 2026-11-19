@@ -11,6 +11,7 @@ import { DEMO_GARMENT, demoGarment, GarmentPanel } from "./GarmentPanel";
 import { PantsPanel, type PantsVariant } from "./PantsPanel";
 import type { Sidecar } from "../../lib/garment/correctives";
 import { createSidecarLoader, DEFAULT_PANTS_VARIANT, pantsUrl, sidecarIsPending, sidecarUrlForSelection } from "../../lib/garment/demoResources";
+import { DEFAULT_GENERATION, GENERATIONS, type Generation } from "../../lib/garment/generation";
 import type { PoseName } from "../../lib/garment/poses";
 import type { AssetStatus, AvatarSource, CameraView, GarmentInfo, GarmentSource, GarmentStatus, ModelInfo, RenderStats } from "./types";
 import { FitPicker, MeasurementsForm, useSizes } from "../FitControls";
@@ -29,8 +30,8 @@ class SceneErrorBoundary extends Component<{ children: ReactNode; onError: () =>
 export function AvatarLab() {
   const [wireframe, setWireframe] = useState(false), [garmentWireframe, setGarmentWireframe] = useState(false), [skeleton, setSkeleton] = useState(false), [grid, setGrid] = useState(true), [turntable, setTurntable] = useState(false);
   const [source, setSource] = useState<AvatarSource>(NEUTRAL_SOURCE);
-  const [candidate, setCandidate] = useState(false);
-  const topSizes = useSizes(source.kind === "neutral" ? "neutral" : null, "top", false, "", candidate), bottomSizes = useSizes(source.kind === "neutral" ? "neutral" : null, "bottom", false, "", candidate);
+  const [generation, setGeneration] = useState<Generation>(DEFAULT_GENERATION);
+  const topSizes = useSizes(source.kind === "neutral" ? "neutral" : null, "top", false, "", generation), bottomSizes = useSizes(source.kind === "neutral" ? "neutral" : null, "bottom", false, "", generation);
   const [heatmap, setHeatmap] = useState(false), [useFitSizes, setUseFitSizes] = useState(true);
   const [status, setStatus] = useState<AssetStatus>("loading");
   const [model, setModel] = useState<ModelInfo | null>(null);
@@ -117,7 +118,7 @@ export function AvatarLab() {
         while (pantsStatusRef.current.state === "loading" && performance.now() < pantsDeadline) await new Promise(resolve => setTimeout(resolve, 100));
         if (pantsStatusRef.current.state !== "ready") skipped.push("pants (load failed)");
       } else skipped.push(pantsResponse.status === 404 ? "pants (not generated)" : "pants (unavailable)");
-      for (const variant of ["v1", "v2", "v4", "v5", "v5.1", "v5.2"] as const) {
+      for (const variant of ["v1", "v2", "v4", "v5", "v5.1", "v5.2", "v5.3"] as const) {
         const response = await fetch(`/api/demo-garment?variant=${variant}`, { method: "GET" });
         if (!response.ok) { skipped.push(variant); continue; }
         chooseGarment(demoGarment(variant));
@@ -170,7 +171,7 @@ export function AvatarLab() {
       <div className="header-center"><span className="header-divider" /><span>Avatar Reconstruction Lab</span><span className="header-badge">SPRINT 1</span></div><div className="header-right"><span className="status-dot" /> LOCAL ENVIRONMENT <span className="header-index">/ 01</span></div>
     </header>
     <div className="lab-body"><LeftInspector source={source} onSelectSource={selectSource} skeleton={skeleton} wireframe={wireframe} garmentWireframe={garmentWireframe} grid={grid} turntable={turntable} setSkeleton={setSkeleton} setWireframe={setWireframe} setGarmentWireframe={setGarmentWireframe} setGrid={setGrid} setTurntable={setTurntable} status={status}>
-      <section className="side-section"><label className="field-label" htmlFor="generation-select">Garment generation</label><select id="generation-select" value={candidate ? "v5.3" : "v5.2"} onChange={event => { const next = event.target.value === "v5.3"; setCandidate(next); chooseGarment(demoGarment(next ? "v5.3" : "v5.2")); choosePants(next ? "pants-v3" : "pants-v2"); }}><option value="v5.2">v5.2 / pants-v2 (default)</option><option value="v5.3">v5.3 / pants-v3 (candidate)</option></select></section>
+      <section className="side-section"><label className="field-label" htmlFor="generation-select">Garment generation</label><select id="generation-select" value={generation} onChange={event => { const next = event.target.value as Generation; setGeneration(next); chooseGarment(demoGarment(GENERATIONS[next].topVariant)); choosePants(GENERATIONS[next].bottomVariant); }}><option value="v5.3">v5.3 / pants-v3 (default)</option><option value="v5.2">v5.2 / pants-v2 (previous, until Sprint 4A ends)</option></select></section>
       <GarmentPanel enabled={garmentEnabled} setEnabled={enableGarment} source={garmentSource} onSource={chooseGarment} visible={garmentVisible} setVisible={setGarmentVisible} color={garmentColor} setColor={setGarmentColor} pose={pose} setPose={setPose} status={garmentStatus} correctives={correctives} setCorrectives={setCorrectives} weights={weights} avatarReady={status === "ready"} />
       <PantsPanel variant={pantsVariant} setVariant={choosePants} enabled={pantsEnabled} setEnabled={enablePants} visible={pantsVisible} setVisible={setPantsVisible} color={pantsColor} setColor={setPantsColor} wireframe={pantsWireframe} setWireframe={setPantsWireframe} correctives={pantsCorrectives} setCorrectives={setPantsCorrectives} weights={pantsWeights} status={pantsStatus} avatarReady={status === "ready"} />
       <div className="lab-fit-controls"><label><input type="checkbox" checked={useFitSizes} onChange={event => setUseFitSizes(event.target.checked)} /> Use size fits</label><FitPicker title="Top" options={topSizes.options} selected={topSizes.size} onSize={topSizes.setSize} /><FitPicker title="Bottom" options={bottomSizes.options} selected={bottomSizes.size} onSize={bottomSizes.setSize} /><label className="fit-heatmap"><input type="checkbox" checked={heatmap} onChange={event => setHeatmap(event.target.checked)} /> Fit heatmap <span>Orange: tight · Green: good · Blue: loose</span></label><MeasurementsForm /></div>
