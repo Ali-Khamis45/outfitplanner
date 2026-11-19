@@ -4,8 +4,8 @@ import { emptyMeasurements, measurementError, measurementFields, names, serializ
 import { parseSidecar, type Sidecar } from "../lib/garment/correctives";
 import { formatRegion, isFullyClampedAndTight, parseFitMap, regionEstimateNote, SIZES, type Size, type SizeOption, type Slot } from "../lib/garment/fitMap";
 
-export function useSizes(body: string | null, slot: Slot, fixtures = false, preferredSize = "") {
-  const key = JSON.stringify([body, slot, fixtures, preferredSize]);
+export function useSizes(body: string | null, slot: Slot, fixtures = false, preferredSize = "", candidate = false) {
+  const key = JSON.stringify([body, slot, fixtures, preferredSize, candidate]);
   const [discovery, setDiscovery] = useState<{ key: string; options: SizeOption[]; initial: Size | null } | null>(null);
   const [choice, setChoice] = useState<{ key: string; size: Size } | null>(null);
   const [loaded, setLoaded] = useState<{ url: string; sidecar: Sidecar | null } | null>(null);
@@ -13,6 +13,7 @@ export function useSizes(body: string | null, slot: Slot, fixtures = false, pref
     let active = true;
     if (!body) return;
     const query = new URLSearchParams({ body, slot });
+    if (candidate) query.set("gen", "v5.3");
     if (fixtures) query.set("fixtures", "1");
     fetch(`/api/size-garment?${query}`, { cache: "no-store" })
       .then(response => response.ok ? response.json() : [])
@@ -23,7 +24,7 @@ export function useSizes(body: string | null, slot: Slot, fixtures = false, pref
         setDiscovery({ key, options, initial });
       }).catch(() => { if (active) setDiscovery({ key, options: [], initial: null }); });
     return () => { active = false; };
-  }, [body, slot, fixtures, preferredSize, key]);
+  }, [body, slot, fixtures, preferredSize, candidate, key]);
   const resolved = !body || discovery?.key === key;
   const options = resolved && body ? discovery?.options ?? [] : [];
   const size = resolved ? (choice?.key === key ? choice.size : discovery?.initial ?? null) : null;

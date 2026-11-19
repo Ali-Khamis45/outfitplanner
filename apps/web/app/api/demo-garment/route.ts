@@ -14,6 +14,8 @@ const VARIANTS: Record<string, string> = {
   v5: "experiments/tshirt-v5-mhr-neutral.glb",
   "v5.1": "experiments/tshirt-v5.1-mhr-neutral.glb",
   "v5.2": "experiments/tshirt-v5.2-mhr-neutral.glb",
+  "v5.3": "experiments/tshirt-v5.3-mhr-neutral.glb",
+  "pants-v3": "pants-basic-v3-mhr-neutral.glb",
   pants: "pants-basic-v1-mhr-neutral.glb",
   "pants-v2": "pants-basic-v2-mhr-neutral.glb",
 };

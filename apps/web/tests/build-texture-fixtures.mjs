@@ -13,14 +13,15 @@ function chunk(name, data) {
 // UV layout v2: the torso occupies v=0..0.58; its front is centered at u=0.5.
 // Body up is +v, so the F is drawn upside down in image coordinates.
 // Stripes cover the whole atlas, including sleeves, legs, seat and gusset.
-function texture(shirt) {
+function texture(shirt, candidate = false) {
   const size = 2048, raw = Buffer.alloc((size * 4 + 1) * size);
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
     const offset = y * (size * 4 + 1) + 1 + x * 4, stripe = y % 128 < 52;
     let rgb = stripe ? [41, 63, 112] : [233, 227, 213];
-    if (shirt && x >= 980 && x < 1068 && y >= 570 && y < 760) {
+    const logoX = candidate ? x + 478 : x;
+    if (shirt && logoX >= 980 && logoX < 1068 && y >= 570 && y < 760) {
       rgb = [232, 80, 53];
-      if ((x >= 1000 && x < 1012 && y >= 600 && y < 730) || (x >= 1000 && x < 1050 && y >= 705 && y < 730) || (x >= 1000 && x < 1035 && y >= 650 && y < 675)) rgb = [255, 255, 255];
+      if ((logoX >= 1000 && logoX < 1012 && y >= 600 && y < 730) || (logoX >= 1000 && logoX < 1050 && y >= 705 && y < 730) || (logoX >= 1000 && logoX < 1035 && y >= 650 && y < 675)) rgb = [255, 255, 255];
     }
     raw[offset] = rgb[0]; raw[offset + 1] = rgb[1]; raw[offset + 2] = rgb[2]; raw[offset + 3] = 255;
   }
@@ -29,6 +30,10 @@ function texture(shirt) {
 }
 for (const [item, template, fallback] of [["shirt", "tshirt-v5.2", "#e9e3d5"], ["pants", "pants-basic-v2", "#777f69"]]) {
   await writeFile(path.join(dir, `${item}.png`), texture(item === "shirt"));
+  await writeFile(path.join(dir, `${item}.texture.json`), JSON.stringify({ version: 1, item, template, views: ["front", "back"], coverage: 1, fallback_hex: fallback, created_at: "2026-11-14" }, null, 2));
+}
+for (const [item, template, fallback] of [["shirt-v3", "tshirt-v5.3", "#e9e3d5"], ["pants-v3", "pants-v3", "#777f69"]]) {
+  await writeFile(path.join(dir, `${item}.png`), texture(item === "shirt-v3", true));
   await writeFile(path.join(dir, `${item}.texture.json`), JSON.stringify({ version: 1, item, template, views: ["front", "back"], coverage: 1, fallback_hex: fallback, created_at: "2026-11-14" }, null, 2));
 }
 console.log(`Generated test textures in ${dir}`);
