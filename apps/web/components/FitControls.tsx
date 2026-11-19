@@ -3,7 +3,7 @@ import { useEffect, useId, useState } from "react";
 import { emptyMeasurements, measurementError, measurementFields, names, serializeMeasurements, type Measurements } from "../lib/measurements";
 import { parseSidecar, type Sidecar } from "../lib/garment/correctives";
 import { formatRegion, isFullyClampedAndTight, parseFitMap, regionEstimateNote, SIZES, type Size, type SizeOption, type Slot } from "../lib/garment/fitMap";
-import { DEFAULT_GENERATION, type Generation } from "../lib/garment/generation";
+import { DEFAULT_GENERATION, generationQuery, type Generation } from "../lib/garment/generation";
 
 export function useSizes(body: string | null, slot: Slot, fixtures = false, preferredSize = "", generation: Generation = DEFAULT_GENERATION) {
   const key = JSON.stringify([body, slot, fixtures, preferredSize, generation]);
@@ -14,7 +14,7 @@ export function useSizes(body: string | null, slot: Slot, fixtures = false, pref
     let active = true;
     if (!body) return;
     const query = new URLSearchParams({ body, slot });
-    if (generation !== DEFAULT_GENERATION) query.set("gen", generation);
+    for (const [name, value] of Object.entries(generationQuery(generation))) query.set(name, value);
     if (fixtures) query.set("fixtures", "1");
     fetch(`/api/size-garment?${query}`, { cache: "no-store" })
       .then(response => response.ok ? response.json() : [])

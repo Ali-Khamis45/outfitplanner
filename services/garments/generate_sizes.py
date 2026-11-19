@@ -45,7 +45,9 @@ RECONSTRUCTION = PROJECT / "outputs" / "sam3d-person-front-sprint03-run2" / "rec
 GARMENT_TAGS = {"tshirt": "tshirt-v5.3", "pants": "pants-v3"}
 # --revision: 3.5 = tshirt-v5.3 / pants-v3 (pattern panels, UV layout v3, smooth push falloff), the default generation;
 # 3a = tshirt-v5.2 / pants-v2 (UV layout v2, linear push), the previous default, reachable for one sprint.
-REVISIONS = {"3a": {"tshirt": "v5.2", "pants": "v2", "dir": SIZES_DIR.parent / "sizes-v5.2"}, "3.5": {"tshirt": "v5.3", "pants": "v3", "dir": SIZES_DIR}}
+REVISIONS = {"3a": {"tshirt": "v5.2", "pants": "v2", "dir": SIZES_DIR.parent / "sizes-v5.2"}, "3.5": {"tshirt": "v5.3", "pants": "v3", "dir": SIZES_DIR},
+             # candidate: pants v3.1 (no knee step) under the v5.3 shirts; generate with --garments pants
+             "3.5-knee": {"tshirt": "v5.3", "pants": "v3.1", "dir": SIZES_DIR.parent / "sizes-pants-v3.1"}}
 CRASH_LOG = PROJECT / "outputs" / "garment-tests" / "sizes-crash.log"  # faulthandler + per-stage peak memory
 ENTRIES_DIR = PROJECT / "outputs" / "garment-tests" / "sizes"  # per-size report entries (resume)
 
@@ -291,12 +293,12 @@ def build_shirt(body: RestBody, body_id: str, avatar_path: Path, spec: Any, surf
 def build_pants(body: RestBody, body_id: str, avatar_path: Path, spec: Any, surface: Any, revision: str = "v2") -> dict[str, Any]:
     from fit_sizes import fit_pants
     from generate_pants import MATERIAL as PANTS_MATERIAL, metadata as pants_metadata
-    from pants import PANTS_V2_CORRECTIVE_RULES, PANTS_V2_RULES, PANTS_V2_SPECS, PANTS_V3_RULES, leg_corrective_specs
+    from pants import PANTS_V2_CORRECTIVE_RULES, PANTS_V2_RULES, PANTS_V2_SPECS, PANTS_V3_1_RULES, PANTS_V3_RULES, leg_corrective_specs
     from sizes import ease_map_mm, pants_regions, pants_target_m
     from tshirt import assemble
 
     started = time.perf_counter()
-    garment, rules, fit = fit_pants(body, spec, PANTS_V3_RULES if revision == "v3" else PANTS_V2_RULES)
+    garment, rules, fit = fit_pants(body, spec, {"v3": PANTS_V3_RULES, "v3.1": PANTS_V3_1_RULES}.get(revision, PANTS_V2_RULES))
     if body_id != "neutral":
         from personal_fit import collapse_degenerate
 
@@ -338,7 +340,7 @@ def main() -> int:
     parser.add_argument("--out-dir", type=Path, default=None, help="default: the revision's sizes folder")
     parser.add_argument("--entries-dir", type=Path, default=ENTRIES_DIR, help="per-size report entries, written as each size finishes (resume)")
     parser.add_argument("--report", type=Path, default=None, help="default: outputs/garment-tests/sizes-sprint-<revision>.json")
-    parser.add_argument("--revision", choices=sorted(REVISIONS), default="3.5", help="3.5: tshirt-v5.3 / pants-v3 (default); 3a: tshirt-v5.2 / pants-v2")
+    parser.add_argument("--revision", choices=sorted(REVISIONS), default="3.5", help="3.5: tshirt-v5.3 / pants-v3 (default); 3a: tshirt-v5.2 / pants-v2; 3.5-knee: candidate pants-v3.1")
     args = parser.parse_args()
     args.out_dir = args.out_dir or REVISIONS[args.revision]["dir"]
     args.report = args.report or PROJECT / "outputs" / "garment-tests" / f"sizes-sprint-{args.revision}.json"

@@ -3,8 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 import { createPantsChecker, pantsUrl, type PantsAvailability } from "../../lib/garment/demoResources";
 import type { GarmentStatus } from "./types";
 
-export type PantsVariant = "pants" | "pants-v2" | "pants-v3";
-const checkers = { "pants-v3": createPantsChecker(pantsUrl("pants-v3")), pants: createPantsChecker(pantsUrl("pants")), "pants-v2": createPantsChecker(pantsUrl("pants-v2")) };
+export type PantsVariant = "pants" | "pants-v2" | "pants-v3" | "pants-v3.1";
+const checkers = { "pants-v3.1": createPantsChecker(pantsUrl("pants-v3.1")), "pants-v3": createPantsChecker(pantsUrl("pants-v3")), pants: createPantsChecker(pantsUrl("pants")), "pants-v2": createPantsChecker(pantsUrl("pants-v2")) };
 type Availability = "checking" | PantsAvailability;
 export function PantsPanel({ variant, setVariant, enabled, setEnabled, visible, setVisible, color, setColor, wireframe, setWireframe, correctives, setCorrectives, weights, status, avatarReady }: {
   variant: PantsVariant; setVariant: (value: PantsVariant) => void;
@@ -26,7 +26,7 @@ export function PantsPanel({ variant, setVariant, enabled, setEnabled, visible, 
   return <section className="side-section" aria-labelledby="pants-heading">
     <div className="section-title"><h2 id="pants-heading">Pants</h2></div>
     <label className="field-label" htmlFor="pants-select">PANTS VERSION</label>
-    <select id="pants-select" value={variant} onChange={event => setVariant(event.target.value as PantsVariant)}><option value="pants-v3">Basic pants v3 &#183; pattern panels</option><option value="pants-v2">Basic pants v2</option><option value="pants">Basic pants v1</option></select>
+    <select id="pants-select" value={variant} onChange={event => setVariant(event.target.value as PantsVariant)}><option value="pants-v3">Basic pants v3 &#183; pattern panels</option><option value="pants-v3.1">Basic pants v3.1 &#183; candidate, no knee step</option><option value="pants-v2">Basic pants v2</option><option value="pants">Basic pants v1</option></select>
     <p className="side-note" role="status">{availability === "checking" ? "Checking pants asset…" : availability === "missing" ? "Pants not generated yet." : availability === "error" ? "Could not check the pants asset." : "Neutral-fit pants available."}</p>
     {(availability === "missing" || availability === "error") && <button className="photo-picker" type="button" onClick={() => { setChecked({ variant, status: "checking" }); void check(); }}>Check again</button>}
     <label className="toggle-row"><span><strong>Load pants</strong><small>Neutral avatar fit</small></span><input type="checkbox" checked={enabled} onChange={event => setEnabled(event.target.checked)} disabled={!avatarReady || (!enabled && availability !== "available")} /><span className="toggle-track" aria-hidden="true"><span /></span></label>

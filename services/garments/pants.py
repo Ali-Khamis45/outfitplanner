@@ -62,6 +62,11 @@ class PantsRules:
     cuff_clearance_m: float = 0.012
     hem_loop_smoothing_iterations: int = 0  # smooth each hem loop along itself after the turn-in (0 = off, v1)
     panel_seams: bool = False  # Sprint 3.5: left/right front/back panels and gusset by real seams; UV layout v3
+    # Pants v3.1 knee blend (0 = off: the thigh offset is cut by a plane at knee + body_offset_end_above_knee_m and the
+    # tube starts with a flat top at knee + tube_start_above_knee_m, which leaves a 7-12 mm step in the gap there).
+    # When > 0, each leg's field morphs from the thigh offset to the straight tube along the leg axis: a smoothstep over
+    # this length, centred midway between those two heights, with no cut plane.
+    knee_blend_m: float = 0.0
 
 
 def leg_axis(body: RestBody, side: str) -> dict[str, Any]:
@@ -124,13 +129,26 @@ def pants_fields(body: RestBody, surface: BodySurface, rules: PantsRules, marks:
     distance = ndimage.gaussian_filter(np.where(core, -inside, outside), sigma=rules.fit.field_blur_voxels)
     y = grid[..., 1]
     ease = np.interp(y, [marks["knee_y"], marks["seam_y"], marks["hip_y"], marks["waist_y"]], [rules.ease_thigh_m, rules.ease_thigh_m, rules.ease_hip_m, rules.ease_waist_m])
-    garment = np.maximum(distance - ease, marks["knee_y"] + rules.body_offset_end_above_knee_m - y)  # body offset above the knee only
     cuts = [y - marks["waist_y"]]
-    for side in ("l", "r"):
-        leg = marks["legs"][side]
-        along, radial = _tube(grid, leg, leg["radius"])
-        garment = np.minimum(garment, np.maximum(radial, leg["knee_t"] - rules.tube_start_above_knee_m - along))
-        cuts.append(np.minimum(along - leg["hem_t"], leg["radius"] + 0.05 - (radial + leg["radius"])))
+    if rules.knee_blend_m > 0:  # v3.1: per leg, (1 - s) * thigh offset + s * tube, s a smoothstep down the leg axis
+        thigh = distance - ease
+        garment = thigh.copy()
+        centre = (rules.tube_start_above_knee_m + rules.body_offset_end_above_knee_m) / 2
+        for side, sign in (("l", 1.0), ("r", -1.0)):
+            leg = marks["legs"][side]
+            along, radial = _tube(grid, leg, leg["radius"])
+            t = np.clip((along - (leg["knee_t"] - centre - rules.knee_blend_m / 2)) / rules.knee_blend_m, 0.0, 1.0)
+            s = t * t * (3 - 2 * t)  # 0 above the band: thigh offset; 1 below it: straight tube
+            own = (grid[..., 0] * sign > 0) & (y < marks["seam_y"])  # this leg's half, below the crotch seam
+            garment = np.where(own, (1 - s) * thigh + s * radial, garment)
+            cuts.append(np.minimum(along - leg["hem_t"], leg["radius"] + 0.05 - (radial + leg["radius"])))
+    else:
+        garment = np.maximum(distance - ease, marks["knee_y"] + rules.body_offset_end_above_knee_m - y)  # body offset above the knee only
+        for side in ("l", "r"):
+            leg = marks["legs"][side]
+            along, radial = _tube(grid, leg, leg["radius"])
+            garment = np.minimum(garment, np.maximum(radial, leg["knee_t"] - rules.tube_start_above_knee_m - along))
+            cuts.append(np.minimum(along - leg["hem_t"], leg["radius"] + 0.05 - (radial + leg["radius"])))
     gap = np.minimum(rules.crotch_gap_half_m - np.abs(grid[..., 0]), marks["seam_y"] - y)
     garment = np.maximum(garment, gap)
     stack = np.stack([garment] + cuts).astype(np.float32)
@@ -424,11 +442,12 @@ def leg_corrective_specs(hip_ramp_start_deg: float = 20.0, hip_radii: tuple[floa
     return tuple(specs)
 
 
-PANTS_2_1_FIELDS = ("gusset_lateral_m", "gusset_front_back_m", "gusset_cap_m", "gusset_relax_iterations", "merge_twist_weights", "cuff_turn_in_m", "cuff_clearance_m", "hem_loop_smoothing_iterations", "panel_seams")
+PANTS_2_1_FIELDS = ("gusset_lateral_m", "gusset_front_back_m", "gusset_cap_m", "gusset_relax_iterations", "merge_twist_weights", "cuff_turn_in_m", "cuff_clearance_m", "hem_loop_smoothing_iterations", "panel_seams", "knee_blend_m")
 
 # Sprint 2.1A pants v2: twist-folded crotch weights, diamond crotch gusset, turned-in cuffs; correctives with the
 # compressible (membrane) energy, triangle-based collision, larger regions and hip regions crossing the midline.
 PANTS_V2_RULES = PantsRules(merge_twist_weights=True, gusset_lateral_m=0.08, cuff_turn_in_m=0.04, hem_loop_smoothing_iterations=5)
-PANTS_V3_RULES = replace(PANTS_V2_RULES, panel_seams=True)  # Sprint 3.5 candidate: pants v2 cut into pattern panels
+PANTS_V3_RULES = replace(PANTS_V2_RULES, panel_seams=True)  # Sprint 3.5: pants v2 cut into pattern panels (the default)
+PANTS_V3_1_RULES = replace(PANTS_V3_RULES, knee_blend_m=0.10)  # candidate: no knee step (thigh-to-tube blend over 10 cm)
 PANTS_V2_SPECS = {"anchor": 0.3, "knee_radii": (0.18, 0.26), "hip_radii": (0.22, 0.30), "hip_midline_cross_m": 0.07, "signed": True}  # signed: contract v2 sidecar (Sprint 2.2A)
 PANTS_V2_CORRECTIVE_RULES = {"triangle_collision": True, "rest_edge_scale": 0.0}

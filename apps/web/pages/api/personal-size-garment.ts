@@ -4,7 +4,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { compressGlb } from "../../asset-compression/compress.mjs";
 import { localRequest } from "../../lib/personalFit.ts";
 import { parseFitMap, SIZES, type Size, type Slot } from "../../lib/garment/fitMap.ts";
-import { DEFAULT_GENERATION, GENERATIONS, parseGeneration } from "../../lib/garment/generation.ts";
+import { GENERATIONS, generationQuery, parseGeneration } from "../../lib/garment/generation.ts";
 
 // Neutral sizes are public demo assets. Personal sizes retain the local-only,
 // development-only boundary used for the personal-fit endpoint.
@@ -13,7 +13,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   res.setHeader("X-Content-Type-Options", "nosniff");
   if (req.method !== "GET") return res.status(404).end();
   const { body, slot, size, asset } = req.query;
-  const generation = parseGeneration(req.query.gen), { top, bottom, sizesDir } = GENERATIONS[generation];
+  const generation = parseGeneration(req.query.gen, req.query.pants), { top, bottom, topSizesDir, bottomSizesDir } = GENERATIONS[generation], sizesDir = slot === "top" ? topSizesDir : bottomSizesDir;
   if (typeof body !== "string" || !/^[a-zA-Z0-9_-]+$/.test(body) || (slot !== "top" && slot !== "bottom")) return res.status(404).end();
   if (body !== "neutral" && (process.env.NODE_ENV !== "development" || !localRequest(req))) return res.status(404).end();
   try {
@@ -33,7 +33,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       try { fit = parseFitMap(JSON.parse(await readFile(fitFile, "utf8"))); } catch { continue; }
       if (fit.body !== body || fit.size !== match[2] || fit.garment !== match[1]) continue;
       const safe = new URLSearchParams({ slot: slot as Slot, body, size: fit.size });
-      if (generation !== DEFAULT_GENERATION) safe.set("gen", generation);
+      for (const [key, value] of Object.entries(generationQuery(generation))) safe.set(key, value);
       options.push({ size: fit.size, fit, glb: `/api/size-garment?${safe}&asset=glb`, sidecar: `/api/size-garment?${safe}&asset=sidecar`, fileBase });
     }
     options.sort((a, b) => SIZES.indexOf(a.size) - SIZES.indexOf(b.size));

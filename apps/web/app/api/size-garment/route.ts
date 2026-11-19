@@ -2,7 +2,7 @@ import { readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import { compressGlb } from "../../../asset-compression/compress.mjs";
 import { parseFitMap, SIZES, type Size } from "../../../lib/garment/fitMap.ts";
-import { DEFAULT_GENERATION, GENERATIONS, parseGeneration } from "../../../lib/garment/generation.ts";
+import { GENERATIONS, generationQuery, parseGeneration } from "../../../lib/garment/generation.ts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,7 +12,7 @@ const missing = () => new Response(null, { status: 404, headers });
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const body = params.get("body"), slot = params.get("slot"), size = params.get("size"), asset = params.get("asset");
-  const generation = parseGeneration(params.get("gen")), { top, bottom, sizesDir } = GENERATIONS[generation];
+  const generation = parseGeneration(params.get("gen"), params.get("pants")), { top, bottom, topSizesDir, bottomSizesDir } = GENERATIONS[generation], sizesDir = slot === "top" ? topSizesDir : bottomSizesDir;
   const fixtures = params.get("fixtures") === "1";
   if (!body || !/^[a-zA-Z0-9_-]+$/.test(body) || (slot !== "top" && slot !== "bottom")) return missing();
   if (fixtures && (process.env.NODE_ENV !== "development" || body !== "neutral")) return missing();
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
       try { fit = parseFitMap(JSON.parse(await readFile(fitFile, "utf8"))); } catch { continue; }
       if (fit.body !== body || fit.size !== match[2] || fit.garment !== match[1]) continue;
       const safe = new URLSearchParams({ slot, body, size: fit.size });
-      if (generation !== DEFAULT_GENERATION) safe.set("gen", generation);
+      for (const [key, value] of Object.entries(generationQuery(generation))) safe.set(key, value);
       if (fixtures) safe.set("fixtures", "1");
       options.push({ size: fit.size, fit, glb: `/api/size-garment?${safe}&asset=glb`, sidecar: `/api/size-garment?${safe}&asset=sidecar`, fileBase });
     }

@@ -10,7 +10,7 @@ import type { CameraView } from "../avatar-lab/types";
 import { TryOnScene, type OutfitItem } from "./TryOnScene";
 import { FitPicker, MeasurementsForm, useSizes } from "../FitControls";
 import { parseWardrobe } from "../../lib/wardrobe/schema";
-import { DEFAULT_GENERATION, GENERATIONS, LEGACY_GENERATION, isBottomTemplate, isTopTemplate, templateGeneration, type Generation } from "../../lib/garment/generation";
+import { DEFAULT_GENERATION, GENERATIONS, LEGACY_GENERATION, isBottomTemplate, isTopTemplate, templateLayout, type Generation } from "../../lib/garment/generation";
 
 const demoUrls = (generation: Generation) => ({ top: `/api/demo-garment?variant=${GENERATIONS[generation].topVariant}`, bottom: `/api/demo-garment?variant=${GENERATIONS[generation].bottomVariant}` });
 const NEUTRAL_URL = "/api/demo-avatar";
@@ -103,8 +103,8 @@ export function TryOn({ generation = DEFAULT_GENERATION, textureFixture = false,
       setTopEnabled(topSupported); setBottomEnabled(bottomSupported);
       setOutfitSizes({ top: topSupported ? topItem.size.trim().toUpperCase() : "", bottom: bottomSupported ? bottomItem.size.trim().toUpperCase() : "" });
       const mainColor = (item: NonNullable<typeof topItem>) => item.colors.reduce((best, color) => color.share > best.share ? color : best).hex;
-      // A texture is painted in its template's UV layout: show it only on the mesh of that generation, else the colour.
-      const texture = (item: NonNullable<typeof topItem>) => templateGeneration(item.template) === generation ? item.texture ?? null : null;
+      // A texture is painted in its template's UV layout: show it only on a mesh with that layout, else the colour.
+      const texture = (item: NonNullable<typeof topItem>) => templateLayout(item.template) === GENERATIONS[generation].layout ? item.texture ?? null : null;
       if (topSupported) { setTopColor(mainColor(topItem)); setTopTexture(texture(topItem)); setTopOriginal(true); }
       if (bottomSupported) { setBottomColor(mainColor(bottomItem)); setBottomTexture(texture(bottomItem)); setBottomOriginal(true); }
       if ((topItem && !topSupported) || (bottomItem && !bottomSupported) || !items.length) setMessage("Some pieces have no supported 3D template. Add tshirt-v5.3 for a top or pants-v3 for a bottom to preview them.");
