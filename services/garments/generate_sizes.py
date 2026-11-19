@@ -49,7 +49,8 @@ GARMENT_TAGS = {"tshirt": "tshirt-v5.3", "pants": "pants-v3"}
 # personal ones: neutral sizes kept sub-millimetre slivers (waistband rim, neckline) whose edges stretched 12-18x and
 # flipped. "hip_keys_deg": the pants hip-flexion corrective keys (pants.leg_corrective_specs). With the single 90 deg key, l-hip-60 showed
 # 56 % of the 90 deg shape and the groin crease folded (neutral L: 64 flips where the gate allows 24); Sprint 3.6 adds a 60 deg key.
-# "shoulder_search_all": every body searches the shoulder corrective settings against its own gates (shoulder_morphs)., so the v5.2 / pants-v2 sizes still regenerate byte for byte.
+# "shoulder_search_all": every body searches the shoulder corrective settings against its own gates (shoulder_morphs).
+# 3a keeps its Sprint 3A behaviour, so the v5.2 / pants-v2 sizes still regenerate byte for byte.
 REVISIONS = {"3a": {"tshirt": "v5.2", "pants": "v2", "dir": SIZES_DIR.parent / "sizes-v5.2", "clean_all": False, "hip_keys_deg": (90.0,), "shoulder_search_all": False},
              "3.5": {"tshirt": "v5.3", "pants": "v3", "dir": SIZES_DIR, "clean_all": True, "hip_keys_deg": (60.0, 90.0), "shoulder_search_all": True}}
 CRASH_LOG = PROJECT / "outputs" / "garment-tests" / "sizes-crash.log"  # faulthandler + per-stage peak memory

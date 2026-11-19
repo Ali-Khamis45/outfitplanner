@@ -12,7 +12,7 @@ outputs/garments/sizes/<garment>-<size>-<bodyId>.correctives.json   (corrective-
 outputs/garments/sizes/<garment>-<size>-<bodyId>.fit.json           (§3)
 ```
 
-- `<garment>`: `tshirt-v5.3` or `pants-v3`, the default generation since Sprint 3.5 was accepted (pattern panels, UV layout v3; the GLBs also carry the `_PANEL` attribute, garment-texture.md). The previous generation, `tshirt-v5.2` / `pants-v2`, is kept for one sprint (through Sprint 4A) in `outputs/garments/sizes-v5.2/`, same file names and schema; the web app serves it with `?gen=v5.2` (`apps/web/lib/garment/generation.ts`). `generate_sizes.py --revision 3a` writes there, `--revision 3.5` (default) to `outputs/garments/sizes/`.
+- `<garment>`: `tshirt-v5.3` or `pants-v3`, the default generation since Sprint 3.5 was accepted (pattern panels, UV layout v3; the GLBs also carry the `_PANEL` attribute, garment-texture.md). The previous generation, `tshirt-v5.2` / `pants-v2`, is a **development-only comparison set, labelled "legacy, ungated"**, in `outputs/garments/sizes-v5.2/` (same file names and schema). Its sizes were never gated (12 of 16 fail the Sprint 3.6 gates). The web app serves it only in development with `?gen=v5.2` and shows the label in the lab selector and on the try-on page; elsewhere `?gen=v5.2` gets the default (`apps/web/lib/garment/generation.ts`). It is removed in Sprint 3.7. `generate_sizes.py --revision 3a` writes there, `--revision 3.5` (default) to `outputs/garments/sizes/`.
 - `<size>`: `S`, `M`, `L` or `XL`.
 - `<bodyId>`: `neutral` (`outputs/avatars/mhr-neutral.glb`), or a personal manifest id such as `personal-scaled`, whose body GLB is listed in `outputs/garments/personal/manifest.json`.
 
