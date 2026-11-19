@@ -158,6 +158,87 @@ def _pants_landmarks(name: str, loop: np.ndarray, shared: list[frozenset[int]], 
     return marks
 
 
+def to_model(uv: np.ndarray) -> np.ndarray:
+    """UV -> flat-lay model coordinates in metres, as a photo of the garment from outside shows them: x along +u (the
+    viewer's right), y down the photo along -v (higher on the body = larger v). The photo is then a similarity
+    transform of the model (no reflection)."""
+    return np.stack([uv[..., 0], -uv[..., 1]], axis=-1) / DENSITY_UV_PER_M
+
+
+SLEEVE_DROP_DEG = 30.0  # a flat-laid T-shirt's sleeve fold (shoulder point to cuff) runs this far below horizontal
+
+
+def _turn(direction: np.ndarray, target: np.ndarray, pivot: np.ndarray, to: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Rotation R and translation t (2D, no scale or reflection) turning `direction` onto `target` and moving `pivot` to
+    `to`: x -> R x + t."""
+    angle = np.arctan2(target[1], target[0]) - np.arctan2(direction[1], direction[0])
+    R = np.array([[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]])
+    return R, to - R @ pivot
+
+
+def _half_sleeve(model: FlatLay, sleeve: str, torso: int) -> tuple[np.ndarray, int]:
+    """The half of a sleeve island that lies against the given torso panel (0 front, 1 back) when the garment is laid
+    flat: walk the island outline from the shoulder point into the armhole run shared with that panel, on through the
+    armpit and the underarm seam edge, along the cuff to the cuff's top point; the fold from there back to the shoulder
+    point closes it. Returns the outline as GLB vertex ids, and this half's armpit: the lowest point of its armhole run
+    (the island has two copies of the armpit, one on each edge of the underarm cut)."""
+    panel = model.panels[sleeve]
+    loop, marks = list(map(int, panel.outline)), panel.landmarks
+    keys = np.round(model.positions / 1e-5).astype(np.int64)
+    torso_keys = {tuple(k) for k in keys[np.unique(model.panels[PANELS["tshirt"][torso]].outline)]}
+    start = loop.index(marks["shoulder"])
+    n = len(loop)
+    for step in (1, -1):  # the direction whose next vertex is on this torso panel's armhole
+        if tuple(keys[loop[(start + step) % n]]) in torso_keys:
+            break
+    path, i = [loop[start]], start
+    for _ in range(n):
+        i = (i + step) % n
+        path.append(loop[i])
+        if loop[i] == marks["cuff_top"]:
+            armhole = [v for v in path if tuple(keys[v]) in torso_keys]
+            return np.asarray(path), int(armhole[int(np.argmin(model.positions[armhole, 1]))])
+    raise ValueError(f"{sleeve}: the cuff's top point was not reached from the shoulder")
+
+
+def layout(model: FlatLay, view: str) -> dict[str, dict[str, np.ndarray]]:
+    """The garment laid flat in its natural pose, seen from the front ("front") or the back ("back"), in model metres
+    (see to_model; y runs down). For each visible piece: its outline (model coordinates), the GLB vertex ids of that
+    outline, and the 2x2 rotation and translation placing the island's model coordinates into the layout.
+    - T-shirt: the torso panel of that view, and each sleeve's half that lies against it, hanging from the torso's
+      shoulder point with its fold (shoulder point to cuff top) SLEEVE_DROP_DEG below horizontal, pointing outwards.
+    - Pants: the left and right panels of that view, each turned so its centre seam (waist centre to crotch) runs
+      straight down, meeting along it.
+    A photo differs from this pose by a similarity transform plus the garment's own drape, which the producer's
+    thin-plate spline absorbs."""
+    pieces: dict[str, dict[str, np.ndarray]] = {}
+    identity = (np.eye(2), np.zeros(2))
+    if model.kind == "tshirt":
+        torso_name = "front" if view == "front" else "back"
+        torso = model.panels[torso_name]
+        pieces[torso_name] = {"vertices": torso.outline, "rotation": identity[0], "translation": identity[1]}
+        for side in ("left", "right"):
+            sleeve = f"sleeve_{side}"
+            ids, _ = _half_sleeve(model, sleeve, 0 if view == "front" else 1)
+            marks = model.panels[sleeve].landmarks
+            shoulder, cuff = to_model(model.uv[[marks["shoulder"], marks["cuff_top"]]])
+            # the garment's left is the viewer's right on both views (each photo shows the outside)
+            outwards = (1.0 if (side == "left") == (view == "front") else -1.0) * np.cos(np.radians(SLEEVE_DROP_DEG))
+            R, t = _turn(cuff - shoulder, np.array([outwards, np.sin(np.radians(SLEEVE_DROP_DEG))]), shoulder, to_model(model.uv[torso.landmarks[f"shoulder_{side}"]]))
+            pieces[sleeve] = {"vertices": ids, "rotation": R, "translation": t}
+    else:
+        for name in (("left_front", "right_front") if view == "front" else ("left_back", "right_back")):
+            panel = model.panels[name]
+            m = {k: to_model(model.uv[v]) for k, v in panel.landmarks.items()}
+            # the centre seam (waist centre to crotch) runs straight down, so the two halves meet along it without
+            # overlapping (turning the leg axes upright instead crossed the inner legs over each other)
+            R, t = _turn(m["crotch"] - m["waist_centre"], np.array([0.0, 1.0]), m["waist_centre"], np.zeros(2))
+            pieces[name] = {"vertices": panel.outline, "rotation": R, "translation": t}
+    for piece in pieces.values():
+        piece["outline"] = to_model(model.uv[piece["vertices"]]) @ piece["rotation"].T + piece["translation"]
+    return pieces
+
+
 def flat_lay(template: str, glb: Path | None = None) -> FlatLay:
     kind, default = TEMPLATES[template]
     document, blob = read_glb(glb or default)
