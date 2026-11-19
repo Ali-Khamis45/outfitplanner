@@ -60,7 +60,14 @@ def gate_reports() -> dict[str, list[dict]]:
 
 @unittest.skipUnless(any(SIZES_DIR.glob("*.glb")), "generate the sizes first")
 class ShippedGarmentGateTests(unittest.TestCase):
-    """A size (and every garment the personal manifest lists) ships only with a passing gate report for its exact bytes."""
+    """A size (and every garment the personal manifest lists) ships only with a passing gate report for its exact bytes.
+
+    Only the shipped default generation (outputs/garments/sizes/) is gated. The legacy tshirt-v5.2 / pants-v2 set in
+    sizes-v5.2/ is a development-only comparison set, "legacy, ungated", and is never counted here."""
+
+    def test_only_the_gated_default_generation_is_in_the_shipped_folder(self) -> None:
+        for glb in sorted(SIZES_DIR.glob("*.glb")):
+            self.assertTrue(glb.name.startswith(("tshirt-v5.3-", "pants-v3-")), f"{glb.name}: not the gated default generation")
 
     @classmethod
     def setUpClass(cls) -> None:

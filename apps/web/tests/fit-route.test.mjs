@@ -31,6 +31,10 @@ try {
   assert.equal((await request({ body: "neutral", slot: "top", size: "L", asset: "glb" })).status, 404, "a withheld size is never served");
   assert.deepEqual((await (await request({ body: "neutral", slot: "bottom" })).json()), [], "nothing withheld for the bottom");
   assert.ok(items.every(item => item.fit.garment === "tshirt-v5.3" && !item.glb.includes("gen=")), "default generation without a gen parameter");
+  // the legacy, ungated v5.2 set is development-only: elsewhere ?gen=v5.2 gets the gated default
+  process.env.NODE_ENV = "production";
+  assert.deepEqual((await (await request({ body: "neutral", slot: "top", gen: "v5.2" })).json()).filter(item => !item.withheld).map(item => item.fit.garment), ["tshirt-v5.3", "tshirt-v5.3"], "no legacy sizes outside development");
+  process.env.NODE_ENV = "development";
   const legacyItems = await (await request({ body: "neutral", slot: "top", gen: "v5.2" })).json();
   assert.ok(!legacyItems.some(item => item.withheld), "the withheld folder belongs to sizes/ only");
   assert.deepEqual(legacyItems.map(item => [item.size, item.fit.garment]), [["S", "tshirt-v5.2"], ["M", "tshirt-v5.2"]]); assert.match(legacyItems[0].glb, /gen=v5\.2/);
