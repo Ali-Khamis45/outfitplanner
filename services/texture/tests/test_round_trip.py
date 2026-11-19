@@ -82,5 +82,23 @@ class RoundTripTests(unittest.TestCase):
         self.check("pants-v3")
 
 
+class LinkTests(unittest.TestCase):
+    def test_link_sets_only_the_items_texture(self) -> None:
+        from produce import link_texture
+
+        with tempfile.TemporaryDirectory() as directory:
+            wardrobe = Path(directory)
+            self.assertFalse(link_texture("shirt-1", wardrobe), "no wardrobe file")
+            data = {"version": 1, "items": [{"id": "shirt-1", "name": "Tee", "photo": ""}, {"id": "pants-1", "name": "Chinos", "texture": None}], "outfits": []}
+            (wardrobe / "wardrobe.json").write_text(json.dumps(data), encoding="utf-8")
+            self.assertTrue(link_texture("shirt-1", wardrobe))
+            self.assertFalse(link_texture("missing", wardrobe))
+            written = json.loads((wardrobe / "wardrobe.json").read_text(encoding="utf-8"))
+            self.assertEqual(written["items"][0], {**data["items"][0], "texture": "outputs/wardrobe/textures/shirt-1.png"})
+            self.assertEqual(written["items"][1], data["items"][1])
+            self.assertEqual({k: v for k, v in written.items() if k != "items"}, {k: v for k, v in data.items() if k != "items"})
+            self.assertEqual(sorted(p.name for p in wardrobe.iterdir()), ["wardrobe.json"], "no temporary file left behind")
+
+
 if __name__ == "__main__":
     unittest.main()

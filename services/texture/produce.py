@@ -304,14 +304,35 @@ def produce(item: str, template: str, wardrobe: Path, glb: Path | None = None) -
     return {**metadata, "views_report": reports}
 
 
+def link_texture(item: str, wardrobe: Path) -> bool:
+    """Point the wardrobe item at its texture: set `texture` to the one value the web's schema accepts
+    (outputs/wardrobe/textures/<item>.png) in <wardrobe>/wardrobe.json, written like the web's writeWardrobe (a temporary
+    file renamed over it), every other field unchanged. False if there is no wardrobe file or no such item."""
+    path = wardrobe / "wardrobe.json"
+    if not path.is_file():
+        return False
+    data = json.loads(path.read_text(encoding="utf-8"))
+    entry = next((i for i in data.get("items", []) if i.get("id") == item), None)
+    if entry is None:
+        return False
+    entry["texture"] = f"outputs/wardrobe/textures/{item}.png"
+    temporary = path.with_name(f".{item}.texture-link.tmp")
+    temporary.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    temporary.replace(path)
+    return True
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("item")
     parser.add_argument("--template", required=True, choices=["tshirt-v5.3", "pants-v3"])
     parser.add_argument("--wardrobe", type=Path, default=HERE.parents[1] / "outputs" / "wardrobe")
+    parser.add_argument("--link", action="store_true", help="also set the item's texture in <wardrobe>/wardrobe.json")
     args = parser.parse_args()
     result = produce(args.item, args.template, args.wardrobe)
     print(json.dumps({k: v for k, v in result.items() if k != "views_report"}, indent=2))
+    if args.link:
+        print("linked in wardrobe.json" if link_texture(args.item, args.wardrobe) else "not linked: no wardrobe.json or no such item")
     return 0
 
 
