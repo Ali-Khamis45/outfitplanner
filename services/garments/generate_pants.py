@@ -37,7 +37,7 @@ VERSIONS: dict[str, dict[str, Any]] = {
     "v2": {"rules": PANTS_V2_RULES, "specs": PANTS_V2_SPECS, "corrective_rules": PANTS_V2_CORRECTIVE_RULES, "regions": REGION_NAMES_V2,
            "strategy": STRATEGY_V1 + "; Sprint 2.1A: twist-folded crotch weights, diamond crotch gusset panel (relaxed rest triangles, harmonic weights), turned-in cuffs, membrane-energy correctives with triangle collision"},
 }
-# Sprint 3.5 candidate (not the default): pants v2 cut into pattern panels, one UV island per panel (layout v3)
+# Sprint 3.5 (the default since its acceptance): pants v2 cut into pattern panels, one UV island per panel (layout v3)
 VERSIONS["v3"] = {**VERSIONS["v2"], "rules": PANTS_V3_RULES, "strategy": VERSIONS["v2"]["strategy"] + "; Sprint 3.5: left/right front/back panels and gusset cut by centre, outer-leg and inner-leg seams, UV layout v3"}
 
 

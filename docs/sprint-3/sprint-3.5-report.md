@@ -207,3 +207,25 @@ cd services/garments; ..\..\external\mhr-venv\Scripts\python.exe -m unittest dis
 
 - During the work, gate processes launched from inside an agent's background shell died when the session ended, despite `launch_detached.ps1`. Started directly from PowerShell, as the README describes, they survive. All results here come from runs that completed.
 - `sizes-v5.3-superseded/` (local) keeps the earlier shirt runs: the principal-axis sleeves, and the push without the blur.
+
+## Promotion to the default (2026-11-19)
+
+After the browser check, `tshirt-v5.3` / `pants-v3` became the default generation for both bodies and every size.
+
+- `outputs/garments/sizes/` now holds the v5.3 / pants-v3 sizes; the 3A files moved to `outputs/garments/sizes-v5.2/` (local, git-ignored). `generate_sizes.py` defaults to `--revision 3.5`.
+- The web app reads the generation from `apps/web/lib/garment/generation.ts`. `?gen=v5.2` keeps v5.2 / pants-v2 reachable for one sprint (through Sprint 4A).
+- The personal manifest's primary body wears the recommended v5.3 / pants-v3 sizes (status only: M / M, unchanged).
+
+Gates rerun on the promoted files (from `outputs/garments/sizes/`):
+
+| Gate | Result |
+| --- | --- |
+| Validator (stretch, flips, intersections, rest clearance), 16 sizes + 2 base garments | 18 / 18 PASS |
+| Penetration > 3 mm, every arm and leg pose | 16 / 16 PASS |
+| Layering (shirt over pants, hem overlap ≥ 3 cm, no interpenetration) | 32 / 36 PASS; the 4 failures are shirt S on the personal body (below) |
+| UV layout v3 bounds (`test_uv_v3.py`) | PASS |
+| Byte-for-byte regeneration (v1, v2, v4, v5, v5.1, v5.2, v5.3, pants v1, v2, v3) | 10 / 10 identical |
+| Python tests (garments 72, reconstruction 19, collision 3) | PASS |
+| Web: typecheck, lint, build, `npm test` | PASS |
+
+**Known failure: shirt S on the personal body.** Over each of the four personal pants sizes, the hem overlaps the waistband by 2.7–2.8 cm instead of 3 cm, with no penetration, no interpenetration and no shirt vertex under the pants. The values equal the Sprint 3.5 run exactly, so this is the known case, not a regression.
