@@ -1,12 +1,13 @@
 import { validDate, record } from "../../lib/stylist/core.ts";
 import type { Wardrobe } from "../../lib/wardrobe/schema.ts";
+import { validToolArguments } from "../../lib/stylist/toolValidation.ts";
 
 export type Scenario = { id: string; language: "en" | "arz"; message: string; date: string; city: string; expect: {
   must_call_get_wardrobe: true; must_call_get_weather: boolean; recommended_items_exist: true;
   categories: { top: "top"; bottom: "bottom" }; occasion: string; formality_range: [number, number]; not_worn_days: number | null;
 } };
 export type Check = { id: string; status: "PASS" | "FAIL" | "N/A"; detail: string };
-export type Score = { id: string; language: string; status: "PASS" | "FAIL"; checks: Check[]; passed_checks: number; applicable_checks: number; score: number; tool_calls: number; latency_ms: number; http_status: number; response_status: string; tool_failures: number; error?: string };
+export type Score = { id: string; language: string; status: "PASS" | "FAIL"; checks: Check[]; passed_checks: number; applicable_checks: number; score: number; tool_calls: number; valid_tool_calls: number; invalid_tool_calls: number; latency_ms: number; http_status: number; response_status: string; tool_failures: number; error?: string };
 export function parseScenarios(value: unknown): Scenario[] {
   if (!Array.isArray(value) || value.length !== 30) throw new Error("The evaluation suite must contain exactly 30 scenarios.");
   const ids = new Set<string>();
@@ -66,13 +67,19 @@ export function scoreScenario(scenario: Scenario, wardrobe: Wardrobe, response: 
   check("not_worn_recently", exists && selected.every(item => item.last_worn === null || Date.parse(`${item.last_worn}T00:00:00Z`) < cutoff), `Exclude last_worn on or after ${new Date(cutoff).toISOString().slice(0, 10)} (${n ?? 0} days, inclusive boundary).`, n !== null);
   check("no_wear_mutation", Array.isArray(evaluation.trace) && !trace.some(call => call.name === "log_worn"), "Recommendation scenarios do not authorize logging wear.");
   const passed = checks.filter(c => c.status === "PASS").length, applicable = checks.filter(c => c.status !== "N/A").length;
+  const validity = record(evaluation.tool_validity) ? evaluation.tool_validity : null;
+  const validCalls = validity && Number.isInteger(validity.valid) ? Number(validity.valid) : trace.filter(call => typeof call.name === "string" && validToolArguments(call.name, call.arguments)).length;
+  const invalidCalls = validity && Number.isInteger(validity.invalid) ? Number(validity.invalid) : trace.length - validCalls;
   return { id: scenario.id, language: scenario.language, status: passed === applicable ? "PASS" : "FAIL", checks, passed_checks: passed, applicable_checks: applicable,
-    score: passed / applicable, tool_calls: trace.length || calls.length, tool_failures: trace.filter(call => call.ok !== true).length,
+    score: passed / applicable, tool_calls: validCalls + invalidCalls || calls.length, valid_tool_calls: validCalls, invalid_tool_calls: invalidCalls, tool_failures: trace.filter(call => call.ok !== true).length,
     latency_ms: Math.round(latencyMs), http_status: httpStatus, response_status: String(data.status ?? "missing"), ...(error ? { error } : {}) };
 }
 export function summarize(scores: Score[]) {
   const passedChecks = scores.reduce((n, s) => n + s.passed_checks, 0), applicableChecks = scores.reduce((n, s) => n + s.applicable_checks, 0);
+  const valid = scores.reduce((n, s) => n + s.valid_tool_calls, 0), invalid = scores.reduce((n, s) => n + s.invalid_tool_calls, 0);
+  const failures = Object.fromEntries([...new Set(scores.flatMap(s => s.checks.map(c => c.id)))].map(id => [id, scores.filter(s => s.checks.some(c => c.id === id && c.status === "FAIL")).length]));
   return { scenarios: scores.length, passed_scenarios: scores.filter(s => s.status === "PASS").length, failed_scenarios: scores.filter(s => s.status === "FAIL").length,
+    valid_tool_calls: valid, invalid_tool_calls: invalid, tool_call_validity: valid + invalid ? valid / (valid + invalid) : null, failures_by_category: failures,
     passed_checks: passedChecks, applicable_checks: applicableChecks, overall_score: applicableChecks ? passedChecks / applicableChecks : 0,
     average_tool_calls: scores.length ? scores.reduce((n, s) => n + s.tool_calls, 0) / scores.length : 0,
     average_latency_ms: scores.length ? scores.reduce((n, s) => n + s.latency_ms, 0) / scores.length : 0 };

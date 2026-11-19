@@ -14,9 +14,22 @@ Normal mode loads `apps/web/.env.local` using Next's environment loader (existin
 ```dotenv
 STYLIST_BASE_URL=http://localhost:11434/v1
 STYLIST_MODEL=your-local-model-name
+STYLIST_THINKING=off
 ```
 
 Only loopback model endpoints are accepted by the existing chat route. Normal mode uses live Open-Meteo weather. Scenario dates are fixed for reproducibility; old dates may fall outside the provider's coverage. Edit the scenarios if you want current forecasts, keeping explicit dates in messages consistent. The report records the scenario-file hash. It scores a correctly targeted weather **call**, independently of whether the provider can serve that date.
+
+Thinking defaults to **off**: every completion request, including all tool rounds and the final round, sends `reasoning_effort: "none"`. `STYLIST_THINKING=on` omits that field and uses the local model's default thinking mode. Values are `on` or `off`. Provider reasoning fields are never returned, replayed, displayed or logged. Restart the app after changing its environment. For an A/B evaluation without editing `.env.local`, run sequentially from PowerShell:
+
+```powershell
+$env:STYLIST_THINKING = 'off'
+node apps/web/eval/stylist/run.mjs
+$env:STYLIST_THINKING = 'on'
+node apps/web/eval/stylist/run.mjs
+Remove-Item Env:STYLIST_THINKING
+```
+
+Reports record the chosen mode and latency. Tool-call validity measures the advertised tool name, envelope and JSON argument schema, including malformed and final-round calls; it is separate from tool execution success and scenario correctness.
 
 `--mock` uses the existing scripted OpenAI-compatible HTTP mock server plus explicitly labelled synthetic weather. Its oracle reads the expectations to choose valid items. A perfect mock score verifies the harness, **not an LLM**. Real model prompts contain only the user message and date/city context; expectations are never sent to the model.
 
@@ -46,7 +59,7 @@ The exact N-days-ago boundary is excluded, matching `get_wardrobe`. No cards, re
 
 Reports are checkpointed after each scenario in the git-ignored `eval/stylist/results/<UTC-timestamp>-<run-id>/`:
 
-- `report.json`: full scenarios, per-check PASS/FAIL/N/A, response and trace evidence, HTTP/result status, tool failures, latency, model name, source revision/dirty state, suite and wardrobe hashes, and aggregate metrics.
+- `report.json`: status-only per-check PASS/FAIL/N/A, HTTP/result status, tool validity and execution-failure counts, latency, model/thinking mode, source revision/dirty state, suite and wardrobe hashes, aggregate metrics and failure counts by category. Prompts, model prose, reasoning, tool arguments, photos and personal fit values are excluded. Scoring uses the full synthetic response in memory before discarding it from the report.
 - `report.md`: short per-scenario table, overall score, average tool calls and average latency.
 - `server.log`: owned Next server diagnostics. Infrastructure failures also create `harness-error.txt` when the report directory exists.
 

@@ -13,6 +13,7 @@ import { createChatHandler } from "../lib/stylist/chat.ts";
 import { evaluationWeather } from "../lib/stylist/evaluation.ts";
 import { request } from "./local-api.mjs";
 import { startMockModel, completion, toolCall } from "./mock-stylist-model.mjs";
+import { validToolArguments } from "../lib/stylist/toolValidation.ts";
 
 const app = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const scenarios = parseScenarios(JSON.parse(await readFile(path.join(app, "eval/stylist/scenarios.json"), "utf8")));
@@ -52,6 +53,17 @@ const noWeather = scoreScenario(scenarios[0], fixtureWardrobe(scenarios[0].date)
 const summary = summarize([score(), disconnected]); assert.equal(summary.overall_score, 0.5); assert.equal(summary.average_tool_calls, 1.5); assert.equal(summary.average_latency_ms, 75);
 const rendered = markdownReport(makeReport({ mode: "mock", model: "fixture", fixture_version: "v1" }, [{ score: score() }, { score: disconnected }]));
 assert.match(rendered, /50.0%/); assert.match(rendered, /not a model-quality result/); assert.match(rendered, /FAIL/);
+assert.equal(score().valid_tool_calls, 3);
+changed = response(); changed.evaluation.trace[1].ok = false;
+assert.equal(score(changed).valid_tool_calls, 3, "provider failure is not a schema-invalid tool call");
+changed = response(); changed.evaluation.trace[1].arguments.date = 123;
+assert.equal(score(changed).invalid_tool_calls, 1);
+assert.equal(validToolArguments("get_wardrobe", { filter: { category: "invalid" } }), false);
+assert.equal(validToolArguments("get_wardrobe", { filter: { formality_min: 0 } }), false);
+assert.equal(validToolArguments("show_on_avatar", { item_ids: [] }), false);
+assert.equal(validToolArguments("unknown", {}), false);
+const safeReport = JSON.stringify(makeReport({ thinking: "off" }, [{ score: { ...score(), error: "PRIVATE_ERROR" }, scenario: { message: "PRIVATE_PROMPT" }, response: { message: "PRIVATE_REPLY", reasoning: "PRIVATE_REASONING" } }]));
+for (const hidden of ["PRIVATE_ERROR", "PRIVATE_PROMPT", "PRIVATE_REPLY", "PRIVATE_REASONING"]) assert.ok(!safeReport.includes(hidden), "report is status-only");
 
 const root = await mkdtemp(path.join(os.tmpdir(), "stylist-eval-test-")), servers = [];
 try {
@@ -62,6 +74,7 @@ try {
     const fixture = fixtureWardrobe(s.date); await writeFile(path.join(root, "wardrobe/wardrobe.json"), JSON.stringify(fixture));
     const result = await request(handler, { body: { messages: [{ role: "user", content: s.message }], context: { date: s.date, city: s.city } } });
     assert.equal(scoreScenario(s, fixture, result.body, result.code, 0).status, "PASS", s.id);
+    assert.equal(result.body.evaluation.tool_validity.invalid, 0);
   }
   // Clock is genuinely frozen, not merely mentioned in the prompt. Old items
   // in 2030 must remain eligible even when this suite runs years earlier/later.
