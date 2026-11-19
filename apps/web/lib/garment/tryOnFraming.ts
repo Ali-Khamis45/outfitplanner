@@ -1,9 +1,15 @@
 /** Fit the avatar to the current viewport, with extra horizontal room for arms out. */
-export function tryOnFraming(height: number, width: number, viewportWidth: number, viewportHeight: number, fov: number, armsOut: boolean, stacked: boolean) {
+export function tryOnFraming(height: number, width: number, viewportWidth: number, viewportHeight: number, fov: number, armsOut: boolean, stacked: boolean, insets?: { top: number; bottom: number }) {
   const safeHeight = Math.max(height, 0.01);
   const aspect = viewportWidth / Math.max(viewportHeight, 1);
   const halfFov = fov * Math.PI / 360;
   const fittedWidth = width * (armsOut ? 1.5 : 1.05);
+  if (insets) {
+    const usableHeight = Math.max(viewportHeight - insets.top - insets.bottom, viewportHeight * 0.25);
+    const distance = Math.max(safeHeight / (2 * Math.tan(halfFov) * usableHeight / viewportHeight), fittedWidth / (2 * Math.tan(halfFov) * 0.9 * Math.max(aspect, 0.2)));
+    // Move the subject into the clear area without cropping it behind controls.
+    return { distance, targetYOffset: (insets.top - insets.bottom) / viewportHeight * distance * Math.tan(halfFov) };
+  }
   // On short portrait screens reserve room for the bar; wide landscape puts it to the side.
   const barBesideBody = stacked && viewportHeight <= 300 && viewportWidth >= 600 && aspect >= 1.5;
   const maxCoverage = stacked ? 0.82 : 0.67;

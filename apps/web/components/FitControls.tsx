@@ -39,12 +39,12 @@ export function useSizes(body: string | null, slot: Slot, fixtures = false, pref
   return { options, size, setSize, selected, resolved, garment: selected && loaded?.url === selected.glb ? { url: selected.glb, sidecar: loaded.sidecar } : null };
 }
 
-export function FitPicker({ title, options, selected, onSize }: { title: string; options: SizeOption[]; selected: Size | null; onSize: (size: Size) => void }) {
+export function FitPicker({ title, options, selected, onSize, editorial = false }: { title: string; options: SizeOption[]; selected: Size | null; onSize: (size: Size) => void; editorial?: boolean }) {
   const fit = options.find(option => option.size === selected)?.fit;
-  return <section className="fit-picker" aria-label={`${title} fit`}>
+  return <section className={`fit-picker${editorial ? " fit-editorial" : ""}`} aria-label={`${title} fit`}>
     <div className="fit-heading"><strong>{title} size</strong>{options.some(option => option.fit.recommended) && <span>● Recommended</span>}</div>
     <div className="fit-sizes" role="group" aria-label={`${title} size`}>{SIZES.map(size => { const recommended = options.some(option => option.size === size && option.fit.recommended); return <button type="button" key={size} disabled={!options.some(option => option.size === size)} aria-label={recommended ? `${size}, Recommended` : size} aria-pressed={selected === size} onClick={() => onSize(size)}>{size}{recommended && <span className="fit-recommended-dot" aria-hidden="true" title="Recommended" />}</button>; })}</div>
-    {fit ? <div className="fit-summary">{isFullyClampedAndTight(fit) && <p className="fit-clamped-warning">Too small for this body. Shown at the closest wearable fit.</p>}<strong>Fit summary</strong>{Object.entries(fit.regions).map(([name, region]) => <p key={name} className="fit-label" data-fit={region.status}>{formatRegion(name, region, fit.garment)}{regionEstimateNote(region) && <small className="fit-estimate-note"> {regionEstimateNote(region)}</small>}</p>)}</div> : <p className="fit-unavailable">Size fits are not available yet.</p>}
+    {fit ? <div className="fit-summary">{isFullyClampedAndTight(fit) && <p className="fit-clamped-warning">Too small for this body. Shown at the closest wearable fit.</p>}<strong>{editorial ? "Fit analysis" : "Fit summary"}</strong>{Object.entries(fit.regions).map(([name, region]) => <p key={name} className="fit-label" data-fit={region.status}>{editorial && <><span className="fit-region-name">{name.replaceAll("_", " ")}</span><span className="fit-status">{region.status}</span></>}<span className="fit-region-detail">{formatRegion(name, region, fit.garment)}</span>{regionEstimateNote(region) && <small className="fit-estimate-note"> {regionEstimateNote(region)}</small>}</p>)}</div> : <p className="fit-unavailable">Size fits are not available yet.</p>}
   </section>;
 }
 

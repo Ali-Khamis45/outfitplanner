@@ -24,6 +24,13 @@ try {
   colours = await renderedColours();
   assert.equal(colours.red, 0, "back panels have no front logo");
   assert.ok(colours.blue > 100, "back panels remain striped");
+  await evaluate("[...document.querySelectorAll('.try-camera button')].find(b=>b.textContent==='Front').click()");
+  await evaluate("document.querySelector('[aria-label=\"Top: Ocean\"]').click()");
+  await new Promise(resolve => setTimeout(resolve, 1500));
+  assert.equal((await renderedColours()).red, 0, "a colour swatch replaces the logo");
+  await evaluate("document.querySelector('[aria-label=\"Top: Original\"]').click()");
+  await new Promise(resolve => setTimeout(resolve, 1500));
+  assert.ok((await renderedColours()).red > 5, "Original restores the front texture");
   await evaluate("document.querySelector('.fit-heatmap input').click()");
   assert.ok(await evaluate("document.querySelector('.fit-heatmap input').checked"));
   await evaluate("document.querySelector('[aria-label=\"Top size\"] button:last-child').click()");

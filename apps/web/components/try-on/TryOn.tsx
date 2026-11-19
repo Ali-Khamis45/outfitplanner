@@ -1,5 +1,5 @@
 "use client";
-import { ArrowClockwise, ArrowLeft, ArrowsClockwise, Check, UploadSimple } from "@phosphor-icons/react";
+import { ArrowsClockwise, CaretDown, Check, UploadSimple } from "@phosphor-icons/react";
 import { useGLTF } from "@react-three/drei";
 import Link from "next/link";
 import { Component, Suspense, useCallback, useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
@@ -9,7 +9,9 @@ import { LocalGlbError, readLocalGlb, type LocalGlb } from "../../lib/localGlb";
 import type { CameraView } from "../avatar-lab/types";
 import { TryOnScene, type OutfitItem } from "./TryOnScene";
 import { FitPicker, MeasurementsForm, useSizes } from "../FitControls";
-import { parseWardrobe } from "../../lib/wardrobe/schema";
+import { parseWardrobe, type WardrobeItem } from "../../lib/wardrobe/schema";
+import { PieceImage, canTryOn } from "../wardrobe/PieceImage";
+import { TemplateThumbnail } from "../wardrobe/TemplateThumbnail";
 
 const TOP_URL = "/api/demo-garment?variant=v5.2", BOTTOM_URL = "/api/demo-garment?variant=pants-v2";
 const NEUTRAL_URL = "/api/demo-avatar";
@@ -88,24 +90,32 @@ export function TryOn({ candidate = false, textureFixture = false, fixtures = fa
   const [outfitSizes, setOutfitSizes] = useState({ top: "", bottom: "" });
   const topSizes = useSizes(bodyId, "top", fixtures && bodyId === "neutral", outfitSizes.top, candidate), bottomSizes = useSizes(bodyId, "bottom", fixtures && bodyId === "neutral", outfitSizes.bottom, candidate);
   const [heatmap, setHeatmap] = useState(false);
+  const [slot, setSlot] = useState<"top" | "bottom">("top");
+  const [expanded, setExpanded] = useState(false);
+  const [wardrobeItems, setWardrobeItems] = useState<WardrobeItem[]>([]);
+  const [wardrobeStatus, setWardrobeStatus] = useState("Opening your wardrobe...");
+  const [chosen, setChosen] = useState<{ top: WardrobeItem | null; bottom: WardrobeItem | null }>({ top: null, bottom: null });
   useEffect(() => {
-    if (!outfitId && !topId && !bottomId) return;
     let active = true;
     fetch("/api/wardrobe", { cache: "no-store" }).then(response => { if (!response.ok) throw new Error("This outfit is only available on the local development server."); return response.json(); }).then(value => {
       if (!active) return;
-      const wardrobe = parseWardrobe(value), outfit = outfitId ? wardrobe.outfits.find(item => item.id === outfitId) : { name: "selected pieces", items: [topId, bottomId].filter((id): id is string => !!id) };
+      const wardrobe = parseWardrobe(value);
+      setWardrobeItems(wardrobe.items); setWardrobeStatus("");
+      if (!outfitId && !topId && !bottomId) return;
+      const outfit = outfitId ? wardrobe.outfits.find(item => item.id === outfitId) : { name: "selected pieces", items: [topId, bottomId].filter((id): id is string => !!id) };
       if (!outfit) throw new Error("Outfit not found in your wardrobe.");
       const items = outfit.items.map(id => wardrobe.items.find(item => item.id === id)).filter(item => item !== undefined);
       const topItem = items.find(item => item.category === "top"), bottomItem = items.find(item => item.category === "bottom");
       const topSupported = topItem?.template === "tshirt-v5.2", bottomSupported = bottomItem?.template === "pants-basic-v2" || bottomItem?.template === "pants-v2";
       setTopEnabled(topSupported); setBottomEnabled(bottomSupported);
+      setChosen({ top: topSupported ? topItem : null, bottom: bottomSupported ? bottomItem : null });
       setOutfitSizes({ top: topSupported ? topItem.size.trim().toUpperCase() : "", bottom: bottomSupported ? bottomItem.size.trim().toUpperCase() : "" });
       const mainColor = (item: NonNullable<typeof topItem>) => item.colors.reduce((best, color) => color.share > best.share ? color : best).hex;
       if (topSupported) { setTopColor(mainColor(topItem)); setTopTexture(topItem.texture ?? null); setTopOriginal(true); }
       if (bottomSupported) { setBottomColor(mainColor(bottomItem)); setBottomTexture(bottomItem.texture ?? null); setBottomOriginal(true); }
       if ((topItem && !topSupported) || (bottomItem && !bottomSupported) || !items.length) setMessage("Some pieces have no supported 3D template. Add tshirt-v5.2 for a top or pants-basic-v2 for a bottom to preview them.");
       else setMessage(`Showing ${outfit.name} from your wardrobe.`);
-    }).catch(error => { if (active) setMessage(error instanceof Error ? error.message : "Could not load the outfit."); });
+    }).catch(error => { if (active) { setWardrobeStatus("Your wardrobe is unavailable. You can still explore the demo pieces."); if (outfitId || topId || bottomId) setMessage(error instanceof Error ? error.message : "Could not load the outfit."); } });
     return () => { active = false; };
   }, [outfitId, topId, bottomId]);
   const avatarUrl = activeFit?.body ?? (avatar === "personal" && personalSource === "file" && personal ? personal.url : NEUTRAL_URL);
@@ -139,9 +149,9 @@ export function TryOn({ candidate = false, textureFixture = false, fixtures = fa
     try {
       const fit = await loadPersonalFit();
       if (request !== selection.current) return;
-      if (!fit) { setMessage("No personal fit found. Choose your avatar file below."); return; }
+      if (!fit) { setExpanded(true); setMessage("No personal fit found. Open Avatar & measurements to choose your avatar file."); return; }
       setPersonalFit(fit); setPersonalSource("manifest"); switchAvatar("personal");
-    } catch { if (request === selection.current) setMessage("Could not load your personal fit. Choose your avatar file below."); }
+    } catch { if (request === selection.current) { setExpanded(true); setMessage("Could not load your personal fit. Open Avatar & measurements to choose your avatar file."); } }
   }
   async function chooseAvatar(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]; event.target.value = "";
@@ -153,36 +163,63 @@ export function TryOn({ candidate = false, textureFixture = false, fixtures = fa
       if (previous) URL.revokeObjectURL(previous);
     } catch (error) { setMessage(error instanceof LocalGlbError ? error.message : "Could not open that file. Please try another GLB."); }
   }
-  return <main className="try-page">
+  function choosePiece(item: WardrobeItem | null, target: "top" | "bottom" = slot) {
+    if (item && !canTryOn(item)) return;
+    const color = item?.colors.reduce((best, entry) => entry.share > best.share ? entry : best).hex;
+    setChosen(previous => ({ ...previous, [target]: item }));
+    setOutfitSizes(previous => ({ ...previous, [target]: item?.size.trim().toUpperCase() ?? "" }));
+    if (target === "top") { if (!topEnabled) showTop(true); setTopColor(color ?? colors[4].value); setTopTexture(item?.texture ?? (textureFixture ? (candidate ? "fixture:/shirt-v3.png" : "fixture:/shirt.png") : null)); setTopOriginal(true); }
+    else { if (!bottomEnabled) showBottom(true); setBottomColor(color ?? colors[1].value); setBottomTexture(item?.texture ?? (textureFixture ? (candidate ? "fixture:/pants-v3.png" : "fixture:/pants.png") : null)); setBottomOriginal(true); }
+    setMessage("");
+  }
+  const current = chosen[slot], currentSizes = slot === "top" ? topSizes : bottomSizes;
+  const pieceName = (target: "top" | "bottom") => chosen[target]?.name ?? (target === "top" ? "Demo T-shirt" : "Demo pants");
+  const categories = <div className="try-categories" role="group" aria-label="Garment category">{(["top", "bottom"] as const).map(value => <button key={value} type="button" aria-pressed={slot === value} onClick={() => setSlot(value)}>{value === "top" ? "Tops" : "Bottoms"}</button>)}</div>;
+  const outfitQuery = new URLSearchParams();
+  if (topEnabled && chosen.top) outfitQuery.set("top", chosen.top.id);
+  if (bottomEnabled && chosen.bottom) outfitQuery.set("bottom", chosen.bottom.id);
+  return <main className={`try-page${expanded ? " try-expanded" : ""}`}>
+    <h1 className="try-sr-only">Fitting room</h1>
+    <aside className="try-wearing" aria-label="Choose garments">
+      <h2>Wearing</h2>{categories}
+      <ul className="try-piece-list">
+        <li><button className="try-piece" aria-pressed={!current} onClick={() => choosePiece(null)}><span className="try-piece-image"><TemplateThumbnail item={{ category: slot, template: slot === "top" ? "tshirt-v5.2" : "pants-v2", colors: [{ name: "Demo", hex: slot === "top" ? colors[4].value : colors[1].value, share: 1 }] }} /></span><span><strong>{slot === "top" ? "Demo T-shirt" : "Demo pants"}</strong><small>Example &middot; {!current ? "Selected" : "Explore the fit"}</small></span></button></li>
+        {wardrobeItems.filter(item => item.category === slot).map(item => <li key={item.id}><button className="try-piece" disabled={!canTryOn(item)} aria-pressed={current?.id === item.id} onClick={() => choosePiece(item)}><span className="try-piece-image"><PieceImage item={item} /></span><span><strong>{item.name}</strong><small>{item.id.startsWith("example-") ? "Example \u00b7 " : ""}{!canTryOn(item) ? "No 3D template" : current?.id === item.id ? "Selected" : item.material || "From your wardrobe"}</small></span></button></li>)}
+      </ul>
+      {wardrobeStatus && <p className="try-hint" role="status">{wardrobeStatus}</p>}
+      <Link className="try-wardrobe-link" href="/wardrobe">Explore wardrobe &rarr;</Link>
+      <div className="try-layers"><span className="try-eyebrow">Layers</span>{(["top", "bottom"] as const).map(value => <button key={value} aria-pressed={slot === value} onClick={() => setSlot(value)}><span>{value === "top" ? "Top" : "Bottom"}</span><span>{(value === "top" ? topEnabled : bottomEnabled) ? pieceName(value) : "Hidden"}</span></button>)}</div>
+    </aside>
     <section className="try-stage" ref={stageRef} aria-label="3D outfit preview">
-      <div className="try-stage-top"><Link href="/" className="try-brand"><span className="try-brand-icon">v<span>.</span></span><span>virtual<br />wardrobe</span></Link><span className="try-stage-caption">THE FITTING ROOM <i /> 01</span></div>
-      <div className={outfitReady || avatarFailed ? "try-viewport ready" : "try-viewport"}><SceneBoundary key={avatarUrl} onError={onAvatarError}><Suspense fallback={null}><TryOnScene key={avatarUrl} stageRef={stageRef} avatarUrl={avatarUrl} pose={pose} top={top} bottom={bottom} heatmap={heatmap} view={view} turntable={turntable} onAvatarReady={onAvatarReady} onTopReady={onTopReady} onBottomReady={onBottomReady} onTopError={onTopError} onBottomError={onBottomError} /></Suspense></SceneBoundary></div>
+      <div className={outfitReady || avatarFailed ? "try-viewport ready" : "try-viewport"}><SceneBoundary key={avatarUrl} onError={onAvatarError}><Suspense fallback={null}><TryOnScene key={avatarUrl} controlsExpanded={expanded} stageRef={stageRef} avatarUrl={avatarUrl} pose={pose} top={top} bottom={bottom} heatmap={heatmap} view={view} turntable={turntable} onAvatarReady={onAvatarReady} onTopReady={onTopReady} onBottomReady={onBottomReady} onTopError={onTopError} onBottomError={onBottomError} /></Suspense></SceneBoundary></div>
       {!outfitReady && !avatarFailed && <div className="try-stage-loading" role="status">Preparing your fitting room<span>...</span><span className="try-loading-bar" aria-hidden="true"><i /></span></div>}
-      <div className="try-stage-bottom"><div><span className="try-eyebrow light">YOUR PERSPECTIVE</span><p>Make it yours.</p></div><span className="try-drag-hint">DRAG TO ROTATE <ArrowClockwise size={17} /></span></div>
-      <div className="try-camera" aria-label="Camera views"><button onClick={() => changeView("front")}>Front</button><button onClick={() => changeView("left")}>Side</button><button onClick={() => changeView("back")}>Back</button><span className="try-camera-rule" /><button className={turntable ? "active" : ""} aria-pressed={turntable} onClick={() => setTurntable(!turntable)}><ArrowsClockwise size={16} /> 360°</button></div>
+      <div className="try-stage-top">
+        <div className="try-avatar-options" id="avatar" role="group" aria-label="Avatar"><button type="button" aria-label="Neutral avatar" aria-pressed={avatar === "neutral"} className={avatar === "neutral" ? "selected" : ""} onClick={() => { selection.current++; if (avatar !== "neutral") switchAvatar("neutral"); }}>Demo body</button><button type="button" aria-pressed={avatar === "personal"} className={avatar === "personal" ? "selected" : ""} onClick={() => { if (avatar !== "personal" || personalSource !== "manifest") void selectPersonalFit(); }}>My avatar</button></div>
+        <label className="fit-heatmap"><input type="checkbox" checked={heatmap} onChange={event => setHeatmap(event.target.checked)} /> Fit map</label>
+      </div>
+      <div className="try-stage-category">{categories}</div>
+      {heatmap && <div className="try-fit-legend" aria-label="Fit map legend"><span data-fit="tight">Tight</span><span data-fit="good">Good</span><span data-fit="loose">Loose</span></div>}
+      <div className="try-pose-group" role="group" aria-label="Pose">{poses.map(item => <button key={item.value} type="button" aria-pressed={pose === item.value} className={pose === item.value ? "selected" : ""} onClick={() => setPose(item.value)}>{item.label}</button>)}</div>
+      <div className="try-camera" aria-label="Camera views"><button aria-pressed={!turntable && view.view === "front"} onClick={() => changeView("front")}>Front</button><button aria-pressed={!turntable && view.view === "left"} onClick={() => changeView("left")}>Side</button><button aria-pressed={!turntable && view.view === "back"} onClick={() => changeView("back")}>Back</button><button aria-label="Rotate 360 degrees" aria-pressed={turntable} onClick={() => setTurntable(!turntable)}><ArrowsClockwise size={16} /> 360&deg;</button></div>
     </section>
     <aside className="try-panel" aria-label="Outfit controls">
-      <div className="try-panel-inner"><div className="try-panel-top"><Link href="/" className="try-back"><ArrowLeft size={15} /> BACK</Link><Link href="/wardrobe">WARDROBE</Link></div>
-        <header className="try-heading"><span className="try-eyebrow">THE VIRTUAL FITTING ROOM</span><h1>Make yourself<br /><em>at home.</em></h1><p>Good style starts with a little exploration. Find a look that feels like you.</p>{textureFixture && <p role="status">Synthetic texture fixtures are active.</p>}{fixtures && <p role="status">Synthetic size fixtures are active for the neutral avatar. Fit values and heatmap are illustrative.</p>}</header>
-        <div className="try-section-heading"><div><span className="try-eyebrow">THE EDIT</span><h2>Your outfit<span>.</span></h2></div><span className="try-section-label">01 / 03</span></div>
-        <OutfitSlot number="01" name="Top" description="The everyday T-shirt" enabled={topEnabled} onEnabled={showTop} color={topColor} onColor={value => { setTopColor(value); setTopOriginal(false); }} hasOriginal={!!topTexture} original={!!topTexture && topOriginal} onOriginal={() => setTopOriginal(true)} available />
-        <FitPicker title="Top" options={topSizes.options} selected={topSizes.size} onSize={topSizes.setSize} />
-        {outfitSizes.top && topSizes.resolved && !topSizes.options.some(option => option.size === outfitSizes.top) && <p className="try-hint">Saved top size {outfitSizes.top} is unavailable for this avatar; showing the available default.</p>}
-        <OutfitSlot number="02" name="Bottom" description="The essential pants" enabled={bottomEnabled} onEnabled={showBottom} color={bottomColor} onColor={value => { setBottomColor(value); setBottomOriginal(false); }} hasOriginal={!!bottomTexture} original={!!bottomTexture && bottomOriginal} onOriginal={() => setBottomOriginal(true)} available={!!activeFit || bottomAvailability === "available" || bottomAvailability === "checking"} />
-        <FitPicker title="Bottom" options={bottomSizes.options} selected={bottomSizes.size} onSize={bottomSizes.setSize} />
-        {outfitSizes.bottom && bottomSizes.resolved && !bottomSizes.options.some(option => option.size === outfitSizes.bottom) && <p className="try-hint">Saved bottom size {outfitSizes.bottom} is unavailable for this avatar; showing the available default.</p>}
-        <label className="fit-heatmap"><input type="checkbox" checked={heatmap} onChange={event => setHeatmap(event.target.checked)} /> Fit heatmap <span>Orange: tight · Green: good · Blue: loose</span></label>
-        <div className="try-divider" />
-        <div className="try-section-heading compact"><div><span className="try-eyebrow">SEE THE FIT</span><h2>Strike a pose<span>.</span></h2></div><span className="try-section-label">02 / 03</span></div>
-        <div className="try-pose-group" role="group" aria-label="Pose">{poses.map(item => <button key={item.value} type="button" aria-pressed={pose === item.value} className={pose === item.value ? "selected" : ""} onClick={() => setPose(item.value)}>{item.label}</button>)}</div>
-        <div className="try-divider" />
-        <div className="try-section-heading compact"><div><span className="try-eyebrow">MADE PERSONAL</span><h2>Your avatar<span>.</span></h2></div><span className="try-section-label">03 / 03</span></div>
-        <div className="try-avatar-options" id="avatar"><button type="button" className={avatar === "neutral" ? "selected" : ""} onClick={() => { selection.current++; if (avatar !== "neutral") switchAvatar("neutral"); }}><span>Neutral avatar</span>{avatar === "neutral" && <Check size={16} />}</button><button type="button" className={avatar === "personal" ? "selected" : ""} onClick={() => { if (avatar !== "personal" || personalSource !== "manifest") void selectPersonalFit(); }}><span>My avatar</span>{avatar === "personal" && <Check size={16} />}</button></div>
-        <label htmlFor="try-avatar-file" className="try-upload"><UploadSimple size={17} /> {personal ? "Choose a different avatar" : "Choose your avatar file"}</label><input className="try-sr-only" id="try-avatar-file" type="file" accept=".glb,model/gltf-binary" onChange={chooseAvatar} />
-        <p className="try-hint">Your GLB stays on this device. Garments need a matching avatar fit.</p>
-        <MeasurementsForm />
+      <div className="try-panel-inner">
+        <button type="button" className="try-sheet-toggle" aria-expanded={expanded} aria-controls="try-more-controls" onClick={() => setExpanded(!expanded)}><span aria-hidden="true" /><span>{expanded ? "Less detail" : "Pieces & details"} <CaretDown size={14} /></span></button>
+        <header className="try-item-heading"><div><span className="try-eyebrow">{current ? current.material || "From your wardrobe" : "Example piece"}</span><h2>{pieceName(slot)}</h2></div>{currentSizes.selected?.fit.recommended && <span className="try-recommended"><Check size={13} /> Recommended size</span>}</header>
+        {(["top", "bottom"] as const).map(target => {
+          const isTop = target === "top", sizes = isTop ? topSizes : bottomSizes;
+          return <div key={target} hidden={slot !== target}>
+            <FitPicker editorial title={isTop ? "Top" : "Bottom"} options={sizes.options} selected={sizes.size} onSize={sizes.setSize} />
+            {outfitSizes[target] && sizes.resolved && !sizes.options.some(option => option.size === outfitSizes[target]) && <p className="try-hint">Saved {target} size {outfitSizes[target]} is unavailable for this avatar; showing the available default.</p>}
+            <div className="try-extra"><OutfitSlot number={isTop ? "01" : "02"} name={isTop ? "Top" : "Bottom"} description={pieceName(target)} enabled={isTop ? topEnabled : bottomEnabled} onEnabled={isTop ? showTop : showBottom} color={isTop ? topColor : bottomColor} onColor={value => { if (isTop) { setTopColor(value); setTopOriginal(false); } else { setBottomColor(value); setBottomOriginal(false); } }} hasOriginal={!!(isTop ? topTexture : bottomTexture)} original={isTop ? !!topTexture && topOriginal : !!bottomTexture && bottomOriginal} onOriginal={() => isTop ? setTopOriginal(true) : setBottomOriginal(true)} available={isTop || !!activeFit || bottomAvailability === "available" || bottomAvailability === "checking"} /></div>
+          </div>;
+        })}
+        <div id="try-more-controls" className="try-extra">
+          <details className="try-avatar-details"><summary>Avatar & measurements</summary><label htmlFor="try-avatar-file" className="try-upload"><UploadSimple size={17} /> {personal ? "Choose a different avatar" : "Choose your avatar file"}</label><input className="try-file" id="try-avatar-file" type="file" accept=".glb,model/gltf-binary" onChange={chooseAvatar} /><p className="try-hint">Your GLB stays on this device. Garments need a matching avatar fit.</p><MeasurementsForm /></details>
+          <div className="try-outfit-actions"><Link className="button-primary" href={`/outfits?${outfitQuery}`}>{outfitQuery.has("top") && outfitQuery.has("bottom") ? "Save as outfit" : "Build an outfit"}</Link><Link className="button-secondary" href="/stylist">Ask stylist</Link></div><p className="try-hint">Save wardrobe pieces in the outfit builder. Preview colours and sizes stay in this session.</p>
+        </div>
+        {textureFixture && <p className="try-hint" role="status">Synthetic texture fixtures are active.</p>}{fixtures && <p className="try-hint" role="status">Synthetic size fixtures are active for the neutral avatar. Fit values and heatmap are illustrative.</p>}
         {message && <p className="try-message" role="status">{message}</p>}
-        <footer className="try-footer"><span>VIRTUAL WARDROBE</span><span>MADE FOR YOUR WORLD&nbsp; ✳</span></footer>
       </div>
     </aside>
   </main>;
