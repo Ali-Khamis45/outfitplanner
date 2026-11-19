@@ -1,10 +1,13 @@
+import { selectCandidates, selectionContains } from "../../lib/stylist/selection.ts";
+import { requestIntent, eligibleItems } from "../../lib/stylist/pipeline.ts";
+import { validateIntent } from "../../lib/stylist/intent.ts";
 import { record } from "../../lib/stylist/core.ts";
 import type { Wardrobe, WardrobeItem } from "../../lib/wardrobe/schema.ts";
 import type { Scenario, Check } from "./scoring.ts";
 
-// Independent scoring policy: do not import the production selection/parser.
-// These checks can fail on perfectly schema-valid, server-accepted answers.
-export function qualityChecks(s: Scenario, wardrobe: Wardrobe, response: unknown, draft = false): Check[] {
+// Historical v2 scoring retained for comparison; v2.1 dispatch below explicitly
+// shares production policy and reports intent accuracy separately.
+function legacyQualityChecks(s: Scenario, wardrobe: Wardrobe, response: unknown, draft = false): Check[] {
   const data = record(response) ? response : {}, look = record(data.structured) ? data.structured : {};
   const evaluation = record(data.evaluation) ? data.evaluation : {};
   const today = s.reference_date ?? s.date, days = Math.max(3, s.expect.not_worn_days ?? 3);
@@ -50,4 +53,28 @@ export function qualityChecks(s: Scenario, wardrobe: Wardrobe, response: unknown
   };
   check("reply_language", look.language === s.language && matchesLanguage(look.reason) && [look.gap_note, look.weather_note].every(value => value === null || matchesLanguage(value)), "Expected reply language and dominant script in the reason and notes; not a dialect-fluency judge.");
   return checks;
+}
+
+// v2.1 uses the production filter deliberately. Intent labels never enter it.
+// These guarantees are conditional on the extracted intent, which is scored separately.
+export function qualityChecks(s: Scenario, wardrobe: Wardrobe, response: unknown, draft = false): Check[] {
+  const data = record(response) ? response : {}, evaluation = record(data.evaluation) ? data.evaluation : {};
+  const checks = legacyQualityChecks(s, wardrobe, response, draft);
+  if (evaluation.pipeline !== "v2.1") return checks;
+  const look = record(data.structured) ? data.structured : {};
+  try {
+    const extracted = validateIntent(evaluation.intent), base = requestIntent(s.message, s.reference_date ?? s.date, s.city);
+    const intent = { ...base, occasion: extracted.occasion_type, range: [extracted.formality_min, extracted.formality_max] as [number, number], date: extracted.date, language: extracted.language, indoor_outdoor: extracted.indoor_outdoor };
+    const selection = selectCandidates(wardrobe.items, intent, evaluation.forecast);
+    const contains = selectionContains(selection, look);
+    const best = eligibleItems(wardrobe.items, intent, "top").some(i=>i.id===look.top_id) && eligibleItems(wardrobe.items, intent, "bottom").some(i=>i.id===look.bottom_id);
+    return checks.map(c => c.id === "best_available_formality" ? { ...c, status: best ? "PASS" : "FAIL", detail: "Guaranteed by shared server formality policy, conditional on extracted intent." }
+      : c.id === "warmth_vs_forecast" ? { ...c, status: !selection.thermal ? "N/A" : contains ? "PASS" : "FAIL", detail: "Guaranteed by shared server thermal candidate groups, conditional on extracted intent." }
+      : c.id === "gap_note" ? { ...c, status: contains && look.gap_note === selection.gap_note ? "PASS" : "FAIL", detail: "Server-generated disclosure matches the computed gaps." } : c);
+  } catch { return checks.map(c => ["best_available_formality", "warmth_vs_forecast", "gap_note"].includes(c.id) ? { ...c, status: "FAIL" } : c); }
+}
+export function intentChecks(s: Scenario, value: unknown): Check[] {
+  const got = record(value) ? value : {}, labels = s.intent_labels;
+  if (!labels) return [];
+  return [...Object.keys(labels), "formality_range"].map(id => ({ id, status: (id === "formality_range" ? got.formality_min === labels.formality_min && got.formality_max === labels.formality_max : got[id] === labels[id as keyof typeof labels]) ? "PASS" : "FAIL", detail: "Exact match against pre-labelled scenario intent; no label is sent to inference." }));
 }

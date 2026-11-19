@@ -14,10 +14,10 @@ const root = await mkdtemp(path.join(os.tmpdir(), "stylist-pipeline-test-")), se
 const date = "2030-01-01", wardrobe = fixtureWardrobe(date), file = path.join(root, "wardrobe/wardrobe.json");
 const message = { context: { date, city: "Cairo" }, messages: [{ role: "user", content: "Choose a casual look in Cairo and log it worn today." }] };
 const options = { outputs: root, environment: "development", evaluation: true, weather: evaluationWeather };
-async function model(script) { const server = await startMockModel(script); servers.push(server); return server; }
+async function model(script) { const server = await startMockModel(script, body => { const i = requestIntent(body.messages.at(-1).content, date); return completion(JSON.stringify({occasion_type:i.occasion,formality_min:i.range[0],formality_max:i.range[1],date:i.date,indoor_outdoor:"unknown",language:i.language})); }); servers.push(server); return server; }
 const look = (body, changes = {}) => {
   const p = body.response_format.json_schema.schema.properties;
-  return { top_id: p.top_id.enum[0], bottom_id: p.bottom_id.enum[0], outer_id: null, occasion: "casual", formality: Number(p.top_id.enum[0].split("-")[2]), gap_note: null, date, reason: "These pieces make a comfortable casual look.", weather_note: null, language: "en", ...changes };
+  return { top_id: p.top_id.enum[0], bottom_id: p.bottom_id.enum[0], outer_id: null, occasion: "casual", formality: Number(p.top_id.enum[0].split("-")[2]), gap_note: p.gap_note.enum?.[0] ?? null, date, reason: "These pieces make a comfortable casual look.", weather_note: null, language: "en", ...changes };
 };
 const handlerFor = (server, extra = {}) => createChatHandler({ ...options, settings: () => ({ model: "local", baseUrl: server.baseUrl }), ...extra });
 try {
@@ -30,6 +30,9 @@ try {
   assert.equal(result.body.recommendations.length, 1);
   assert.deepEqual(result.body.calls.map(c => c.name), ["get_wardrobe", "get_weather"]);
   assert.deepEqual(result.body.evaluation.tool_validity, { valid: 0, invalid: 0 });
+  assert.equal(scripted.intentRequests.length, 1);
+  assert.ok(!JSON.stringify(scripted.intentRequests).includes("eval-top"), "intent stage never receives wardrobe IDs");
+  assert.ok(scripted.allRequests.every(r=>r.keep_alive==="30m" && r.reasoning_effort==="none"));
   const body = scripted.requests[0];
   assert.equal(body.keep_alive, "30m");
   assert.equal(scripted.warmups[0].keep_alive, "30m");
@@ -46,6 +49,13 @@ try {
   assert.match(body.messages[0].content, /worn_last_3_days/); assert.match(body.messages[0].content, /2030-01-01/);
   for (const secret of ["private.png", "PRIVATE MEASUREMENTS", "123456", "ease_mm", "delta_mm"]) assert.ok(!JSON.stringify(scripted.requests).includes(secret));
   assert.deepEqual(JSON.parse(await readFile(file, "utf8")), wardrobe, "chat cannot log wear even when asked");
+  const intentRetry = await startMockModel(body => completion(JSON.stringify(look(body))), (_body, index) => completion(JSON.stringify(index ? { occasion_type: "business", formality_min: 4, formality_max: 5, date, indoor_outdoor: "unknown", language: "en" } : { date: "invalid" })));
+  servers.push(intentRetry);
+  const intentResult = await request(handlerFor(intentRetry), { body: message });
+  assert.equal(intentResult.body.status, "ok");
+  assert.equal(intentRetry.intentRequests.length, 2); assert.equal(intentRetry.requests.length, 1);
+  assert.equal(intentResult.body.evaluation.intent_attempts, 2);
+  assert.equal(intentResult.body.structured.formality, 5, "model-extracted range drives filtering; the old regex guess does not replace it");
   for (const invalid of ["invented", "wrong-category", "recent", "formality", "language", "verbose", "malformed", "tool-call"]) {
     const server = await model((body, index) => {
       if (index) return completion(JSON.stringify(look(body)));
@@ -76,14 +86,14 @@ try {
 
   const intent = requestIntent("casual", date), casual = wardrobe.items.filter(item => item.formality <= 2);
   const allRecent = casual.map(item => ({ ...item, last_worn: date }));
-  assert.equal(eligibleItems(allRecent, intent, "top").length, allRecent.filter(i => i.category === "top").length, "fallback when nothing fresh fits");
+  assert.equal(eligibleItems(allRecent, intent, "top").length, allRecent.filter(i => i.category === "top" && i.formality === 2).length, "fallback when nothing fresh fits");
   const alternatives = [...allRecent, { ...casual[0], id: "fresh-alternative", last_worn: null }];
   assert.deepEqual(eligibleItems(alternatives, intent, "top").map(i => i.id), ["fresh-alternative"]);
   assert.throws(() => lookSchema(allRecent, requestIntent("casual, avoid last 7 days", date)));
   const boundary = { ...casual[0], last_worn: "2029-12-29" }, fresh = { ...casual[0], id: "older", last_worn: "2029-12-28" };
   assert.deepEqual(eligibleItems([boundary, fresh], intent, "top").map(i => i.id), ["older"], "inclusive three-day cutoff");
   const schema = lookSchema(wardrobe.items, intent), outer = { ...casual[0], id: "outer", category: "outerwear", last_worn: null };
-  const valid = { gap_note: null, date, top_id: schema.properties.top_id.enum[0], bottom_id: schema.properties.bottom_id.enum[0], outer_id: "outer", occasion: "casual", formality: 1, reason: "A simple look.", weather_note: null, language: "en" };
+  const valid = { gap_note: null, date, top_id: schema.properties.top_id.enum[0], bottom_id: schema.properties.bottom_id.enum[0], outer_id: "outer", occasion: "casual", formality: 2, reason: "A simple look.", weather_note: null, language: "en" };
   const formalIntent = requestIntent("business presentation", date);
   const closest = { ...valid, top_id: "eval-top-2-fresh", bottom_id: "eval-bottom-2-fresh", outer_id: null, formality: 2, gap_note: "You have no formal shirt; these casual pieces are the closest available." };
   assert.equal(validateLook(closest, casual, formalIntent).formality, 2);

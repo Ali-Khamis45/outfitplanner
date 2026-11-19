@@ -84,6 +84,10 @@ try {
     const evaluated = scoreScenario(s, fixture, result.body, result.code, 0);
     assert.equal(evaluated.quality_status, "PASS", s.id + JSON.stringify(evaluated.quality_checks));
     assert.equal(evaluated.first_try_pass, true, s.id);
+    assert.ok(evaluated.intent_checks.every(c => c.status === "PASS"), s.id);
+    const wrongIntent = structuredClone(result.body);
+    wrongIntent.evaluation.intent.date = "2000-01-01";
+    assert.equal(scoreScenario(s, fixture, wrongIntent, 200, 0).intent_checks.find(c => c.id === "date").status, "FAIL", "schema-valid but wrong intent must count as a model error");
     if (!s.id.startsWith("hard-")) assert.equal(evaluated.status, "PASS", s.id);
     assert.equal(result.body.evaluation.tool_validity.invalid, 0);
     const altered = structuredClone(result.body);
@@ -109,6 +113,7 @@ try {
   // in 2030 must remain eligible even when this suite runs years earlier/later.
   const future = fixtureWardrobe("2030-01-01"); await writeFile(path.join(root, "wardrobe/wardrobe.json"), JSON.stringify(future));
   const clockModel = await startMockModel(body => {
+    if(body.response_format.json_schema.name==="stylist_intent") return completion(JSON.stringify({occasion_type:"everyday",formality_min:1,formality_max:5,date:"2030-01-01",indoor_outdoor:"unknown",language:"en"}));
     const p = body.response_format.json_schema.schema.properties;
     return completion(JSON.stringify({ top_id: p.top_id.enum[0], bottom_id: p.bottom_id.enum[0], outer_id: null, occasion: "casual", formality: Number(p.top_id.enum[0].split("-")[2]), gap_note: null, date: "2030-01-01", reason: "A simple look.", weather_note: null, language: "en" }));
   }); servers.push(clockModel);

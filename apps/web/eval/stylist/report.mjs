@@ -2,8 +2,8 @@ import { summarize } from "./scoring.ts";
 
 export function makeReport(metadata, results) {
   return { version: 2, ...metadata, status_only: true, summary: summarize(results.map(result => result.score)), results: results.map(result => {
-    const { error, checks, quality_checks, ...score } = result.score;
-    return { score: { ...score, quality_checks: quality_checks?.map(({ id, status }) => ({ id, status })), request_error: !!error, checks: checks.map(({ id, status }) => ({ id, status })) }, ...(result.wardrobe_sha256 ? { wardrobe_sha256: result.wardrobe_sha256 } : {}) };
+    const { error, checks, quality_checks, intent_checks, first_intent_checks, ...score } = result.score;
+    return { score: { ...score, intent_checks: intent_checks?.map(({id,status})=>({id,status})), first_intent_checks: first_intent_checks?.map(({id,status})=>({id,status})), quality_checks: quality_checks?.map(({ id, status }) => ({ id, status })), request_error: !!error, checks: checks.map(({ id, status }) => ({ id, status })) }, ...(result.wardrobe_sha256 ? { wardrobe_sha256: result.wardrobe_sha256 } : {}) };
   }) };
 }
 const cell = value => String(value).replaceAll("|", "\\|").replace(/[\r\n]+/g, " ");
@@ -27,14 +27,19 @@ export function markdownReport(report) {
     `| Average scenario latency | 6.30 s | ${(summary.average_latency_ms / 1000).toFixed(2)} s |`,
     `| Item-existence failures | 29/30 | ${summary.failures_by_category.recommended_items_exist ?? 0}/${summary.scenarios} |`, "",
     "The scenario messages, fixture and nine scoring categories are unchanged. In v2, server context reads satisfy read checks and a structured recommendation replaces the show_on_avatar tool prerequisite. Rejected drafts never become recommendations; their retry count is reported separately. This compares complete pipelines, not isolated model quality.");
-  if (report.pipeline === "v2-quality") lines.push("", "## Quality checks", "",
+  if (["v2-quality", "v2.1"].includes(report.pipeline)) lines.push("", "## Quality checks", "",
     `Quality passed: **${summary.quality_passed_scenarios}/${summary.scenarios}**. First-try quality passed: **${summary.first_try_passed_scenarios}/${summary.scenarios}**. First-try server validation: **${summary.first_try_validation_passed_scenarios}/${summary.scenarios}**. Retries: **${summary.retry_count}**.`, "",
     "| Cohort | Old checks passed | New quality passed | First-try quality passed |", "| --- | --- | --- | --- |",
     "| Prior v2 qwen3.5 baseline (30) | 30/30 | Not measured | Not measured |",
+    "| Prior v2 follow-up (40) | 38/40 | 35/40 (independent checks) | 30/40 |",
     ...Object.entries(summary.cohorts).map(([name, c]) => `| ${name} | ${c.old_checks_passed}/${c.scenarios} | ${c.quality_passed}/${c.scenarios} | ${c.first_try_passed}/${c.scenarios} |`), "",
     "| Scenario | Old checks | Quality | First try | Retries | Quality failures |", "| --- | --- | --- | --- | --- | --- |",
-    ...report.results.map(({ score: s }) => `| ${s.id} | ${s.status} | ${s.quality_status} | ${s.first_try_pass ? "PASS" : "FAIL"} | ${Math.max(0, s.validation_attempts - 1)} | ${s.quality_checks.filter(c => c.status === "FAIL").map(c => c.id).join(", ") || "None"} |`), "",
+    ...report.results.map(({ score: s }) => `| ${s.id} | ${s.status} | ${s.quality_status} | ${s.first_try_pass ? "PASS" : "FAIL"} | ${Math.max(0, (s.validation_attempts ?? 0) - 1) + Math.max(0, (s.intent_attempts ?? 0) - 1)} | ${s.quality_checks.filter(c => c.status === "FAIL").map(c => c.id).join(", ") || "None"} |`), "",
     "| Quality failure category | Scenarios |", "| --- | --- |", ...Object.entries(summary.quality_failures_by_category).map(([id, count]) => `| ${id} | ${count} |`));
+  if (report.pipeline === "v2.1") lines.push("", "## Main model metric: intent extraction", "",
+    "| Intent field | Correct | First attempt correct |", "| --- | --- | --- |",
+    ...Object.entries(summary.intent_accuracy).map(([id, c]) => `| ${id} | ${c.correct}/${c.total} | ${c.first_try_correct}/${c.total} |`), "",
+    "Formality and warmth now share server filter/scoring rules and are guaranteed for a published answer relative to the extracted intent. They are not evidence of model reasoning. The previous 35/40 used independent selection scoring. Intent labels never enter prompts; an incorrect intent is reported even when all filtered choices pass.");
   lines.push("", "| Failure category | Scenarios |", "| --- | --- |", ...Object.entries(summary.failures_by_category).map(([category, count]) => `| ${cell(category)} | ${count} |`), "",
     "Status-only report: no prompts, model prose, reasoning fields, tool arguments, photos or personal fit values. Scoring checks structured tool traces and recommendations in memory, not prose quality. A correct weather call is scored independently of provider availability. Legacy v1 action attempts all count; v2 scores published recommendations and reports validation retries separately. Missing recommendations fail.", "");
   return lines.join("\n");

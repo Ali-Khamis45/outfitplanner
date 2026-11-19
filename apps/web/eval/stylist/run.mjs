@@ -55,7 +55,7 @@ async function main(mock) {
     await warm.arrayBuffer();
     const warmupMs = Math.round(performance.now() - warmStarted);
     const metadata = { run_id: runId, started_at: startedAt, mode: mock ? "mock" : "local-model", model: env.STYLIST_MODEL?.trim() || null,
-      pipeline: "v2-quality", keep_alive: env.STYLIST_KEEP_ALIVE || "30m", legacy_scenarios_sha256: createHash("sha256").update(legacyText).digest("hex"), thinking: env.STYLIST_THINKING?.trim().toLowerCase() || "off", reasoning_effort: env.STYLIST_THINKING?.trim().toLowerCase() === "on" ? "model-default" : "none",
+      pipeline: "v2.1", keep_alive: env.STYLIST_KEEP_ALIVE || "30m", legacy_scenarios_sha256: createHash("sha256").update(legacyText).digest("hex"), thinking: env.STYLIST_THINKING?.trim().toLowerCase() || "off", reasoning_effort: env.STYLIST_THINKING?.trim().toLowerCase() === "on" ? "model-default" : "none",
       warmup_status: warm.status, warmup_ms: warmupMs,
       weather: mock ? "synthetic fixture" : "live Open-Meteo for legacy cohort; controlled synthetic forecasts for hard scenarios", fixture_version: FIXTURE_VERSION,
       scenarios_sha256: createHash("sha256").update(scenarioText).digest("hex"), source_revision: revision, source_dirty: sourceDirty, endpoint: BASE_URL + "/api/stylist/chat" };
@@ -80,9 +80,10 @@ async function main(mock) {
       await writeFile(path.join(reportDirectory, "report.md"), markdownReport(report));
     }
     const report = makeReport(metadata, results);
+    console.log(`Intent all fields ${report.summary.intent_all_fields_passed}/${scenarios.length}.`);
     console.log(`Quality ${report.summary.quality_passed_scenarios}/${scenarios.length}; first-try quality ${report.summary.first_try_passed_scenarios}/${scenarios.length}; first-try validation ${report.summary.first_try_validation_passed_scenarios}/${scenarios.length}; retries ${report.summary.retry_count}.`);
     console.log(`Overall ${(report.summary.overall_score * 100).toFixed(1)}%; ${report.summary.passed_scenarios}/${scenarios.length} scenarios; average ${report.summary.average_tool_calls.toFixed(2)} tools, ${(report.summary.average_latency_ms / 1000).toFixed(2)} s.\nReports: ${reportDirectory}`);
-    process.exitCode = controller.signal.aborted ? 130 : report.summary.quality_passed_scenarios < scenarios.length ? 1 : 0;
+    process.exitCode = controller.signal.aborted ? 130 : report.summary.quality_passed_scenarios < scenarios.length || report.summary.intent_all_fields_passed < scenarios.length ? 1 : 0;
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
     if (reportDirectory) await writeFile(path.join(reportDirectory, "harness-error.txt"), String(error) + "\n");
