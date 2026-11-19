@@ -108,11 +108,11 @@ export function TryOnScene({ stageRef, avatarUrl, pose, top, bottom, heatmap, vi
   const [model, setModel] = useState<ModelInfo | null>(null);
   const onReady = useCallback((info: ModelInfo) => { setModel(info); onAvatarReady(); }, [onAvatarReady]);
   return <Canvas shadows dpr={[1, 1.5]} camera={{ position: [0, 1, 3], fov: 40 }} gl={{ antialias: true }} fallback={<div className="try-stage-message">3D viewing is unavailable in this browser.</div>}>
-    <color attach="background" args={["#202321"]} />
+    <color attach="background" args={["#24201c"]} />
     <ambientLight intensity={0.8} /><hemisphereLight args={["#f8eee3", "#313a33", 1.1]} />
     <directionalLight position={[3, 5, 4]} intensity={2.6} castShadow shadow-mapSize={[2048, 2048]} shadow-camera-left={-2} shadow-camera-right={2} shadow-camera-top={2} shadow-camera-bottom={-2} shadow-normalBias={0.02} />
     <directionalLight position={[-3, 2, -3]} intensity={1.1} color="#d2dfd3" />
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.003, 0]} receiveShadow><circleGeometry args={[8, 64]} /><meshStandardMaterial color="#202321" roughness={1} /></mesh>
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.003, 0]} receiveShadow><circleGeometry args={[8, 64]} /><meshStandardMaterial color="#24201c" roughness={1} /></mesh>
     <Suspense fallback={null}><AvatarModel url={avatarUrl} pose="rest" wireframe={false} inspection={false} skeleton={false} onReady={onReady} onRig={setRig} /></Suspense>
     {rig && (avatarUrl === "/api/demo-avatar" || avatarUrl === "/api/personal-fit?asset=body") && <WarmSkin rig={rig} />}
     {rig && <PoseMotion rig={rig} pose={pose} />}
