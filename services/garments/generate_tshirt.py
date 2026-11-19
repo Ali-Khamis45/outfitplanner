@@ -20,7 +20,7 @@ import trimesh
 
 from body import PROJECT, VIEWER, RestBody, evaluate_rest_body, load_model
 from garment_glb import read_glb, skinned_primitive, write_garment_glb
-from tshirt import BOUNDARY_KINDS, REGION_NAMES, V2_RULES, V4_RULES, V5_1_RULES, V5_2_RULES, V5_RULES, BodySurface, FitRules, OuterGarment, assemble, design_tshirt, enforce_clearance, retarget, rules_record
+from tshirt import BOUNDARY_KINDS, REGION_NAMES, V2_RULES, V4_RULES, V5_1_RULES, V5_2_RULES, V5_3_RULES, V5_RULES, BodySurface, FitRules, OuterGarment, assemble, design_tshirt, enforce_clearance, retarget, rules_record
 
 MATERIAL = {"name": "TShirt_Cotton_PBR", "baseColor": [0.85, 0.85, 0.88, 1.0], "metalness": 0.0, "roughness": 0.85}
 NEUTRAL_AVATAR = PROJECT / "outputs" / "avatars" / "mhr-neutral.glb"
@@ -33,6 +33,7 @@ RULESETS = {
     "v5": V5_RULES,  # Sprint 1.4A: v2 + shoulder corrective morph targets (promotion candidate, not the default)
     "v5.1": V5_1_RULES,  # Sprint 2.1A: v5 + hip-flexion hem correctives
     "v5.2": V5_2_RULES,  # Sprint 2.2A: v5.1 + arm-down correctives (signed sidecar, contract v2)
+    "v5.3": V5_3_RULES,  # Sprint 3.5 candidate: v5.2 cut into pattern panels, UV layout v3 (not the default)
     # Ablations for the Sprint 1.1 deformation analysis: each change on its own.
     "v2-separation-only": FitRules(underarm_separation_m=0.007),
     "v2-weights-only": FitRules(weight_mode="region", weight_smoothing_iterations=4),
@@ -107,8 +108,18 @@ def topology_report(arrays: dict[str, Any]) -> dict[str, Any]:
 
 
 def write(directory: Path, body: RestBody, outer: OuterGarment, rules: FitRules, name: str, garment_id: str, revision: str, personal: bool, source_variant: str | None, extra: dict[str, Any], avatar_path: Path = NEUTRAL_AVATAR, original: tuple[Path, Path] | None = None) -> dict[str, Any]:
-    arrays = assemble(outer, rules.thickness_m)
-    if rules.adduction_correctives:  # v5.2 and later: UV layout v2 (only TEXCOORD_0 changes; docs/contracts/garment-texture.md)
+    extra_attributes = None
+    if rules.panel_seams:  # Sprint 3.5: split along the pattern seams, one UV island per panel (layout v3)
+        import panels
+        from uv_layout import relayout_panels
+
+        outer, extra["panels"] = panels.cut(outer, "tshirt")
+        arrays = assemble(outer, rules.thickness_m)
+        arrays["uv"], extra["uv_layout"], panel_of_vertex = relayout_panels(arrays, "tshirt")
+        extra_attributes = {"_PANEL": panel_of_vertex}
+    else:
+        arrays = assemble(outer, rules.thickness_m)
+    if rules.adduction_correctives and not rules.panel_seams:  # v5.2 and later: UV layout v2 (only TEXCOORD_0 changes; docs/contracts/garment-texture.md)
         from uv_layout import relayout
 
         arrays["uv"], extra["uv_layout"] = relayout(arrays, "tshirt")
@@ -137,7 +148,7 @@ def write(directory: Path, body: RestBody, outer: OuterGarment, rules: FitRules,
                 morphs.update(add_morphs)
             document = correctives.signed_shirt_sidecar(avatar.skeleton, rules.adduction_correctives)  # contract v2
         new_file(glb.with_name(glb.stem + ".correctives.json")).write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
-    write_garment_glb(glb, arrays, body, info, MATERIAL, morphs)
+    write_garment_glb(glb, arrays, body, info, MATERIAL, morphs, extra_attributes)
     report = {"garment": info, "topology": topology_report(arrays), "fit_report": {k: v for k, v in outer.report.items() if k != "rules"}, **extra}
     new_file(glb.with_suffix(".json")).write_text(json.dumps(report, indent=2, default=float), encoding="utf-8")
     print(f"Wrote {glb}")
