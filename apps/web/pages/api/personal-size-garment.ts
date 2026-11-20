@@ -2,7 +2,7 @@ import { readFile, readdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import type { NextApiRequest, NextApiResponse } from "next";
-import { compressedAsset } from "../../asset-compression/compress.mjs";
+import { clearPersonalAssetMemory, compressedAsset, compressedPersonalAsset, prepareAssetCache } from "../../asset-compression/compress.mjs";
 import { localRequest } from "../../lib/personalFit.ts";
 import { parseFitMap, SIZES, type Size, type Slot } from "../../lib/garment/fitMap.ts";
 import { GENERATIONS, generationQuery, parseGeneration } from "../../lib/garment/generation.ts";
@@ -21,6 +21,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (fixtures && (process.env.NODE_ENV !== "development" || body !== "neutral")) return res.status(404).end();
   if (body !== "neutral" && (process.env.NODE_ENV !== "development" || !localRequest(req))) return res.status(404).end();
   try {
+    if (body !== "neutral") await prepareAssetCache();
     const directory = path.resolve(/*turbopackIgnore: true*/ process.cwd(), fixtures ? "../../.codex-garment-check/sprint3-fixtures/outputs/garments/sizes" : `../../outputs/garments/${sizesDir}`), root = await realpath(/*turbopackIgnore: true*/ directory);
     const files = await readdir(root);
     const suffix = `-${body}.fit.json`;
@@ -57,7 +58,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const encoding = (req.headers["accept-encoding"] ?? "").split(",").map(x => x.trim()).find(x => /^gzip(?:\s*;|$)/i.test(x));
     const quality = encoding?.match(/;\s*q=([\d.]+)/i);
     const gzip = !!encoding && (!quality || Number(quality[1]) > 0);
-    const bytes = Buffer.from(await compressedAsset(filename, undefined, gzip));
+    const bytes = Buffer.from(body === "neutral" ? await compressedAsset(filename, undefined, gzip) : await compressedPersonalAsset(filename, gzip));
     const etag = `"${createHash("sha256").update(bytes).digest("hex")}"`;
     res.setHeader("ETag", etag); res.setHeader("Vary", "Accept-Encoding");
     res.setHeader("Cache-Control", body === "neutral" && req.query.v === version ? "public, max-age=31536000, immutable, no-transform" : "private, no-store, no-transform");
@@ -67,5 +68,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (gzip) res.setHeader("Content-Encoding", "gzip");
     res.status(200).end(bytes);
     return;
-  } catch { return res.status(404).end(); }
+  } catch { if (body !== "neutral") clearPersonalAssetMemory(); return res.status(404).end(); }
 }
