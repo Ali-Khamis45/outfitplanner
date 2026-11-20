@@ -111,27 +111,48 @@ Personal results are status only.
 - Browser check of the heatmap band (before any promotion).
 - The waistband-rim stretch and the size flip counts above (Sprint 3A follow-up).
 
-## Promotion (2026-11-19)
+## Promotion, pants only (2026-11-20)
 
-The browser check of the heatmap band was done on My avatar, with the heatmap on, front and back. The network log confirmed the `pants=v3.1` files. The knee step is gone, and v3.1 was visually approved.
+The browser check of the heatmap band was done on My avatar, with the heatmap on, front and back. The network log confirmed the `pants=v3.1` files. The knee step is gone, and v3.1 was visually approved. **pants-v3.1 is now the default bottom. The shipped shirts are the Sprint 3.6 shirts, unchanged, so no UV changes.**
 
-The v3.1 sizes were then rebuilt through the Sprint 3.6 pipeline: clean-up on every body, chained 60 / 90° hip correctives, the shoulder search, and the size gates with withholding. The v5.3 shirts were rebuilt over them, so the default pipeline produces every shipped file.
+### Pants rebuilt through the Sprint 3.6 pipeline
+
+The rebuild used the full 3.6 pipeline: clean-up on every body, chained 60 / 90° hip correctives, and the size gates with withholding.
 
 | Gate | Result |
 | --- | --- |
-| Size gates: stretch, flips and penetration at every supported pose | S, M and L pass on both bodies. The same five sizes as in Sprint 3.6 are withheld: XL pants on both bodies (`walk` / `l-hip-60` flips), and the XL shirts on both bodies plus the personal L shirt (shoulder gates). |
+| Size gates: stretch, flips and penetration at every supported pose | S, M and L pass on both bodies. XL is withheld on both bodies (`walk` / `l-hip-60` flips), as XL v3 was. |
 | Neutral pants, worst over the poses | `l-hip-60` flips 0 / 2 / 8 (S / M / L, limit 24), `walk` 0, max stretch 3.23 / 3.54 / 3.58, penetration 0, flipped inside the body 0. Identical to the pants-v3 sizes of 3.6. |
 | Knee step, largest 1 cm gap change on the leg (limit 4 mm) | Neutral base 3.0 mm, S 3.9, M 3.2, L 3.7. The straight tube is unchanged from v3. Personal sizes pass. |
-| Penetration > 3 mm, rest and every pose (`evaluate_sizes.py`) | PASS on all 11 shipped sizes (deepest 2.22 mm, neutral M shirt). |
-| Layering: shirts over v3.1 pants sizes and the v3.1 base | 15 / 18 pass. The 3 failures are the known shirt S personal case (overlap 2.7–2.8 cm, 0 containment, 0 intersections), the same values as in Sprints 3.5 and 3.6. Neutral: all 12 pass. |
-| Secondary personal avatars (v5.3 shirt, v3.1 pants) | All four garments pass their gates and both pairs layer. Status only. |
 | UV layout v3, STRICT (`test_uv_v3`) | Pass, base and sizes. |
-| Byte-for-byte regeneration | v3.1 base pants, a v3.1 size (neutral M) and a default shirt (neutral S, over the v3.1 pants) are all identical. |
+| Secondary personal avatars (their v5.3 shirt over a v3.1 pants fit) | All four garments pass their gates and both pairs layer. Status only. |
+| Byte-for-byte regeneration | The v3.1 base pants and a v3.1 size (neutral M) are identical. |
 
-**Shirts.** Rebuilt over pants-v3.1, the shirts differ by a few vertices from those built over pants-v3: the layer push sees slightly different pants, and the degenerate clean-up follows. They pass the same gates. Every recommended size is unchanged: neutral L / L, personal M / M.
+### The shipped 3.6 shirts over the v3.1 pants
 
-**Files.**
-- `outputs/garments/sizes/` holds `tshirt-v5.3` and `pants-v3.1`.
-- The pants-v3 default of Sprint 3.6 is archived in `sizes-3.6-v3/` and `sizes-3.6-v3-withheld/` (`generate_sizes.py --revision 3.5`); the previous manifest is `manifest.sprint-3.6-v3.json`.
+| Check | Result |
+| --- | --- |
+| Layering (≥ 3 cm overlap, no containment or intersections, shirt outside): every shipped shirt over every shipped v3.1 pants size of its body, plus the v3.1 base | 15 / 18 pass. The 3 failures are the known shirt S personal case: overlap 2.7–2.8 cm, 0 containment, 0 intersections, the same values as in Sprints 3.5 and 3.6. Neutral: all 12 pass. |
+| Penetration > 3 mm, rest and every supported pose | 11 / 11: 5 shirts and 6 v3.1 pants sizes. |
+| Posed gates for the 5 shirts (stretch, flips, shoulder gates) | All pass. They test the shirt against the body; there is no posed shirt-over-pants check. |
+| Byte-for-byte | `generate_sizes.py` (revision 3.6) rebuilds the neutral S shirt identical to the shipped one. |
+
+### Why the shirts were not rebuilt over the v3.1 pants
+
+A full rebuild of the shirts over pants-v3.1 passed every size gate, but the personal S shirt's front-panel up angle rose from 7.66 to 8.93° (guard 8.16°). A render of the stripe fixture showed it: the waist and upper-hem stripes tilt 1.7° more (0.7 → 2.4°, 1.5 → 3.2°); the chest and hem do not change. The renders are personal and stay local (`outputs/garment-tests/sprint-3.6/v3.1/uv-tilt-check/`).
+
+**The cause is the shirts' layering envelope, not the pants.**
+- The v3 and v3.1 pants are **bit-identical above 0.70 m**, on the base and on every size of both bodies: every vertex of the waistband, hips and upper thigh is at distance 0.
+- The only differences are the knee band and a narrow strip just above it (0.64–0.70 m): up to 0.4 mm neutral and 2.5 mm personal, carried there by the whole-mesh smoothing.
+- `sizes.GarmentEnvelope` represents each pants mesh by 120,000 surface points, drawn at random (seed 7) and weighted by triangle area over the **whole** mesh. Changing the legs re-rolls every sample, including the waistband's.
+- At the S shirt's vertices, the v3 and v3.1 envelopes read up to 18 mm apart (p99 1 mm). The same v3 pants with only the seed changed (7 → 8) read up to 19.6 mm apart. The shirt's hem push follows these readings.
+- `outward_faces` adds a little: it classifies faces against the whole mesh's mean vertex, and 1 to 7 faces above 0.70 m change class.
+
+**Stopgap until Sprint 3.7.** Revision 3.6 layers its shirts over the pants-v3 sizes archived in `sizes-3.6-v3/` (`REVISIONS["3.6"]["shirt_envelope"]`), so the default pipeline reproduces the shipped shirts byte for byte. Sprint 3.7 makes the envelope deterministic in the region it judges, then rebuilds the shirts over pants-v3.1 and checks their UV up angles (`docs/roadmap.md`).
+
+### Files
+
+- `outputs/garments/sizes/` holds the 3.6 `tshirt-v5.3` sizes (unchanged) and the `pants-v3.1` sizes; `sizes-withheld/` holds the same five withheld sizes as in 3.6, the XL pants now in v3.1.
+- The Sprint 3.6 set (shirts and pants v3) is archived in `sizes-3.6-v3/` and `sizes-3.6-v3-withheld/` (`generate_sizes.py --revision 3.5`). The rejected full rebuild is kept in `sizes-default-v3.1-rejected-tilt/`. The previous manifest is `manifest.sprint-3.6-v3.json`.
 - `generate_sizes.py` defaults to revision 3.6 (tshirt-v5.3 / pants-v3.1). The personal manifest dresses every body in pants-v3.1.
 - **Web:** pants-v3.1 is the default bottom of generation v5.3. The `?pants=v3.1` candidate parameter is gone. A wardrobe item with template `pants-v3` is shown on pants-v3.1: same panels and UV layout, so its texture fits.

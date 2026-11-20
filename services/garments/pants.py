@@ -456,6 +456,6 @@ PANTS_2_1_FIELDS = ("gusset_lateral_m", "gusset_front_back_m", "gusset_cap_m", "
 # compressible (membrane) energy, triangle-based collision, larger regions and hip regions crossing the midline.
 PANTS_V2_RULES = PantsRules(merge_twist_weights=True, gusset_lateral_m=0.08, cuff_turn_in_m=0.04, hem_loop_smoothing_iterations=5)
 PANTS_V3_RULES = replace(PANTS_V2_RULES, panel_seams=True)  # Sprint 3.5: pants v2 cut into pattern panels (the default)
-PANTS_V3_1_RULES = replace(PANTS_V3_RULES, knee_blend_m=0.10)  # the default since 2026-11-19: no knee step (thigh-to-tube blend over 10 cm)
+PANTS_V3_1_RULES = replace(PANTS_V3_RULES, knee_blend_m=0.10)  # the default since 2026-11-20: no knee step (thigh-to-tube blend over 10 cm)
 PANTS_V2_SPECS = {"anchor": 0.3, "knee_radii": (0.18, 0.26), "hip_radii": (0.22, 0.30), "hip_midline_cross_m": 0.07, "signed": True}  # signed: contract v2 sidecar (Sprint 2.2A)
 PANTS_V2_CORRECTIVE_RULES = {"triangle_collision": True, "rest_edge_scale": 0.0}
