@@ -43,6 +43,9 @@ a { color: inherit; }
 .app-header-actions { display: flex; align-items: center; gap: 8px; }
 .profile-button { background: transparent; border: 1px solid var(--border); border-radius: 30px; padding: 8px 13px 8px 9px; display: flex; align-items: center; gap: 8px; font-size: 12px; }
 .profile-button:hover { background: var(--secondary); }
+/* Development only (DevBadge): branch and data folder of this server. Amber when it uses LOCAL_WARDROBE_OUTPUTS_DIR. */
+.dev-badge { font: 600 10px/1.2 ui-monospace, Consolas, monospace; padding: 4px 8px; border-radius: 6px; border: 1px dashed var(--olive); color: var(--text-secondary); background: var(--secondary); white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+.dev-badge[data-override] { border-color: var(--fit-tight-color); color: var(--fit-tight); background: var(--fit-tight-background); }
 .mobile-nav, .mobile-planner { display: none !important; }
 .skip-link { position: fixed; top: 8px; left: 16px; transform: translateY(-200%); padding: 12px; background: var(--text); color: white; z-index: 50; }
 .skip-link:focus { transform: translateY(0); }

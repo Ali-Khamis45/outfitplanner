@@ -83,6 +83,8 @@ No styling or layout change; the redesign phases restyle this screen later.
 - **New, development only:**
   - `WardrobeDetails.tsx` gains an optional **Create texture from photos** button in a second `detail-actions` row, with a status line. It uses the existing `button-secondary` and `muted` classes and no new styles.
   - New files: the route `pages/api/wardrobe-texture.ts`, `lib/wardrobeTextureApi.ts`, `lib/garment/photoTexture.ts` and `tests/wardrobe-texture.test.mjs`, which is part of `npm test`.
+- **Add a piece template default** (`WardrobePage.tsx`, `lib/garment/generation.ts`): new pieces start on `defaultTemplate("top")` (`tshirt-v5.3`). Changing the category now changes the template: a top gets `tshirt-v5.3`, a bottom gets `pants-v3`, and other categories get none (`templateForCategory`). A template typed by hand that isn't a T-shirt or pants template is kept, and so is one that already fits the category. The field and its markup are unchanged. The seeded example wardrobe (`lib/wardrobe/schema.ts`) still uses `tshirt-v5.2` / `pants-v2`: its tests and the Stylist eval fixtures rely on it.
+- **Development badge** (`components/shell/DevBadge.tsx`, `lib/devInfo.ts`, route `pages/api/dev-info.ts`, test `tests/dev-info.test.mjs` in `npm test`): in development, the header shows the server's branch and data folder, for example `sprint-4a · real outputs`. It turns amber with `test data: <folder>` under `LOCAL_WARDROBE_OUTPUTS_DIR`. The route is development and localhost only; production never renders the badge. The two `.dev-badge` rules sit in `app/shell.css`. Which port serves which checkout is in `docs/setup/dev-servers.md`.
 
 **Alignment version 2** (`<item>-<view>.align.json`):
 

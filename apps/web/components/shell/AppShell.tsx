@@ -5,6 +5,7 @@ import { useState, type ReactNode } from "react";
 import { ArrowUpRight, CalendarBlank, CoatHanger, House, SquaresFour, Sparkle, UserCircle, PersonSimple } from "@phosphor-icons/react";
 import { MeasurementsForm } from "../FitControls";
 import { Panel } from "./Panel";
+import { DevBadge } from "./DevBadge";
 
 const destinations = [
   { href: "/", label: "Home", mobile: "Home", icon: House },
@@ -22,7 +23,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <header className="app-header">
       <Link href="/" className="app-brand" aria-label="Virtual Wardrobe home">Virtual Wardrobe</Link>
       <nav className="desktop-nav" aria-label="Main navigation">{destinations.map(item => <Link key={item.href} href={item.href} aria-current={pathname === item.href ? "page" : undefined}>{item.label}</Link>)}</nav>
-      <div className="app-header-actions"><Link className="mobile-planner icon-button" href="/planner" aria-label="Planner" aria-current={pathname === "/planner" ? "page" : undefined}><CalendarBlank size={22} /></Link><button className="profile-button" type="button" aria-label="Open fit profile" aria-haspopup="dialog" onClick={() => setProfile(true)}><UserCircle size={26} weight="light" /><span>Profile</span></button></div>
+      <div className="app-header-actions">{process.env.NODE_ENV === "development" && <DevBadge />}<Link className="mobile-planner icon-button" href="/planner" aria-label="Planner" aria-current={pathname === "/planner" ? "page" : undefined}><CalendarBlank size={22} /></Link><button className="profile-button" type="button" aria-label="Open fit profile" aria-haspopup="dialog" onClick={() => setProfile(true)}><UserCircle size={26} weight="light" /><span>Profile</span></button></div>
     </header>
     <div id="app-content" tabIndex={-1}>{children}</div>
     <nav className="mobile-nav" aria-label="Mobile navigation">{destinations.slice(0, 5).map(item => <Link key={item.href} href={item.href} aria-current={pathname === item.href ? "page" : undefined}><item.icon size={22} weight={pathname === item.href ? "fill" : "regular"} /><span>{item.mobile}</span></Link>)}</nav>
