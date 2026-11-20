@@ -26,6 +26,19 @@ export const BOTTOM_TEMPLATES: readonly string[] = ["pants-v3", "pants-v2", "pan
 export const isTopTemplate = (template: string | null | undefined) => TOP_TEMPLATES.includes(template ?? "");
 export const isBottomTemplate = (template: string | null | undefined) => BOTTOM_TEMPLATES.includes(template ?? "");
 
+/** The template a new piece of this category starts with: the default generation's T-shirt or pants, none otherwise. */
+export function defaultTemplate(category: string): string | null {
+  return category === "top" ? "tshirt-v5.3" : category === "bottom" ? "pants-v3" : null;
+}
+
+/** The template after the piece's category changes: an empty template, or a T-shirt / pants template that does not fit the
+ *  new category, becomes the new category's default; a fitting template, or any other template typed in, is kept. */
+export function templateForCategory(category: string, template: string | null): string | null {
+  if (template && !isTopTemplate(template) && !isBottomTemplate(template)) return template;
+  const fits = category === "top" ? isTopTemplate(template) : category === "bottom" ? isBottomTemplate(template) : false;
+  return fits ? template : defaultTemplate(category);
+}
+
 /** The UV layout a template's textures are painted in (a texture only fits a mesh with that layout). */
 export function templateLayout(template: string | null | undefined): "v3" | "v2" | null {
   return template === "tshirt-v5.3" || template === "pants-v3" ? "v3" : template === "tshirt-v5.2" || template === "pants-v2" || template === "pants-basic-v2" ? "v2" : null;

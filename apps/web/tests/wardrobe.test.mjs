@@ -5,6 +5,13 @@ import path from "node:path";
 import { createWardrobeHandler } from "../lib/wardrobeApi.ts";
 import { createThumbnailHandler } from "../lib/wardrobeThumbnailApi.ts";
 import { exampleWardrobe, parseWardrobe } from "../lib/wardrobe/schema.ts";
+import { defaultTemplate, templateForCategory } from "../lib/garment/generation.ts";
+
+// The Add a piece form starts tops on tshirt-v5.3 and bottoms on pants-v3, and follows a category change.
+assert.equal(defaultTemplate("top"), "tshirt-v5.3"); assert.equal(defaultTemplate("bottom"), "pants-v3"); assert.equal(defaultTemplate("shoes"), null);
+assert.equal(templateForCategory("bottom", "tshirt-v5.3"), "pants-v3"); assert.equal(templateForCategory("top", "pants-v3"), "tshirt-v5.3");
+assert.equal(templateForCategory("bottom", null), "pants-v3"); assert.equal(templateForCategory("shoes", "tshirt-v5.3"), null);
+assert.equal(templateForCategory("top", "tshirt-v5.2"), "tshirt-v5.2", "a fitting template is kept"); assert.equal(templateForCategory("bottom", "my-own-template"), "my-own-template", "a typed template is kept");
 const root = await mkdtemp(path.join(os.tmpdir(), "wardrobe-test-"));
 try {
   const handler = createWardrobeHandler(root, "development"), production = createWardrobeHandler(root, "production");
