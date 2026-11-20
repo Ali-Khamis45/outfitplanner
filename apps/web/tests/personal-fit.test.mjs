@@ -17,7 +17,7 @@ try {
   const fixture = await readFile(new URL("fixtures/corrective.glb", import.meta.url));
   for (const file of ["body.glb", "shirt.glb", "pants.glb"]) await writeFile(path.join(personal, file), fixture);
   for (const file of ["shirt.json", "pants.json"]) await writeFile(path.join(personal, file), `fixture ${file}`);
-  const cacheDir = path.resolve(process.cwd(), ".asset-cache");
+  const cacheDir = path.join(root, "cache");
   const cacheBefore = await readdir(cacheDir).catch(error => { if (error.code === "ENOENT") return []; throw error; });
   async function meshOf(bytes) {
     const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
@@ -29,7 +29,7 @@ try {
   const request = async (environment, overrides = {}) => {
     const req = { socket: { remoteAddress: "127.0.0.1" }, headers: { host: "localhost:3000" }, method: "GET", query: {}, ...overrides };
     const res = { headers: {}, code: 0, body: null, setHeader(key, value) { this.headers[key] = value; }, status(code) { this.code = code; return this; }, end(value) { this.body = value ?? null; return this; }, json(value) { this.body = value; return this; }, send(value) { this.body = value; return this; } };
-    await createPersonalFitHandler(outputs, environment)(req, res);
+    await createPersonalFitHandler(outputs, environment, cacheDir)(req, res);
     return res;
   };
   const found = await request("development");
@@ -52,7 +52,9 @@ try {
   assert.deepEqual((await meshOf(gunzipSync(zipped.body))).morphTargetDictionary, original.morphTargetDictionary);
   const noGzip = await request("development", { headers: { host: "localhost:3000", "accept-encoding": "gzip;q=0" }, query: { asset: "shirt" } });
   assert.equal(noGzip.headers["Content-Encoding"], undefined);
-  assert.deepEqual((await readdir(cacheDir).catch(error => { if (error.code === "ENOENT") return []; throw error; })).sort(), cacheBefore.sort(), "personal requests must not add demo cache files");
+  assert.ok((await readdir(cacheDir)).length > cacheBefore.length, "personal requests use their private local compression cache");
+  const notModified = await request("development", { headers: { host: "localhost:3000", "accept-encoding": "gzip", "if-none-match": zipped.headers.ETag }, query: { asset: "shirt" } });
+  assert.equal(notModified.code, 304);
   assert.equal((await request("production")).code, 404);
   assert.equal((await request("development", { socket: { remoteAddress: "192.0.2.1" } })).code, 404);
   assert.equal((await request("development", { headers: { host: "example.com" } })).code, 404);

@@ -126,14 +126,17 @@ export function TryOn({ generation = DEFAULT_GENERATION, textureFixture = false,
   useEffect(() => {
     let active = true;
     useGLTF.preload(NEUTRAL_URL);
-    useGLTF.preload(topUrl);
     loadTopSidecar(topUrl).then(value => { if (active) setTopSidecar(value); });
     bottomCheckers[generation]().then(result => {
       if (active) setBottomAvailability(result);
-      if (result === "available") { useGLTF.preload(bottomUrl); loadBottomSidecar(bottomUrl).then(value => { if (active) setBottomSidecar(value); }); }
+      if (result === "available") { loadBottomSidecar(bottomUrl).then(value => { if (active) setBottomSidecar(value); }); }
     });
     return () => { active = false; };
   }, [topUrl, bottomUrl, generation]);
+  useEffect(() => {
+    if (topSizes.resolved && !topSizes.selected && !topSizes.options.some(option => option.status === "withheld")) useGLTF.preload(topUrl);
+    if (bottomSizes.resolved && !bottomSizes.selected && !bottomSizes.options.some(option => option.status === "withheld") && bottomAvailability === "available") useGLTF.preload(bottomUrl);
+  }, [topSizes.resolved, topSizes.selected, topSizes.options, bottomSizes.resolved, bottomSizes.selected, bottomSizes.options, bottomAvailability, topUrl, bottomUrl]);
   useEffect(() => () => { if (personalUrl.current) URL.revokeObjectURL(personalUrl.current); }, []);
   const onAvatarReady = useCallback(() => setAvatarReady(true), []);
   const onAvatarError = useCallback(() => { setAvatarReady(false); setAvatarFailed(true); }, []);
@@ -196,8 +199,9 @@ export function TryOn({ generation = DEFAULT_GENERATION, textureFixture = false,
       <div className="try-layers"><span className="try-eyebrow">Layers</span>{(["top", "bottom"] as const).map(value => <button key={value} aria-pressed={slot === value} onClick={() => setSlot(value)}><span>{value === "top" ? "Top" : "Bottom"}</span><span>{(value === "top" ? topEnabled : bottomEnabled) ? pieceName(value) : "Hidden"}</span></button>)}</div>
     </aside>
     <section className="try-stage" ref={stageRef} aria-label="3D outfit preview">
-      <div className={outfitReady || avatarFailed ? "try-viewport ready" : "try-viewport"}><SceneBoundary key={avatarUrl} onError={onAvatarError}><Suspense fallback={null}><TryOnScene key={avatarUrl} controlsExpanded={expanded} stageRef={stageRef} avatarUrl={avatarUrl} pose={pose} top={top} bottom={bottom} heatmap={heatmap} view={view} turntable={turntable} onAvatarReady={onAvatarReady} onTopReady={onTopReady} onBottomReady={onBottomReady} onTopError={onTopError} onBottomError={onBottomError} /></Suspense></SceneBoundary></div>
-      {!outfitReady && !avatarFailed && <div className="try-stage-loading" role="status">Preparing your fitting room<span>...</span><span className="try-loading-bar" aria-hidden="true"><i /></span></div>}
+      <div className={avatarReady || avatarFailed ? "try-viewport ready" : "try-viewport"}><SceneBoundary key={avatarUrl} onError={onAvatarError}><Suspense fallback={null}><TryOnScene key={avatarUrl} controlsExpanded={expanded} stageRef={stageRef} avatarUrl={avatarUrl} pose={pose} top={top} bottom={bottom} heatmap={heatmap} view={view} turntable={turntable} onAvatarReady={onAvatarReady} onTopReady={onTopReady} onBottomReady={onBottomReady} onTopError={onTopError} onBottomError={onBottomError} /></Suspense></SceneBoundary></div>
+      {!avatarReady && !avatarFailed && <div className="try-stage-loading" role="status">Preparing your fitting room<span>...</span><span className="try-loading-bar" aria-hidden="true"><i /></span></div>}
+      {avatarReady && !outfitReady && <span className="try-sr-only" role="status">Fitting your garments</span>}
       <div className="try-stage-top">
         <div className="try-avatar-options" id="avatar" role="group" aria-label="Avatar"><button type="button" aria-label="Neutral avatar" aria-pressed={avatar === "neutral"} className={avatar === "neutral" ? "selected" : ""} onClick={() => { selection.current++; if (avatar !== "neutral") switchAvatar("neutral"); }}>Demo body</button><button type="button" aria-pressed={avatar === "personal"} className={avatar === "personal" ? "selected" : ""} onClick={() => { if (avatar !== "personal" || personalSource !== "manifest") void selectPersonalFit(); }}>My avatar</button></div>
         <label className="fit-heatmap"><input type="checkbox" checked={heatmap} onChange={event => setHeatmap(event.target.checked)} /> Fit map</label>

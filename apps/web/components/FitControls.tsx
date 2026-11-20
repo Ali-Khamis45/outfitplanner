@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useId, useState } from "react";
+import { useGLTF } from "@react-three/drei";
 import { emptyMeasurements, measurementError, measurementFields, names, serializeMeasurements, type Measurements } from "../lib/measurements";
 import { parseSidecar, type Sidecar } from "../lib/garment/correctives";
 import { DEFAULT_GENERATION, generationQuery, type Generation } from "../lib/garment/generation";
@@ -22,6 +23,8 @@ export function useSizes(body: string | null, slot: Slot, fixtures = false, pref
         if (!active) return;
         const options = parseSizeOptions(items, body), available = options.filter(isAvailableSize);
         const initial = available.find(item => item.size === preferredSize)?.size ?? available.find(item => item.fit.recommended)?.size ?? available[0]?.size ?? null;
+        const initialOption = available.find(item => item.size === initial);
+        if (initialOption) useGLTF.preload(initialOption.glb);
         setDiscovery({ key, options, initial });
       }).catch(() => { if (active) setDiscovery({ key, options: [], initial: null }); });
     return () => { active = false; };
@@ -34,6 +37,7 @@ export function useSizes(body: string | null, slot: Slot, fixtures = false, pref
   useEffect(() => {
     if (!selected) return;
     let active = true;
+    useGLTF.preload(selected.glb);
     fetch(selected.sidecar, { cache: "no-store" }).then(response => { if (!response.ok) throw new Error("Sidecar unavailable"); return response.json(); }).then(value => { if (active) setLoaded({ url: selected.glb, sidecar: parseSidecar(value) }); }).catch(() => { if (active) setLoaded({ url: selected.glb, sidecar: null }); });
     return () => { active = false; };
   }, [selected]);

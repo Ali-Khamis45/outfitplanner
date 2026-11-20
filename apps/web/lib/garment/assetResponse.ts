@@ -1,10 +1,10 @@
+import { createHash } from "node:crypto";
 import { compressedAsset } from "../../asset-compression/compress.mjs";
 
 export async function compressedGlbResponse(source: string, request: Request): Promise<Response> {
-  // Next's production route adapter strips Content-Encoding from Web Response
-  // objects. Return meshopt-compressed GLB bytes, never a pre-gzipped body.
-  void request;
   const bytes = await compressedAsset(source, undefined, false);
-  const headers: Record<string, string> = { "Content-Type": "model/gltf-binary", "Content-Length": String(bytes.byteLength), "Cache-Control": "no-store, no-transform", "Vary": "Accept-Encoding", "X-Content-Type-Options": "nosniff" };
+  const etag = `"${createHash("sha256").update(bytes).digest("hex")}"`;
+  const headers: Record<string, string> = { "Content-Type": "model/gltf-binary", "Content-Length": String(bytes.byteLength), "Cache-Control": "private, no-cache, no-transform", "ETag": etag, "X-Content-Type-Options": "nosniff" };
+  if ((request.headers.get("if-none-match") ?? "").split(",").some(tag => tag.trim() === etag || tag.trim() === "*")) { delete headers["Content-Length"]; return new Response(null, { status: 304, headers }); }
   return new Response(new Uint8Array(bytes), { headers });
 }
