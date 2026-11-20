@@ -42,17 +42,25 @@ SIZES_DIR = PROJECT / "outputs" / "garments" / "sizes"
 MANIFEST = PROJECT / "outputs" / "garments" / "personal" / "manifest.json"
 MEASUREMENTS = AVATAR_DIR / "measurements.json"
 RECONSTRUCTION = PROJECT / "outputs" / "sam3d-person-front-sprint03-run2" / "reconstruction.npz"
-GARMENT_TAGS = {"tshirt": "tshirt-v5.3", "pants": "pants-v3"}
+GARMENT_TAGS = {"tshirt": "tshirt-v5.3", "pants": "pants-v3.1"}
 # --revision: 3.5 = tshirt-v5.3 / pants-v3 (pattern panels, UV layout v3, smooth push falloff), the default generation;
 # 3a = tshirt-v5.2 / pants-v2 (UV layout v2, linear push), the previous default, reachable for one sprint.
 # "clean_all": Sprint 3.6 runs the degenerate clean-up (personal_fit.collapse_degenerate) on every body, not only on
 # personal ones: neutral sizes kept sub-millimetre slivers (waistband rim, neckline) whose edges stretched 12-18x and
-# flipped. "hip_keys_deg": the pants hip-flexion corrective keys (pants.leg_corrective_specs). With the single 90 deg key, l-hip-60 showed
-# 56 % of the 90 deg shape and the groin crease folded (neutral L: 64 flips where the gate allows 24); Sprint 3.6 adds a 60 deg key.
-# "shoulder_search_all": every body searches the shoulder corrective settings against its own gates (shoulder_morphs).
-# 3a keeps its Sprint 3A behaviour, so the v5.2 / pants-v2 sizes still regenerate byte for byte.
+# flipped. "hip_keys_deg": the pants hip-flexion corrective keys (pants.leg_corrective_specs). With the single 90 deg key,
+# l-hip-60 showed 56 % of the 90 deg shape and the groin crease folded (neutral L: 64 flips where the gate allows 24);
+# Sprint 3.6 adds a 60 deg key. "shoulder_search_all": every body searches the shoulder corrective settings against its
+# own gates (shoulder_morphs). 3a keeps its Sprint 3A behaviour, so the v5.2 / pants-v2 sizes still regenerate byte for byte.
 REVISIONS = {"3a": {"tshirt": "v5.2", "pants": "v2", "dir": SIZES_DIR.parent / "sizes-v5.2", "clean_all": False, "hip_keys_deg": (90.0,), "shoulder_search_all": False},
-             "3.5": {"tshirt": "v5.3", "pants": "v3", "dir": SIZES_DIR, "clean_all": True, "hip_keys_deg": (60.0, 90.0), "shoulder_search_all": True}}
+             # 3.5: the v5.3 / pants-v3 sizes of Sprint 3.6, the default until pants-v3.1 replaced pants-v3 (2026-11-20); archived
+             "3.5": {"tshirt": "v5.3", "pants": "v3", "dir": SIZES_DIR.parent / "sizes-3.6-v3", "clean_all": True, "hip_keys_deg": (60.0, 90.0), "shoulder_search_all": True},
+             # 3.6: the default, tshirt-v5.3 / pants-v3.1 (pants v3 without the knee step). Its shirts are the 3.5 shirts: they
+             # are layered over the pants-v3 sizes of the 3.5 run ("shirt_envelope"), not over the v3.1 pants. Above 0.70 m the two
+             # pants are identical, but GarmentEnvelope samples each pants surface at random over the whole mesh, so the leg
+             # change re-rolls every sample, moves the hem push by up to ~2 cm and tilts the shirt's UV panels. Until Sprint 3.7
+             # makes the envelope deterministic, the shirts keep the 3.5 envelope and so stay byte-identical.
+             "3.6": {"tshirt": "v5.3", "pants": "v3.1", "dir": SIZES_DIR, "clean_all": True, "hip_keys_deg": (60.0, 90.0), "shoulder_search_all": True,
+                     "shirt_envelope": {"dir": "sizes-3.6-v3", "pants": "pants-v3"}}}
 CRASH_LOG = PROJECT / "outputs" / "garment-tests" / "sizes-crash.log"  # faulthandler + per-stage peak memory
 ENTRIES_DIR = PROJECT / "outputs" / "garment-tests" / "sizes"  # per-size report entries (resume)
 
@@ -284,10 +292,10 @@ def withhold(out_dir: Path, withheld_dir: Path, name: str, why: str, entries_dir
     new_file(withheld_dir / f"{name}.withheld.json").write_text(json.dumps(note, indent=2) + "\n", encoding="utf-8")
 
 
-def pants_envelope_from_disk(out_dir: Path, body_id: str) -> list[tuple[np.ndarray, np.ndarray]]:
+def pants_envelope_from_disk(out_dir: Path, body_id: str, tag: str | None = None) -> list[tuple[np.ndarray, np.ndarray]]:
     """Outer layers of the pants sizes already written for this body (when the shirts are regenerated alone)."""
     meshes = []
-    for path in sorted(out_dir.glob(GARMENT_TAGS["pants"] + f"-*-{body_id}.glb")):
+    for path in sorted(out_dir.glob((tag or GARMENT_TAGS["pants"]) + f"-*-{body_id}.glb")):
         asset = load_asset(path)
         meshes.append(outward_faces(asset.positions, asset.indices))
     return meshes
@@ -339,12 +347,12 @@ def build_shirt(body: RestBody, body_id: str, avatar_path: Path, spec: Any, surf
 def build_pants(body: RestBody, body_id: str, avatar_path: Path, spec: Any, surface: Any, revision: str = "v2", clean_all: bool = False, hip_keys_deg: tuple[float, ...] = (90.0,)) -> dict[str, Any]:
     from fit_sizes import fit_pants
     from generate_pants import MATERIAL as PANTS_MATERIAL, metadata as pants_metadata
-    from pants import PANTS_V2_CORRECTIVE_RULES, PANTS_V2_RULES, PANTS_V2_SPECS, PANTS_V3_RULES, leg_corrective_specs
+    from pants import PANTS_V2_CORRECTIVE_RULES, PANTS_V2_RULES, PANTS_V2_SPECS, PANTS_V3_1_RULES, PANTS_V3_RULES, leg_corrective_specs
     from sizes import ease_map_mm, pants_regions, pants_target_m
     from tshirt import assemble
 
     started = time.perf_counter()
-    garment, rules, fit = fit_pants(body, spec, PANTS_V3_RULES if revision == "v3" else PANTS_V2_RULES)
+    garment, rules, fit = fit_pants(body, spec, {"v3": PANTS_V3_RULES, "v3.1": PANTS_V3_1_RULES}.get(revision, PANTS_V2_RULES))
     if body_id != "neutral" or clean_all:
         from personal_fit import collapse_degenerate
 
@@ -386,7 +394,7 @@ def main() -> int:
     parser.add_argument("--out-dir", type=Path, default=None, help="default: the revision's sizes folder")
     parser.add_argument("--entries-dir", type=Path, default=ENTRIES_DIR, help="per-size report entries, written as each size finishes (resume)")
     parser.add_argument("--report", type=Path, default=None, help="default: outputs/garment-tests/sizes-sprint-<revision>.json")
-    parser.add_argument("--revision", choices=sorted(REVISIONS), default="3.5", help="3.5: tshirt-v5.3 / pants-v3 (default); 3a: tshirt-v5.2 / pants-v2")
+    parser.add_argument("--revision", choices=sorted(REVISIONS), default="3.6", help="3.6: tshirt-v5.3 / pants-v3.1 (default); 3.5: tshirt-v5.3 / pants-v3 (archived); 3a: tshirt-v5.2 / pants-v2 (legacy)")
     args = parser.parse_args()
     args.out_dir = args.out_dir or REVISIONS[args.revision]["dir"]
     withheld_dir = args.out_dir.with_name(args.out_dir.name + "-withheld")  # Sprint 3.6: sizes that fail their gates
@@ -428,6 +436,13 @@ def main() -> int:
         envelope_meshes: list[tuple[np.ndarray, np.ndarray]] = [base_pants_outer(body_id)] if has_base_pants(body_id) and not calibrated else []
         if "pants" not in args.garments:  # shirts regenerated alone: layer them over the pants sizes already written
             envelope_meshes += pants_envelope_from_disk(args.out_dir, body_id) + pants_envelope_from_disk(withheld_dir, body_id)
+        shirt_meshes = None  # the shirts' envelope, when the revision layers them over other pants (see REVISIONS "3.6")
+        if REVISIONS[args.revision].get("shirt_envelope"):
+            source, tag = SIZES_DIR.parent / REVISIONS[args.revision]["shirt_envelope"]["dir"], REVISIONS[args.revision]["shirt_envelope"]["pants"]
+            sizes_found = pants_envelope_from_disk(source, body_id, tag) + pants_envelope_from_disk(source.with_name(source.name + "-withheld"), body_id, tag)
+            if len(sizes_found) != 4:
+                raise SystemExit(f"The shirts' envelope needs the four {tag} sizes of {body_id} in {source} (and -withheld); found {len(sizes_found)}")
+            shirt_meshes = ([base_pants_outer(body_id)] if has_base_pants(body_id) and not calibrated else []) + sizes_found
         for garment in sorted(args.garments, key=lambda g: g != "pants"):  # pants first: the shirts clear them
             region_names = ("chest", "waist", "hips", "shoulders", "length") if garment == "tshirt" else ("waist", "hips", "length")
             entries: dict[str, dict[str, Any]] = {}
@@ -445,8 +460,9 @@ def main() -> int:
                     else:
                         from sizes import GarmentEnvelope
 
-                        envelope = GarmentEnvelope(envelope_meshes)
-                        top = float(max(vertices[:, 1].max() for vertices, _ in envelope_meshes))
+                        meshes = shirt_meshes if shirt_meshes is not None else envelope_meshes
+                        envelope = GarmentEnvelope(meshes)
+                        top = float(max(vertices[:, 1].max() for vertices, _ in meshes))
                         item = build_shirt(body, body_id, avatar_path, shirt[size], surface, envelope, top, REVISIONS[args.revision]["tshirt"], REVISIONS[args.revision]["clean_all"], REVISIONS[args.revision]["shoulder_search_all"])
                     print(f"{body_id} {garment} {size}: {item['seconds']} s {json.dumps(item['regions'])}", flush=True)
                     memory = stage_log(crash_log, f"done {body_id} {garment} {size} ({item['seconds']} s)")

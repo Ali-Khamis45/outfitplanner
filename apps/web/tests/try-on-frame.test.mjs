@@ -23,3 +23,12 @@ const shortPortrait = tryOnFraming(height, width, 220, 234, fov, false, true);
 const shortCoverage = height / (2 * Math.tan(fov * Math.PI / 360) * shortPortrait.distance);
 assert.ok((0.5 + 0.43 * shortCoverage) * 234 <= 234 - 72 + 1e-6, "short portrait reserves room for the controls");
 console.log("Try-on framing responds to the complete resize sequence");
+// The redesigned studio reserves both control bands, including on a narrow phone.
+for (const [w, h, top, bottom] of [[366, 447, 70, 75], [366, 447, 70, 125], [790, 780, 90, 125], [820, 304, 70, 65]]) {
+  const frame = tryOnFraming(height, width, w, h, fov, false, w < 800, { top, bottom });
+  const worldPerPixel = 2 * Math.tan(fov * Math.PI / 360) * frame.distance / h;
+  const centerY = h / 2 + frame.targetYOffset / worldPerPixel;
+  const bodyPixels = height / worldPerPixel;
+  assert.ok(centerY - bodyPixels / 2 >= top - 0.01, 'head clears controls');
+  assert.ok(centerY + bodyPixels / 2 <= h - bottom + 0.01, 'feet clear controls');
+}

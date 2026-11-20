@@ -12,7 +12,7 @@ const root = process.env.FIT_FIXTURE_ROOT ? path.resolve(process.env.FIT_FIXTURE
 await mkdir(output, { recursive: true });
 await Promise.all([MeshoptDecoder.ready, MeshoptEncoder.ready]);
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ "meshopt.encoder": MeshoptEncoder, "meshopt.decoder": MeshoptDecoder });
-for (const [garment, source] of [["tshirt-v5.3", "garments/experiments/tshirt-v5.3-mhr-neutral.glb"], ["pants-v3", "garments/pants-basic-v3-mhr-neutral.glb"], ["tshirt-v5.2", "garments/experiments/tshirt-v5.2-mhr-neutral.glb"], ["pants-v2", "garments/pants-basic-v2-mhr-neutral.glb"]]) {
+for (const [garment, source] of [["tshirt-v5.3", "garments/experiments/tshirt-v5.3-mhr-neutral.glb"], ["pants-v3.1", "garments/pants-basic-v3.1-mhr-neutral.glb"], ["tshirt-v5.2", "garments/experiments/tshirt-v5.2-mhr-neutral.glb"], ["pants-v2", "garments/pants-basic-v2-mhr-neutral.glb"]]) {
   const file = path.join(workspace, "outputs", source);
   const document = await io.readBinary(new Uint8Array(await readFile(file)));
   const buffer = document.getRoot().listBuffers()[0];

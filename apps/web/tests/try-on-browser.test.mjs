@@ -63,7 +63,7 @@ try {
         if (!url.searchParams.has('asset')) return Response.json({body:'/api/personal-fit?asset=body',shirt:'/api/personal-fit?asset=shirt',pants:'/api/personal-fit?asset=pants',shirtSidecar:null,pantsSidecar:null,bodyId:'fixture_personal'});
         if (url.searchParams.get('asset') === 'body') return originalFetch('/api/demo-avatar', init);
         if (url.searchParams.get('asset') === 'shirt') return originalFetch('/api/demo-garment?variant=v5.3', init);
-        if (url.searchParams.get('asset') === 'pants') return originalFetch('/api/demo-garment?variant=pants-v3', init);
+        if (url.searchParams.get('asset') === 'pants') return originalFetch('/api/demo-garment?variant=pants-v3.1', init);
       }
       if (url.pathname === '/api/size-garment' && url.searchParams.get('body') === 'fixture_personal') {
         await new Promise(resolve => setTimeout(resolve, 600));
@@ -82,7 +82,7 @@ try {
   let loaded = false;
   for (let i = 0; i < 80; i++) {
     loaded = await evaluate("!!document.querySelector('canvas') && !document.body.innerText.includes('Preparing your fitting room') && !!document.querySelector('[aria-label=\"Top: Ocean\"]')");
-    if (loaded && requests.some(url => url.includes("variant=v5.3&sidecar=1")) && requests.some(url => url.includes("variant=pants-v3&sidecar=1"))) break;
+    if (loaded && requests.some(url => url.includes("variant=v5.3&sidecar=1")) && requests.some(url => url.includes("variant=pants-v3.1&sidecar=1"))) break;
     await new Promise(resolve => setTimeout(resolve, 250));
   }
   assert.ok(loaded, "Try-on did not finish loading");
@@ -90,11 +90,19 @@ try {
   if (process.env.TEST_REAL_CLAMPED === "1") {
     await waitFor("!!document.querySelector('[aria-label=\"Top fit\"] button[aria-label=\"S\"]:not(:disabled)')", "real shirt sizes");
     await evaluate("document.querySelector('[aria-label=\"Top fit\"] button[aria-label=\"S\"]').click()");
-    await waitFor("document.querySelector('[aria-label=\"Top fit\"] .fit-clamped-warning')?.textContent === 'Too small for this body. Shown at the closest wearable fit.' && document.querySelectorAll('[aria-label=\"Top fit\"] .fit-estimate-note').length === 4", "real S clamped messages");
+    const optionsUrl = new URL('/api/size-garment?body=neutral&slot=top', process.env.TRY_ON_URL);
+    const generation = new URL(process.env.TRY_ON_URL).searchParams.get('gen');
+    if (generation) optionsUrl.searchParams.set('gen', generation);
+    const options = await (await fetch(optionsUrl)).json(), selectedFit = options.find(option => option.size === 'S').fit;
+    const expectedWarning = ['chest', 'waist', 'hips'].every(name => selectedFit.regions[name]?.clamped === true && selectedFit.regions[name]?.status === 'tight');
+    const expectedNotes = Object.values(selectedFit.regions).filter(region => region.clamped).length;
+    await waitFor(`document.querySelector('[aria-label="Top fit"] button[aria-label="S"]').getAttribute('aria-pressed') === 'true' && document.querySelectorAll('[aria-label="Top fit"] .fit-estimate-note').length === ${expectedNotes}`, 'real S region notes');
+    assert.equal(await evaluate("!!document.querySelector('[aria-label=\"Top fit\"] .fit-clamped-warning')"), expectedWarning, 'warning requires every major region to be both clamped and tight');
     assert.ok(await evaluate("[...document.querySelectorAll('[aria-label=\"Top fit\"] .fit-estimate-note')].every(e => e.textContent.trim() === 'estimated from size chart')"));
-    console.log("Real S fit displays the full warning and four region notes");
+    console.log('Real S warning and estimation notes match the current asset contract');
   }
   if (process.env.TEST_FIT_SIZES === "1") {
+    await evaluate("document.querySelector('.try-sheet-toggle')?.click()");
     await waitFor("document.querySelector('[aria-label=\"Top fit\"] button[aria-pressed=\"true\"]')?.textContent === 'M' && document.querySelector('[aria-label=\"Bottom fit\"] button[aria-pressed=\"true\"]')?.textContent === 'M'", "recommended sizes");
     assert.ok(await evaluate("document.querySelector('[aria-label=\"Top fit\"] button[aria-label=\"M, Recommended\"]') && document.body.innerText.includes('Chest: good, 10.0 cm ease')"));
     await evaluate("document.querySelector('.fit-heatmap input').click()");
@@ -151,7 +159,7 @@ try {
     assert.ok(!(await evaluate("document.body.innerText.includes('could not be fitted')")), "personal garments must bind");
     console.log("Personal body and selected size or base garments loaded together");
   }
-  for (const variant of ["v5.3", "pants-v3"]) assert.ok(requests.some(url => url.includes(`variant=${variant}&sidecar=1`)), `${variant} sidecar not requested`);
+  for (const variant of ["v5.3", "pants-v3.1"]) assert.ok(requests.some(url => url.includes(`variant=${variant}&sidecar=1`)), `${variant} sidecar not requested`);
   if (process.env.TEST_REAL_CLAMPED !== "1" && process.env.TEST_PERSONAL_SIZE_SWITCH !== "1" && process.env.TEST_PERSONAL_SIZE_FALLBACK !== "1") {
   await evaluate("window.__tryOnTestCanvas = document.querySelector('canvas'); true");
   const sizes = [[390, 844], [1024, 844], [1440, 900], [390, 844], [844, 390]];
@@ -178,9 +186,10 @@ try {
     await waitFor("!!document.querySelector('.lab-fit-controls input')", "lab fit controls");
     await evaluate("document.querySelector('.lab-fit-controls input').click()");
   }
-  await waitFor("document.querySelector('#garment-select')?.value === 'v5.3' && document.querySelector('#pants-select')?.value === 'pants-v3' && document.body.innerText.includes('corr_L_add20')", "lab defaults and v5.2 targets");
+  await waitFor("document.querySelector('#garment-select')?.value === 'v5.3' && document.querySelector('#pants-select')?.value === 'pants-v3.1' && document.body.innerText.includes('corr_L_add20')", "lab defaults and v5.2 targets");
+  await evaluate("(()=>{const e=document.querySelector('.lab-fit-controls input'); if(e.checked) e.click();})()");
   await evaluate("(()=>{const e=document.querySelector('#garment-select'); e.value='v5.1'; e.dispatchEvent(new Event('change',{bubbles:true})); return true})()");
-  await waitFor("document.querySelector('#garment-select')?.value === 'v5.1' && document.body.innerText.includes('corr_L_hip90') && !document.body.innerText.includes('corr_L_add20')", "v5.1 selection");
+  await waitFor("document.querySelector('#garment-select')?.value === 'v5.1' && document.querySelector('.garment-panel').innerText.includes('corr_L_hip90') && !document.querySelector('.garment-panel').innerText.includes('corr_L_add20')", "v5.1 selection");
   await waitFor("!![...document.querySelectorAll('label')].find(e=>e.innerText.includes('Load pants'))?.querySelector('input:not(:disabled)')", "pants availability");
   await evaluate("(()=>{[...document.querySelectorAll('label')].find(e=>e.innerText.includes('Load pants')).querySelector('input').click(); return true})()");
   await waitFor("document.querySelector('#pants-heading')?.parentElement?.parentElement?.innerText.includes('corr_L_knee90')", "pants v2 targets");

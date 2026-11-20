@@ -8,7 +8,7 @@ const select = (selector, value) => evaluate(`(() => { const e=document.querySel
 try {
   await send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
   await navigate("/try-on?texture-fixture=1");
-  await waitFor("document.querySelector('.try-viewport.ready') && document.querySelectorAll('.fit-sizes button:not(:disabled)').length===8", "default (v5.3) neutral sizes");
+  await waitFor("document.querySelector('.try-viewport.ready') && document.querySelectorAll('.fit-sizes button[aria-pressed=true]').length===2", "default (v5.3) neutral sizes");
   assert.ok(await evaluate("document.body.textContent.includes('Synthetic texture fixtures are active.')"));
   assert.equal(await evaluate("document.querySelector('[aria-label=\"Top: Original\"]').getAttribute('aria-pressed')"), "true");
   await screenshot("default-neutral-textures");
@@ -24,13 +24,23 @@ try {
   colours = await renderedColours();
   assert.equal(colours.red, 0, "back panels have no front logo");
   assert.ok(colours.blue > 100, "back panels remain striped");
+  await evaluate("[...document.querySelectorAll('.try-camera button')].find(b=>b.textContent==='Front').click()");
+  await evaluate("document.querySelector('[aria-label=\"Top: Ocean\"]').click()");
+  await new Promise(resolve => setTimeout(resolve, 1500));
+  assert.equal((await renderedColours()).red, 0, "a colour swatch replaces the logo");
+  await evaluate("document.querySelector('[aria-label=\"Top: Original\"]').click()");
+  await new Promise(resolve => setTimeout(resolve, 1500));
+  assert.ok((await renderedColours()).red > 5, "Original restores the front texture");
   await evaluate("document.querySelector('.fit-heatmap input').click()");
   assert.ok(await evaluate("document.querySelector('.fit-heatmap input').checked"));
-  await evaluate("document.querySelector('[aria-label=\"Top size\"] button:last-child').click()");
-  await waitFor("document.querySelector('[aria-label=\"Top size\"] button:last-child').getAttribute('aria-pressed')==='true' && document.querySelector('.try-viewport.ready')", "v5.3 size switching");
+  await evaluate("window.__nextSize = [...document.querySelectorAll('[aria-label=\"Top size\"] button')].find(b=>!b.disabled && b.getAttribute('aria-disabled')!=='true' && b.getAttribute('aria-pressed')!=='true')?.getAttribute('aria-label'); true");
+  assert.ok(await evaluate("window.__nextSize"), "another released top size is available");
+  await evaluate("[...document.querySelectorAll('[aria-label=\"Top size\"] button')].find(b=>b.getAttribute('aria-label')===window.__nextSize).click()");
+  await waitFor("[...document.querySelectorAll('[aria-label=\"Top size\"] button')].find(b=>b.getAttribute('aria-label')===window.__nextSize)?.getAttribute('aria-pressed')==='true' && document.querySelector('.try-viewport.ready')", "v5.3 size switching");
   await evaluate("[...document.querySelectorAll('.try-avatar-options button')].find(b=>b.textContent.includes('My avatar')).click()");
   await waitFor("document.querySelector('.try-avatar-options .selected')?.textContent.includes('My avatar') && document.querySelector('.try-viewport.ready')", "v5.3 personal avatar");
-  assert.equal(await evaluate("document.querySelectorAll('.fit-sizes button:not(:disabled)').length"), 8);
+  assert.equal(await evaluate("document.querySelectorAll('.fit-sizes button[aria-pressed=true]').length"), 2);
+  assert.equal(await evaluate("document.querySelectorAll('.fit-sizes button[aria-disabled=true][aria-pressed=true]').length"), 0);
   assert.ok(!(await evaluate("document.body.textContent.includes('could not be fitted')")));
   console.log("PASS v5.3 neutral/personal sizes, fit card, heatmap, front-only logo and striped back. Personal result: available.");
   await navigate("/lab");

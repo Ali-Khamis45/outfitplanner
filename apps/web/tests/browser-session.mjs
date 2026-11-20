@@ -5,11 +5,11 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-export async function browserSession() {
+export async function browserSession({ headed = false } = {}) {
   const browser = [process.env.CHROME_PATH, "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe", "/usr/bin/chromium"].filter(Boolean).find(existsSync);
   assert.ok(browser, "Set CHROME_PATH to Chromium");
   const temp = path.resolve(os.tmpdir()), profile = await mkdtemp(path.join(temp, "vw-redesign-"));
-  const chrome = spawn(browser, ["--headless", "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--disable-extensions", "--no-first-run", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "about:blank"], { stdio: "ignore", windowsHide: true });
+  const chrome = spawn(browser, [...(headed ? [] : ["--headless", "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"]), "--disable-backgrounding-occluded-windows", "--disable-renderer-backgrounding", "--disable-background-timer-throttling", "--disable-extensions", "--no-first-run", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "about:blank"], { stdio: "ignore", windowsHide: !headed });
   let socket;
   const close = async () => {
     socket?.close(); chrome.kill();

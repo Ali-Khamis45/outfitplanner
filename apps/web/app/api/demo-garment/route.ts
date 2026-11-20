@@ -1,6 +1,5 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import { compressedGlbResponse } from "../../../lib/garment/assetResponse.ts";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 // Fixed local research demos (procedural T-shirts fitted to the neutral MHR body), not a general file-serving API.
@@ -16,6 +15,7 @@ const VARIANTS: Record<string, string> = {
   "v5.2": "experiments/tshirt-v5.2-mhr-neutral.glb",
   "v5.3": "experiments/tshirt-v5.3-mhr-neutral.glb",
   "pants-v3": "pants-basic-v3-mhr-neutral.glb",
+  "pants-v3.1": "pants-basic-v3.1-mhr-neutral.glb",
   pants: "pants-basic-v1-mhr-neutral.glb",
   "pants-v2": "pants-basic-v2-mhr-neutral.glb",
 };
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
   const sidecar = new URL(request.url).searchParams.get("sidecar") === "1";
   try {
     const source = path.resolve(process.cwd(), "../../outputs/garments", sidecar ? file.replace(/\.glb$/, ".correctives.json") : file);
-    if (!sidecar) return await compressedGlbResponse(source, request);
+    if (!sidecar) return Response.redirect(new URL(`/api/compressed-demo?asset=${encodeURIComponent(variant)}`, request.url), 307);
     const bytes = await readFile(source);
     return new Response(new Uint8Array(bytes), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
   } catch (error) {

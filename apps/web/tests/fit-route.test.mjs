@@ -46,8 +46,20 @@ try {
   assert.equal(await (await request({ body: "neutral", slot: "top", size: "M", asset: "sidecar" })).text(), "{}");
   assert.equal((await request({ body: "../private", slot: "top" })).status, 404);
   assert.equal((await request({ body: "neutral", slot: "top", size: "../M", asset: "glb" })).status, 404);
-  process.env.NODE_ENV = "production";
-  assert.equal((await request({ body: "personal-scaled", slot: "top" })).status, 404);
+  // pants-v3.1 is the default bottom (no knee step); a stray pants-v3 size left in sizes/ is ignored, and the former
+  // candidate parameter ?pants=v3.1 changes nothing
+  for (const garment of ["pants-v3.1", "pants-v3"]) {
+    const stem = `${garment}-M-neutral`;
+    await writeFile(path.join(sizes, `${stem}.glb`), bytes); await writeFile(path.join(sizes, `${stem}.correctives.json`), "{}");
+    await writeFile(path.join(sizes, `${stem}.fit.json`), JSON.stringify({ version: 1, garment, size: "M", body: "neutral", regions: { waist: { ease_mm: 20, status: "good" }, hips: { ease_mm: 90, status: "good" }, length: { delta_mm: 0, status: "good" } }, recommended: true }));
+  }
+  process.env.NODE_ENV = "development";
+  const bottoms = await (await request({ body: "neutral", slot: "bottom" })).json();
+  assert.deepEqual(bottoms.map(item => item.fit.garment), ["pants-v3.1"], "the default bottom is pants-v3.1");
+  assert.ok(!bottoms[0].glb.includes("gen=") && !bottoms[0].glb.includes("pants="));
+  assert.equal((await request({ body: "neutral", slot: "bottom", size: "M", asset: "glb" })).status, 200);
+  assert.deepEqual((await (await request({ body: "neutral", slot: "bottom", gen: "v5.3", pants: "v3.1" })).json()).map(item => item.fit.garment), ["pants-v3.1"], "?pants= is no longer a selector");
+  process.env.NODE_ENV = "production";  assert.equal((await request({ body: "personal-scaled", slot: "top" })).status, 404);
   assert.equal((await request({ body: "neutral", slot: "top", fixtures: "1" })).status, 404);
   process.env.NODE_ENV = "development";
   const fixtureOptions = await (await request({ body: "neutral", slot: "top", fixtures: "1" })).json();

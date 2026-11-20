@@ -1,0 +1,30 @@
+import assert from "node:assert/strict";
+import { fixtureWardrobe } from "../eval/stylist/fixture.ts";
+import { requestIntent } from "../lib/stylist/pipeline.ts";
+import { selectCandidates, selectionContains } from "../lib/stylist/selection.ts";
+import { validateIntent } from "../lib/stylist/intent.ts";
+const date = "2026-11-19", intent = requestIntent("office", date);
+const seed = fixtureWardrobe(date).items[0];
+const item = (id, category, warmth, formality = 4) => ({ ...seed, id, category, warmth, formality, last_worn: null });
+const pieces = [item("light", "top", 1), item("warm", "top", 4), item("lower-light", "bottom", 1), item("lower-warm", "bottom", 4), item("coat", "outerwear", 3)];
+const cold = { date, temperature_max_c: 8, precipitation_probability_percent: 0 };
+const selected = selectCandidates(pieces, intent, cold);
+for (const top of selected.tops) for (const bottom of selected.bottoms) for (const coat of [...selected.outers, ...(selected.allowNoOuter ? [null] : [])]) {
+  assert.equal(Math.min(5, top.warmth + (coat?.warmth ?? 0)), 4, "independent enum choices must never break upper-layer warmth");
+  assert.equal(bottom.warmth, 4);
+}
+assert.equal(selected.gap_note, null);
+assert.equal(selectionContains(selected, { top_id: "light", bottom_id: "lower-warm", outer_id: null }), false);
+const limited = selectCandidates(pieces.filter(i => i.warmth === 1), intent, cold);
+assert.equal(limited.tops.length, 1); assert.equal(limited.bottoms.length, 1); assert.match(limited.gap_note, /forecast warmth/);
+const rainPieces = [item("tee", "top", 1), item("pants", "bottom", 2), { ...item("shell", "outerwear", 1), type: "rain shell" }];
+const rain = selectCandidates(rainPieces, intent, { ...cold, temperature_max_c: 21, precipitation_probability_percent: 90 });
+assert.equal(rain.allowNoOuter, false); assert.equal(rain.outers[0].id, "shell");
+const missingFormal = [item("top-medium", "top", 2, 3), item("top-high", "top", 2, 5), item("bottom-high", "bottom", 2, 5)];
+const fallback = selectCandidates(missingFormal, requestIntent("casual", date), null);
+assert.deepEqual(fallback.tops.map(i => i.id), ["top-high"], "when no item is in range, highest available wins even above the requested range");
+assert.match(fallback.gap_note, /highest-formality/);
+const freshLower = selectCandidates([item("fresh", "top", 2, 3), { ...item("recent", "top", 2, 4), last_worn: date }, item("pants", "bottom", 2)], intent, null);
+assert.deepEqual(freshLower.tops.map(i => i.id), ["fresh"], "recent-wear preference precedes highest eligible formality");
+for (const fields of [{ formality_min: 5, formality_max: 1 }, { date: "2026-02-31" }, { occasion_type: "invented" }]) assert.throws(() => validateIntent({ occasion_type: "work", formality_min: 3, formality_max: 4, date, language: "en", indoor_outdoor: "unknown", ...fields }));
+console.log("PASS thermal enum cross-products, fallback formality, rain layers, unavoidable warmth gaps, recency priority and intent validation");

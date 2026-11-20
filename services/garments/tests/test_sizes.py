@@ -16,11 +16,14 @@ from measure import girth  # noqa: E402
 from sizes import CHART_CM, LENGTH_GRADE_M, PANTS_HIP_EASE_M, SHIRT_CHEST_EASE_M, SIZES, recommend, status  # noqa: E402
 
 PROJECT = Path(__file__).resolve().parents[3]
-SIZES_DIR = PROJECT / "outputs" / "garments" / "sizes"  # the default generation: tshirt-v5.3 / pants-v3
+SIZES_DIR = PROJECT / "outputs" / "garments" / "sizes"  # the default generation: tshirt-v5.3 / pants-v3.1
 LEGACY_SIZES_DIR = PROJECT / "outputs" / "garments" / "sizes-v5.2"  # tshirt-v5.2 / pants-v2, kept for one sprint
 SIZE_DIRS = [d for d in (SIZES_DIR, LEGACY_SIZES_DIR) if d.is_dir()]
 # per generation: its folder, the generate_sizes reports holding each size's ease levels, and the garment tags
-GENERATIONS = [(SIZES_DIR, ("sizes-sprint-3.6-neutral.json", "sizes-sprint-3.6-personal.json"), {"tshirt": "tshirt-v5.3", "pants": "pants-v3"}),
+# The default's shirts are the Sprint 3.6 shirts (built over pants-v3) and its pants the pants-v3.1 sizes: each garment's
+# levels come from the run that built it.
+GENERATIONS = [(SIZES_DIR, ("sizes-sprint-3.6-neutral.json", "sizes-sprint-3.6-personal.json"), {"tshirt": "tshirt-v5.3"}),
+               (SIZES_DIR, ("sizes-sprint-3.6-knee-neutral.json", "sizes-sprint-3.6-knee-personal.json"), {"pants": "pants-v3.1"}),
                (LEGACY_SIZES_DIR, ("sizes-sprint-3a.json",), {"tshirt": "tshirt-v5.2", "pants": "pants-v2"})]
 MODEL_PRESENT = (PROJECT / "external").is_dir()
 
@@ -154,7 +157,7 @@ class GeneratedSizesTests(unittest.TestCase):
                     for body_id, body in json.loads(report_path.read_text(encoding="utf-8"))["bodies"].items():
                         for garment, sizes in body["garments"].items():
                             for size in SIZES:
-                                if size in sizes:
+                                if size in sizes and garment in tags:
                                     stem = directory / f"{tags[garment]}-{size}-{body_id}"
                                     if not stem.with_name(stem.name + ".glb").is_file():  # Sprint 3.6: withheld (failed its gates), not shipped
                                         continue

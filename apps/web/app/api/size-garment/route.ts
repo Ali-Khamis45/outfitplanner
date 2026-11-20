@@ -1,8 +1,8 @@
-import { readFile, readdir, realpath } from "node:fs/promises";
+import { readFile, readdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
-import { compressGlb } from "../../../asset-compression/compress.mjs";
+import { compressedGlbResponse } from "../../../lib/garment/assetResponse.ts";
 import { parseFitMap, SIZES, type Size } from "../../../lib/garment/fitMap.ts";
-import { DEFAULT_GENERATION, GENERATIONS, parseGeneration } from "../../../lib/garment/generation.ts";
+import { GENERATIONS, generationQuery, parseGeneration } from "../../../lib/garment/generation.ts";
 import { withheldSizes } from "../../../lib/garment/withheldSizes.ts";
 
 export const runtime = "nodejs";
@@ -13,7 +13,7 @@ const missing = () => new Response(null, { status: 404, headers });
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const body = params.get("body"), slot = params.get("slot"), size = params.get("size"), asset = params.get("asset");
-  const generation = parseGeneration(params.get("gen")), { top, bottom, sizesDir } = GENERATIONS[generation];
+  const generation = parseGeneration(params.get("gen")), { top, bottom, topSizesDir, bottomSizesDir } = GENERATIONS[generation], sizesDir = slot === "top" ? topSizesDir : bottomSizesDir;
   const fixtures = params.get("fixtures") === "1";
   if (!body || !/^[a-zA-Z0-9_-]+$/.test(body) || (slot !== "top" && slot !== "bottom")) return missing();
   if (fixtures && (process.env.NODE_ENV !== "development" || body !== "neutral")) return missing();
@@ -37,9 +37,11 @@ export async function GET(request: Request) {
       try { fit = parseFitMap(JSON.parse(await readFile(fitFile, "utf8"))); } catch { continue; }
       if (fit.body !== body || fit.size !== match[2] || fit.garment !== match[1]) continue;
       const safe = new URLSearchParams({ slot, body, size: fit.size });
-      if (generation !== DEFAULT_GENERATION) safe.set("gen", generation);
+      for (const [key, value] of Object.entries(generationQuery(generation))) safe.set(key, value);
       if (fixtures) safe.set("fixtures", "1");
-      options.push({ size: fit.size, fit, glb: `/api/size-garment?${safe}&asset=glb`, sidecar: `/api/size-garment?${safe}&asset=sidecar`, fileBase });
+      const info = await stat(path.join(root, `${fileBase}.glb`));
+      const version = `${info.size}-${Math.trunc(info.mtimeMs)}`;
+      options.push({ size: fit.size, fit, glb: `/api/personal-size-garment?${safe}&asset=glb&v=${version}`, sidecar: `/api/size-garment?${safe}&asset=sidecar`, fileBase });
     }
     options.sort((a, b) => SIZES.indexOf(a.size) - SIZES.indexOf(b.size));
     if (size === null && asset === null) return Response.json([...options.map(option => ({ size: option.size, fit: option.fit, glb: option.glb, sidecar: option.sidecar })), ...await withheldSizes(root, slot === "top" ? top : bottom, body, files)], { headers });
@@ -48,7 +50,8 @@ export async function GET(request: Request) {
     if (!option) return missing();
     const filename = await realpath(/*turbopackIgnore: true*/ path.join(/*turbopackIgnore: true*/ root, `${option.fileBase}.${asset === "glb" ? "glb" : "correctives.json"}`));
     if (path.dirname(filename) !== root) return missing();
+    if (asset === "glb") return await compressedGlbResponse(filename, request);
     const bytes = await readFile(filename);
-    return new Response(new Uint8Array(asset === "glb" ? await compressGlb(bytes) : bytes), { headers: { ...headers, "Content-Type": asset === "glb" ? "model/gltf-binary" : "application/json" } });
+    return new Response(new Uint8Array(bytes), { headers: { ...headers, "Content-Type": "application/json" } });
   } catch { return missing(); }
 }

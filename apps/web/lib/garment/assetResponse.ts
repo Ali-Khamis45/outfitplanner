@@ -1,12 +1,10 @@
+import { createHash } from "node:crypto";
 import { compressedAsset } from "../../asset-compression/compress.mjs";
 
 export async function compressedGlbResponse(source: string, request: Request): Promise<Response> {
-  const accepted = request.headers.get("accept-encoding") ?? "";
-  const match = accepted.split(",").map(value => value.trim()).find(value => /^gzip(?:\s*;|$)/i.test(value));
-  const quality = match?.match(/;\s*q=([\d.]+)/i);
-  const gzip = process.env.NODE_ENV !== "development" && Boolean(match) && (!quality || Number(quality[1]) > 0);
-  const bytes = await compressedAsset(source, undefined, gzip);
-  const headers: Record<string, string> = { "Content-Type": "model/gltf-binary", "Content-Length": String(bytes.byteLength), "Cache-Control": "no-store", "Vary": "Accept-Encoding", "X-Content-Type-Options": "nosniff" };
-  if (gzip) headers["Content-Encoding"] = "gzip";
+  const bytes = await compressedAsset(source, undefined, false);
+  const etag = `"${createHash("sha256").update(bytes).digest("hex")}"`;
+  const headers: Record<string, string> = { "Content-Type": "model/gltf-binary", "Content-Length": String(bytes.byteLength), "Cache-Control": "private, no-cache, no-transform", "ETag": etag, "X-Content-Type-Options": "nosniff" };
+  if ((request.headers.get("if-none-match") ?? "").split(",").some(tag => tag.trim() === etag || tag.trim() === "*")) { delete headers["Content-Length"]; return new Response(null, { status: 304, headers }); }
   return new Response(new Uint8Array(bytes), { headers });
 }

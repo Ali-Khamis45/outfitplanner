@@ -6,13 +6,13 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseScenarios, scoreScenario, summarize } from "../eval/stylist/scoring.ts";
-import { fixtureWardrobe } from "../eval/stylist/fixture.ts";
+import { fixtureWardrobe, scenarioWardrobe } from "../eval/stylist/fixture.ts";
 import { makeReport, markdownReport } from "../eval/stylist/report.mjs";
 import { startEvaluationModel } from "../eval/stylist/mock.mjs";
 import { createChatHandler } from "../lib/stylist/chat.ts";
 import { evaluationWeather } from "../lib/stylist/evaluation.ts";
 import { request } from "./local-api.mjs";
-import { startMockModel, completion, toolCall } from "./mock-stylist-model.mjs";
+import { startMockModel, completion } from "./mock-stylist-model.mjs";
 import { validToolArguments } from "../lib/stylist/toolValidation.ts";
 
 const app = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -31,6 +31,13 @@ function response() {
 const score = (data = response(), items = wardrobe) => scoreScenario(scenario, items, data, 200, 100);
 const status = (data, check) => score(data).checks.find(c => c.id === check).status;
 assert.equal(score().status, "PASS"); assert.equal(score().applicable_checks, 9);
+const v2 = response();
+v2.evaluation.pipeline = "v2"; v2.evaluation.trace.pop(); v2.evaluation.tool_validity = { valid: 0, invalid: 0 };
+v2.structured = { top_id: top, bottom_id: bottom, outer_id: null };
+assert.equal(score(v2).status, "PASS", "server reads and validated JSON replace model actions");
+assert.equal(score(v2).tool_calls, 0); assert.equal(summarize([score(v2)]).tool_call_validity, null);
+v2.structured.top_id = "eval-top-4-fresh";
+assert.equal(score(v2).checks.find(c => c.id === "top_bottom_categories").status, "FAIL", "card and structured answer must agree");
 let changed = response(); changed.evaluation.trace.shift(); assert.equal(status(changed, "get_wardrobe"), "FAIL");
 changed = response(); changed.evaluation.trace[1].arguments.city = "Aswan"; assert.equal(status(changed, "get_weather"), "FAIL");
 changed = response(); changed.evaluation.trace[1].arguments.date = "2020-01-01"; assert.equal(status(changed, "get_weather"), "FAIL");
@@ -68,24 +75,54 @@ for (const hidden of ["PRIVATE_ERROR", "PRIVATE_PROMPT", "PRIVATE_REPLY", "PRIVA
 const root = await mkdtemp(path.join(os.tmpdir(), "stylist-eval-test-")), servers = [];
 try {
   await mkdir(path.join(root, "wardrobe"));
-  const model = await startEvaluationModel(scenarios); servers.push(model);
+  const allScenarios = parseScenarios([...scenarios, ...JSON.parse(await readFile(path.join(app, "eval/stylist/hard-scenarios.json"), "utf8"))]);
+  const model = await startEvaluationModel(allScenarios); servers.push(model);
   const handler = createChatHandler({ outputs: root, environment: "development", evaluation: true, weather: evaluationWeather, settings: () => ({ model: "eval-fixture", baseUrl: model.baseUrl }) });
-  for (const s of scenarios) {
-    const fixture = fixtureWardrobe(s.date); await writeFile(path.join(root, "wardrobe/wardrobe.json"), JSON.stringify(fixture));
-    const result = await request(handler, { body: { messages: [{ role: "user", content: s.message }], context: { date: s.date, city: s.city } } });
-    assert.equal(scoreScenario(s, fixture, result.body, result.code, 0).status, "PASS", s.id);
+  for (const s of allScenarios) {
+    const fixture = scenarioWardrobe(s); await writeFile(path.join(root, "wardrobe/wardrobe.json"), JSON.stringify(fixture));
+    const result = await request(handler, { body: { messages: [{ role: "user", content: s.message }], context: { date: s.reference_date ?? s.date, city: s.city, ...(s.forecast ? { forecast: s.forecast } : {}) } } });
+    const evaluated = scoreScenario(s, fixture, result.body, result.code, 0);
+    assert.equal(evaluated.quality_status, "PASS", s.id + JSON.stringify(evaluated.quality_checks));
+    assert.equal(evaluated.first_try_pass, true, s.id);
+    assert.ok(evaluated.intent_checks.every(c => c.status === "PASS"), s.id);
+    const wrongIntent = structuredClone(result.body);
+    wrongIntent.evaluation.intent.date = "2000-01-01";
+    assert.equal(scoreScenario(s, fixture, wrongIntent, 200, 0).intent_checks.find(c => c.id === "date").status, "FAIL", "schema-valid but wrong intent must count as a model error");
+    if (!s.id.startsWith("hard-")) assert.equal(evaluated.status, "PASS", s.id);
     assert.equal(result.body.evaluation.tool_validity.invalid, 0);
+    const altered = structuredClone(result.body);
+    altered.structured.date = "2000-01-01";
+    assert.equal(scoreScenario(s, fixture, altered, 200, 0).quality_checks.find(c=>c.id==="date_handled").status,"FAIL");
+    altered.structured.reason = s.language === "en" ? "\u062f\u0647 \u0637\u0642\u0645." : "English only.";
+    assert.equal(scoreScenario(s, fixture, altered, 200, 0).quality_checks.find(c=>c.id==="reply_language").status,"FAIL");
+    if(s.fixture === "gap") {
+      altered.structured.gap_note=null;
+      assert.equal(scoreScenario(s, fixture, altered, 200, 0).quality_checks.find(c=>c.id==="gap_note").status,"FAIL");
+    }
+    if(s.fixture === "cold") {
+      altered.structured.top_id="eval-top-4-fresh"; altered.structured.outer_id=null;
+      assert.equal(scoreScenario(s, fixture, altered, 200, 0).quality_checks.find(c=>c.id==="warmth_vs_forecast").status,"FAIL");
+    }
+    if(s.id === "en-office") {
+      altered.structured.top_id="eval-top-3-fresh";
+      assert.equal(scoreScenario(s, fixture, altered, 200, 0).quality_checks.find(c=>c.id==="best_available_formality").status,"FAIL");
+    }
+
   }
   // Clock is genuinely frozen, not merely mentioned in the prompt. Old items
   // in 2030 must remain eligible even when this suite runs years earlier/later.
   const future = fixtureWardrobe("2030-01-01"); await writeFile(path.join(root, "wardrobe/wardrobe.json"), JSON.stringify(future));
-  const clockModel = await startMockModel((body, index) => index ? completion("Done.") : completion(null, [toolCall("get_wardrobe", { filter: { not_worn_days: 7 } }), toolCall("log_worn", { outfit_or_item_ids: [top], date: "2030-01-01" })])); servers.push(clockModel);
+  const clockModel = await startMockModel(body => {
+    if(body.response_format.json_schema.name==="stylist_intent") return completion(JSON.stringify({intent_kind:"recommend",occasion_type:"everyday",formality_min:1,formality_max:5,date:"2030-01-01",indoor_outdoor:"unknown",language:"en"}));
+    const p = body.response_format.json_schema.schema.properties;
+    return completion(JSON.stringify({ top_id: p.top_id.enum[0], bottom_id: p.bottom_id.enum[0], outer_id: null, occasion: "casual", formality: Number(p.top_id.enum[0].split("-")[2]), gap_note: null, date: "2030-01-01", reason: "A simple look.", weather_note: null, language: "en" }));
+  }); servers.push(clockModel);
   const clockHandler = createChatHandler({ outputs: root, environment: "development", evaluation: true, settings: () => ({ model: "eval-clock", baseUrl: clockModel.baseUrl }) });
-  const clockBody = { context: { date: "2030-01-01", city: "Cairo" }, messages: [{ role: "user", content: "Choose something new." }] };
+  const clockBody = { context: { date: "2030-01-01", city: "Cairo" }, messages: [{ role: "user", content: "Choose something not worn in the last 7 days." }] };
   const clockResult = await request(clockHandler, { body: clockBody });
-  const returnedItems = JSON.parse(clockModel.requests[1].messages.find(m => m.role === "tool" && m.tool_call_id === "get_wardrobe").content);
-  assert.equal(returnedItems.length, 20); assert.ok(returnedItems.some(i => i.id.endsWith("old"))); assert.ok(!returnedItems.some(i => i.id.endsWith("recent")));
-  assert.equal(clockResult.body.evaluation.trace.find(t => t.name === "log_worn").ok, false);
+  const eligible = clockModel.requests[0].response_format.json_schema.schema.properties.top_id.enum;
+  assert.ok(eligible.some(id => id.endsWith("old"))); assert.ok(!eligible.some(id => id.endsWith("recent")));
+  assert.ok(!clockResult.body.evaluation.trace.some(t => t.name === "log_worn"));
   assert.deepEqual(JSON.parse(await readFile(path.join(root, "wardrobe/wardrobe.json"), "utf8")), future, "evaluation cannot mutate wear history");
   const normal = createChatHandler({ outputs: root, environment: "development", settings: () => ({ model: "eval-clock", baseUrl: clockModel.baseUrl }) });
   assert.equal((await request(normal, { body: clockBody })).code, 400, "normal app rejects eval context");
@@ -99,5 +136,5 @@ try {
     assert.equal(exit, 2, "CLI refuses occupied 3100, regardless of cwd");
     if (ownsPort) assert.equal(blocker.listening, true, "the pre-existing port owner survives");
   } finally { if (ownsPort) await new Promise(resolve => blocker.close(resolve)); }
-  console.log("PASS 30 bilingual scenarios, mock HTTP loop, positive/negative scoring, inclusive recency, Arabic cities, reports, frozen clock, eval opt-in, read-only tools and occupied-port refusal");
+  console.log("PASS 40 bilingual scenarios, mock HTTP loop, positive/negative scoring, inclusive recency, Arabic cities, reports, frozen clock, eval opt-in, read-only tools and occupied-port refusal");
 } finally { for (const server of servers) await server.close(); await rm(root, { recursive: true, force: true }); }

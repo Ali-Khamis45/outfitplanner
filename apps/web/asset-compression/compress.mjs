@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { gzipSync } from "node:zlib";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { Matrix4 } from "three";
 import { NodeIO } from "@gltf-transform/core";
 import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
@@ -30,14 +31,14 @@ export async function compressGlb(input) {
 }
 
 export async function compressedAsset(source, cacheDir = path.resolve(process.cwd(), ".asset-cache"), gzip = false) {
-  const bytes = await readFile(source);
-  const hash = createHash("sha256").update(bytes).digest("hex");
+  const info = await stat(source);
+  const hash = createHash("sha256").update(`${path.resolve(source instanceof URL ? fileURLToPath(source) : source)}:${info.size}:${info.mtimeMs}`).digest("hex");
   const destination = path.join(cacheDir, `${FORMAT}-${hash}.glb${gzip ? ".gz" : ""}`);
   try { return await readFile(destination); } catch (error) { if (error.code !== "ENOENT") throw error; }
   let task = inFlight.get(destination);
   if (!task) {
     task = (async () => {
-      const glb = await compressGlb(bytes);
+      const glb = gzip ? await compressedAsset(source, cacheDir, false) : await compressGlb(await readFile(source));
       const result = gzip ? gzipSync(glb, { level: 9 }) : glb;
       await mkdir(cacheDir, { recursive: true });
       const temporary = path.join(cacheDir, `${FORMAT}-${hash}-${randomUUID()}.tmp`);

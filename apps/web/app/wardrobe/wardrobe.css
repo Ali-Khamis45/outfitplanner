@@ -64,3 +64,9 @@
 @media (min-width: 1100px) { .wardrobe-workspace:has(.wardrobe-detail-panel) { grid-template-columns: minmax(0,1fr) 320px; }.wardrobe-section-heading { min-height: 0; margin-bottom: 16px; }.wardrobe-section-heading > div { display: none; }.wardrobe-detail-panel { margin-top: 35px; } }
 @media (max-width: 800px) { .wardrobe-shell { padding: 0 20px 45px; }.wardrobe-intro { padding: 32px 0 24px; }.wardrobe-intro h1 { font-size: 58px; }.wardrobe-intro p { font-size: 13px; }.wardrobe-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }.wardrobe-card { padding: 8px; border-radius: 18px; }.wardrobe-image { height: 180px; }.wardrobe-card h3 { font-size: 14px !important; }.wardrobe-card-meta { margin-top: 12px; }.wardrobe-card-actions { flex-wrap: wrap; }.wardrobe-card-actions a, .wardrobe-card-actions button { font-size: 10px; padding: 7px 8px; min-height: 40px; }.wardrobe-edit { font-size: 10px; }.wardrobe-card-image > .example-badge { top: 8px; left: 6px; font-size: 8px; }.wardrobe-heart { top: 5px; right: 5px; }.wardrobe-size { left: 8px; bottom: 8px; } }
 .detail-image img { object-fit: contain; }.wardrobe-detail-panel { scrollbar-width: thin; }
+
+.stylist-look-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.stylist-action { min-height: 44px; border: 1px solid var(--action); border-radius: 999px; padding: 10px 18px; color: #fff; background: var(--action); font-size: 12px; font-weight: 700; }
+.stylist-action + .stylist-action { color: var(--action); background: transparent; }
+.stylist-action:focus-visible { outline: 3px solid var(--olive); outline-offset: 3px; }
+.stylist-look-actions p { flex-basis: 100%; }

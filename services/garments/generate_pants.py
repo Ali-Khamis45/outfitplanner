@@ -25,7 +25,7 @@ import correctives
 from body import PROJECT, VIEWER, RestBody, evaluate_rest_body, load_model
 from garment_glb import write_garment_glb
 from generate_tshirt import NEUTRAL_AVATAR, new_file, topology_report, verify_glb_matches_body
-from pants import OPENINGS, PANTS_2_1_FIELDS, PANTS_V2_CORRECTIVE_RULES, PANTS_V2_RULES, PANTS_V3_RULES, PANTS_V2_SPECS, REGION_NAMES, REGION_NAMES_V2, PantsRules, design_pants, leg_corrective_specs
+from pants import OPENINGS, PANTS_2_1_FIELDS, PANTS_V2_CORRECTIVE_RULES, PANTS_V2_RULES, PANTS_V3_1_RULES, PANTS_V3_RULES, PANTS_V2_SPECS, REGION_NAMES, REGION_NAMES_V2, PantsRules, design_pants, leg_corrective_specs
 from posing import load_asset
 from tshirt import assemble, rules_record
 
@@ -39,6 +39,8 @@ VERSIONS: dict[str, dict[str, Any]] = {
 }
 # Sprint 3.5 (the default since its acceptance): pants v2 cut into pattern panels, one UV island per panel (layout v3)
 VERSIONS["v3"] = {**VERSIONS["v2"], "rules": PANTS_V3_RULES, "strategy": VERSIONS["v2"]["strategy"] + "; Sprint 3.5: left/right front/back panels and gusset cut by centre, outer-leg and inner-leg seams, UV layout v3"}
+# The default bottom since 2026-11-20 (pants-v3.1): pants v3 with the thigh offset blended into the straight tube over 10 cm at the knee
+VERSIONS["v3.1"] = {**VERSIONS["v3"], "rules": PANTS_V3_1_RULES, "strategy": VERSIONS["v3"]["strategy"] + "; v3.1: thigh offset morphs into the straight tube over 10 cm above the knee (no cut planes, no knee step)"}
 
 
 def metadata(body: RestBody, rules: PantsRules, version: str = "v1", personal: bool = False) -> dict[str, Any]:
