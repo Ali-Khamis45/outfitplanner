@@ -68,6 +68,8 @@ try {
   assert.equal(scripted.warmups.at(-1).keep_alive, "1m");
   assert.equal(body.reasoning_effort, "none"); assert.ok(!body.tools && !body.tool_choice);
   assert.equal(body.response_format.type, "json_schema"); assert.equal(body.response_format.json_schema.strict, true);
+  assert.match(body.messages[0].content, /using English words and Latin script only/);
+  assert.doesNotMatch(body.messages[0].content, /Egyptian Arabic/);
   assert.match(body.messages[0].content, /worn_last_3_days/); assert.match(body.messages[0].content, /2030-01-01/);
   for (const secret of ["private.png", "PRIVATE MEASUREMENTS", "123456", "ease_mm", "delta_mm"]) assert.ok(!JSON.stringify(scripted.requests).includes(secret));
   assert.deepEqual(JSON.parse(await readFile(file, "utf8")), wardrobe, "chat cannot log wear even when asked");
@@ -102,6 +104,8 @@ try {
   assert.ok(!Object.hasOwn(onModel.requests[0], "reasoning_effort"));
   const arabicModel = await model(body => completion(JSON.stringify(look(body, { language: "arz", occasion: "كاجوال", reason: "ده طقم مريح ومناسب ليك." }))));
   assert.equal((await request(handlerFor(arabicModel), { body: { ...message, messages: [{ role: "user", content: "اختارلي طقم كاجوال من دولابي." }] } })).body.status, "ok");
+  assert.match(arabicModel.requests[0].messages[0].content, /Egyptian Arabic/);
+  assert.doesNotMatch(arabicModel.requests[0].messages[0].content, /Latin script only/);
   const weatherModel = await model(body => completion(JSON.stringify(look(body, { weather_note: "Weather forecast is unavailable right now." }))));
   const weatherResult = await request(handlerFor(weatherModel, { weather: async () => { throw new Error("provider failed"); } }), { body: message });
   assert.equal(weatherResult.body.status, "ok"); assert.equal(weatherResult.body.calls[1].ok, false);
