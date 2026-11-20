@@ -2,10 +2,11 @@
 import { useEffect, useId, useState } from "react";
 import { emptyMeasurements, measurementError, measurementFields, names, serializeMeasurements, type Measurements } from "../lib/measurements";
 import { parseSidecar, type Sidecar } from "../lib/garment/correctives";
+import { DEFAULT_GENERATION, generationQuery, type Generation } from "../lib/garment/generation";
 import { formatRegion, isAvailableSize, isFullyClampedAndTight, parseSizeOptions, regionEstimateNote, SIZES, type Size, type SizeOption, type Slot } from "../lib/garment/fitMap";
 
-export function useSizes(body: string | null, slot: Slot, fixtures = false, preferredSize = "", candidate = false) {
-  const key = JSON.stringify([body, slot, fixtures, preferredSize, candidate]);
+export function useSizes(body: string | null, slot: Slot, fixtures = false, preferredSize = "", generation: Generation = DEFAULT_GENERATION) {
+  const key = JSON.stringify([body, slot, fixtures, preferredSize, generation]);
   const [discovery, setDiscovery] = useState<{ key: string; options: SizeOption[]; initial: Size | null } | null>(null);
   const [choice, setChoice] = useState<{ key: string; size: Size } | null>(null);
   const [loaded, setLoaded] = useState<{ url: string; sidecar: Sidecar | null } | null>(null);
@@ -13,7 +14,7 @@ export function useSizes(body: string | null, slot: Slot, fixtures = false, pref
     let active = true;
     if (!body) return;
     const query = new URLSearchParams({ body, slot });
-    if (candidate) query.set("gen", "v5.3");
+    for (const [name, value] of Object.entries(generationQuery(generation))) query.set(name, value);
     if (fixtures) query.set("fixtures", "1");
     fetch(`/api/size-garment?${query}`, { cache: "no-store" })
       .then(response => response.ok ? response.json() : [])
@@ -24,7 +25,7 @@ export function useSizes(body: string | null, slot: Slot, fixtures = false, pref
         setDiscovery({ key, options, initial });
       }).catch(() => { if (active) setDiscovery({ key, options: [], initial: null }); });
     return () => { active = false; };
-  }, [body, slot, fixtures, preferredSize, candidate, key]);
+  }, [body, slot, fixtures, preferredSize, generation, key]);
   const resolved = !body || discovery?.key === key;
   const options = resolved && body ? discovery?.options ?? [] : [];
   const requestedSize = choice?.key === key ? choice.size : discovery?.initial ?? null;
@@ -47,8 +48,8 @@ export function FitPicker({ title, options, selected, onSize, editorial = false 
     <div className="fit-heading"><strong>{title} size</strong>{available.some(option => option.fit.recommended) && <span>● Recommended</span>}</div>
     <div className="fit-sizes" role="group" aria-label={`${title} size`}>{SIZES.map(size => {
       const option = options.find(entry => entry.size === size), withheld = option?.status === "withheld", recommended = available.some(entry => entry.size === size && entry.fit.recommended);
-      const button = <button key={size} type="button" disabled={!option || withheld} aria-disabled={withheld ? true : undefined} aria-describedby={withheld ? `${tooltipId}-${size}` : undefined} aria-label={recommended ? `${size}, Recommended` : size} aria-pressed={selected === size} onClick={() => onSize(size)}>{size}{recommended && <span className="fit-recommended-dot" aria-hidden="true" title="Recommended" />}</button>;
-      return withheld ? <span className="fit-withheld" key={size} tabIndex={0} aria-label={`${size}: This size isn't ready yet`} aria-describedby={`${tooltipId}-${size}`}><span className="fit-withheld-button">{button}</span><span role="tooltip" id={`${tooltipId}-${size}`} className="fit-withheld-tooltip">This size isn&apos;t ready yet</span></span> : button;
+      const button = <button key={size} type="button" disabled={!option} aria-disabled={withheld ? true : undefined} aria-describedby={withheld ? `${tooltipId}-${size}` : undefined} aria-label={recommended ? `${size}, Recommended` : size} aria-pressed={selected === size} onClick={() => { if (!withheld && option) onSize(size); }}>{size}{recommended && <span className="fit-recommended-dot" aria-hidden="true" title="Recommended" />}</button>;
+      return withheld ? <span className="fit-withheld" key={size}><span className="fit-withheld-button">{button}</span><span role="tooltip" id={`${tooltipId}-${size}`} className="fit-withheld-tooltip">This size isn&apos;t ready yet</span></span> : button;
     })}</div>
     {fit ? <div className="fit-summary">{isFullyClampedAndTight(fit) && <p className="fit-clamped-warning">Too small for this body. Shown at the closest wearable fit.</p>}<strong>{editorial ? "Fit analysis" : "Fit summary"}</strong>{Object.entries(fit.regions).map(([name, region]) => <p key={name} className="fit-label" data-fit={region.status}>{editorial && <><span className="fit-region-name">{name.replaceAll("_", " ")}</span><span className="fit-status">{region.status}</span></>}<span className="fit-region-detail">{formatRegion(name, region, fit.garment)}</span>{regionEstimateNote(region) && <small className="fit-estimate-note"> {regionEstimateNote(region)}</small>}</p>)}</div> : <p className="fit-unavailable">Size fits are not available yet.</p>}
   </section>;

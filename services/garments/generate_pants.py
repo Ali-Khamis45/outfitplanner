@@ -25,7 +25,7 @@ import correctives
 from body import PROJECT, VIEWER, RestBody, evaluate_rest_body, load_model
 from garment_glb import write_garment_glb
 from generate_tshirt import NEUTRAL_AVATAR, new_file, topology_report, verify_glb_matches_body
-from pants import OPENINGS, PANTS_2_1_FIELDS, PANTS_V2_CORRECTIVE_RULES, PANTS_V2_RULES, PANTS_V2_SPECS, REGION_NAMES, REGION_NAMES_V2, PantsRules, design_pants, leg_corrective_specs
+from pants import OPENINGS, PANTS_2_1_FIELDS, PANTS_V2_CORRECTIVE_RULES, PANTS_V2_RULES, PANTS_V3_1_RULES, PANTS_V3_RULES, PANTS_V2_SPECS, REGION_NAMES, REGION_NAMES_V2, PantsRules, design_pants, leg_corrective_specs
 from posing import load_asset
 from tshirt import assemble, rules_record
 
@@ -37,6 +37,10 @@ VERSIONS: dict[str, dict[str, Any]] = {
     "v2": {"rules": PANTS_V2_RULES, "specs": PANTS_V2_SPECS, "corrective_rules": PANTS_V2_CORRECTIVE_RULES, "regions": REGION_NAMES_V2,
            "strategy": STRATEGY_V1 + "; Sprint 2.1A: twist-folded crotch weights, diamond crotch gusset panel (relaxed rest triangles, harmonic weights), turned-in cuffs, membrane-energy correctives with triangle collision"},
 }
+# Sprint 3.5 (the default since its acceptance): pants v2 cut into pattern panels, one UV island per panel (layout v3)
+VERSIONS["v3"] = {**VERSIONS["v2"], "rules": PANTS_V3_RULES, "strategy": VERSIONS["v2"]["strategy"] + "; Sprint 3.5: left/right front/back panels and gusset cut by centre, outer-leg and inner-leg seams, UV layout v3"}
+# The default bottom since 2026-11-20 (pants-v3.1): pants v3 with the thigh offset blended into the straight tube over 10 cm at the knee
+VERSIONS["v3.1"] = {**VERSIONS["v3"], "rules": PANTS_V3_1_RULES, "strategy": VERSIONS["v3"]["strategy"] + "; v3.1: thigh offset morphs into the straight tube over 10 cm above the knee (no cut planes, no knee step)"}
 
 
 def metadata(body: RestBody, rules: PantsRules, version: str = "v1", personal: bool = False) -> dict[str, Any]:
@@ -67,18 +71,29 @@ def metadata(body: RestBody, rules: PantsRules, version: str = "v1", personal: b
 
 def write(directory: Path, body: RestBody, garment: Any, rules: PantsRules, version: str, name: str, avatar_path: Path, personal: bool, extra: dict[str, Any]) -> dict[str, Any]:
     """Assemble, solve the leg correctives against `avatar_path`, and write the GLB, sidecar and report."""
-    arrays = assemble(garment, rules.fit.thickness_m)
-    if version != "v1":  # pants v2: UV layout v2 (only TEXCOORD_0 changes; docs/contracts/garment-texture.md)
+    extra_attributes = None
+    if rules.panel_seams:  # Sprint 3.5: split along the pattern seams, one UV island per panel (layout v3)
+        import panels
+        from uv_layout import relayout_panels
+
+        garment, extra["panels"] = panels.cut(garment, "pants")
+        arrays = assemble(garment, rules.fit.thickness_m)
+        arrays["uv"], extra["uv_layout"], panel_of_vertex = relayout_panels(arrays, "pants")
+        extra_attributes = {"_PANEL": panel_of_vertex}
+    else:
+        arrays = assemble(garment, rules.fit.thickness_m)
+    if version != "v1" and not rules.panel_seams:  # pants v2: UV layout v2 (only TEXCOORD_0 changes; docs/contracts/garment-texture.md)
         from uv_layout import relayout
 
         arrays["uv"], extra["uv_layout"] = relayout(arrays, "pants")
     glb = new_file(directory / f"{name}.glb")
     info = metadata(body, rules, version, personal)
     avatar = load_asset(avatar_path)
-    specs = leg_corrective_specs(**VERSIONS[version]["specs"])
+    # Sprint 3.6: personal v3 fits take the chained 60 / 90 deg hip keys of the 3.6 sizes; the neutral bases keep theirs (bytes)
+    specs = leg_corrective_specs(**{**VERSIONS[version]["specs"], **({"hip_keys_deg": (60.0, 90.0)} if personal and rules.panel_seams else {})})
     morphs, corrective_report = correctives.solve_specs(arrays, garment.vertices, garment.faces, avatar.skeleton, avatar, specs, correctives.CorrectiveRules(**VERSIONS[version]["corrective_rules"]))
     new_file(glb.with_name(glb.stem + ".correctives.json")).write_text(json.dumps(correctives.spec_sidecar(specs, avatar.skeleton), indent=2) + "\n", encoding="utf-8")
-    write_garment_glb(glb, arrays, body, info, MATERIAL, morphs)
+    write_garment_glb(glb, arrays, body, info, MATERIAL, morphs, extra_attributes)
     report = {"garment": info, "topology": topology_report(arrays), "fit_report": garment.report, "correctives": corrective_report, **extra}
     new_file(glb.with_suffix(".json")).write_text(json.dumps(report, indent=2, default=float), encoding="utf-8")
     print(f"Wrote {glb}")

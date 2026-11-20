@@ -39,11 +39,11 @@ try {
   assert.equal((await request("get_weather", { date: "2026-11-14" })).body.temperature_max_c, 25);
   await request("get_weather", { date: "2026-11-14", city: "CAIRO" }); assert.equal(calls, 2); clock += 3600001; await request("get_weather", { date: "2026-11-14" }); assert.equal(calls, 4);
   await mkdir(path.join(root, "garments/sizes"), { recursive: true });
-  for (const [size, recommended] of [["M", false], ["L", true]]) await writeFile(path.join(root, `garments/sizes/tshirt-v5.2-${size}-neutral.fit.json`), JSON.stringify({ version: 1, garment: "tshirt-v5.2", size, body: "neutral", regions: { chest: { status: "good", ease_mm: 20 } }, recommended }));
+  for (const [size, recommended] of [["M", false], ["L", true]]) await writeFile(path.join(root, `garments/sizes/tshirt-v5.3-${size}-neutral.fit.json`), JSON.stringify({ version: 1, garment: "tshirt-v5.3", size, body: "neutral", regions: { chest: { status: "good", ease_mm: 20 } }, recommended }));
   result = await request("get_fit", { item_id: "example-1", body: "neutral" }); assert.equal(result.body.recommended_size, "L"); assert.equal(result.body.regions.chest.status, "good");
   assert.equal((await request("get_fit", { item_id: "example-3", body: "personal-scaled" })).body.status, "unknown");
   await mkdir(path.join(root, "garments/personal"), { recursive: true }); await writeFile(path.join(root, "garments/personal/manifest.json"), JSON.stringify({ primary: { id: "mybody" } }));
-  await writeFile(path.join(root, "garments/sizes/tshirt-v5.2-M-mybody.fit.json"), JSON.stringify({ version: 1, garment: "tshirt-v5.2", size: "M", body: "mybody", regions: { chest: { status: "tight", ease_mm: 2 } }, recommended: true }));
+  await writeFile(path.join(root, "garments/sizes/tshirt-v5.3-M-mybody.fit.json"), JSON.stringify({ version: 1, garment: "tshirt-v5.3", size: "M", body: "mybody", regions: { chest: { status: "tight", ease_mm: 2 } }, recommended: true }));
   assert.equal((await request("get_fit", { item_id: "example-1", body: "personal-scaled" })).body.recommended_size, "M");
   result = await request("show_on_avatar", { item_ids: ["example-3", "example-1"], pose: "walk" }); assert.equal(result.body.url, "/try-on?top=example-1&bottom=example-3&pose=walk");
   assert.equal((await request("show_on_avatar", { item_ids: ["example-1", "example-2"] })).code, 400);

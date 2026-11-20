@@ -4,7 +4,7 @@ import path from "node:path";
 import type { NextApiRequest, NextApiResponse } from "next";
 import { localRequest } from "./personalFit.ts";
 
-const assets: Record<string, string> = { "tshirt-v5.2": "garments/experiments/tshirt-v5.2-mhr-neutral.glb", "pants-v2": "garments/pants-basic-v2-mhr-neutral.glb", "pants-basic-v2": "garments/pants-basic-v2-mhr-neutral.glb" };
+const assets: Record<string, string> = { "tshirt-v5.3": "garments/experiments/tshirt-v5.3-mhr-neutral.glb", "pants-v3": "garments/pants-basic-v3.1-mhr-neutral.glb", "tshirt-v5.2": "garments/experiments/tshirt-v5.2-mhr-neutral.glb", "pants-v2": "garments/pants-basic-v2-mhr-neutral.glb", "pants-basic-v2": "garments/pants-basic-v2-mhr-neutral.glb" };
 export function createThumbnailHandler(outputs = path.resolve(process.cwd(), "../../outputs"), environment = process.env.NODE_ENV) {
   return async (req: NextApiRequest, res: NextApiResponse) => {
     res.setHeader("Cache-Control", "no-store, private"); res.setHeader("X-Content-Type-Options", "nosniff");

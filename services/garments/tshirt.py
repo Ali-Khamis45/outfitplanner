@@ -77,9 +77,11 @@ class FitRules:
     adduction_correctives: bool = False  # Sprint 2.2A: arm-down correctives (arms lowered up to 20 deg, walk swing)
     # Sprint 3A size grading: ease at the body's natural waist (None = the original hem-to-chest profile)
     ease_waist_m: float | None = None
+    # Sprint 3.5: real pattern panels (front, back, sleeves) cut by side, shoulder and underarm seams; UV layout v3
+    panel_seams: bool = False
 
 
-SPRINT_1_1_FIELDS = ("underarm_separation_m", "underarm_length_m", "weight_mode", "weight_band_m", "clearance_smoothing_iterations", "retarget_smoothing_iterations", "discontinuity_ratio", "discontinuity_radius_m", "discontinuity_iterations", "gusset_close_voxels", "gusset_radius_m", "discontinuity_spatial_radius_m", "underarm_panel_radius_m", "underarm_panel_target_stretch", "shoulder_correctives", "hip_correctives", "adduction_correctives", "ease_waist_m")
+SPRINT_1_1_FIELDS = ("underarm_separation_m", "underarm_length_m", "weight_mode", "weight_band_m", "clearance_smoothing_iterations", "retarget_smoothing_iterations", "discontinuity_ratio", "discontinuity_radius_m", "discontinuity_iterations", "gusset_close_voxels", "gusset_radius_m", "discontinuity_spatial_radius_m", "underarm_panel_radius_m", "underarm_panel_target_stretch", "shoulder_correctives", "hip_correctives", "adduction_correctives", "ease_waist_m", "panel_seams")
 
 
 def rules_record(rules: FitRules) -> dict[str, Any]:
@@ -782,3 +784,7 @@ V5_1_RULES = replace(V5_RULES, hip_correctives=True)
 
 # Sprint 2.2A: v5.1 plus arm-down correctives; its sidecar (and v5.1's) uses the signed measure (contract v2).
 V5_2_RULES = replace(V5_1_RULES, adduction_correctives=True)
+
+# Sprint 3.5 candidate: v5.2 geometry, weights and correctives, cut into pattern panels (panels.py) with one UV island
+# each (uv_layout.relayout_panels). Not the default.
+V5_3_RULES = replace(V5_2_RULES, panel_seams=True)

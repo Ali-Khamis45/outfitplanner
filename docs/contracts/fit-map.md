@@ -12,11 +12,26 @@ outputs/garments/sizes/<garment>-<size>-<bodyId>.correctives.json   (corrective-
 outputs/garments/sizes/<garment>-<size>-<bodyId>.fit.json           (§3)
 ```
 
-- `<garment>`: `tshirt-v5.2` or `pants-v2`.
+- `<garment>`: `tshirt-v5.3` or `pants-v3.1`, the default generation (Sprint 3.5 accepted tshirt-v5.3 / pants-v3; pants-v3.1, the same pants without the knee step, replaced pants-v3 on 2026-11-20) (pattern panels, UV layout v3; the GLBs also carry the `_PANEL` attribute, garment-texture.md). The previous generation, `tshirt-v5.2` / `pants-v2`, is a **development-only comparison set, labelled "legacy, ungated"**, in `outputs/garments/sizes-v5.2/` (same file names and schema). Its sizes were never gated (12 of 16 fail the Sprint 3.6 gates). The web app serves it only in development with `?gen=v5.2` and shows the label in the lab selector and on the try-on page; elsewhere `?gen=v5.2` gets the default (`apps/web/lib/garment/generation.ts`). It is removed in Sprint 3.7. `generate_sizes.py --revision 3a` writes there, `--revision 3.5` (default) to `outputs/garments/sizes/`.
 - `<size>`: `S`, `M`, `L` or `XL`.
 - `<bodyId>`: `neutral` (`outputs/avatars/mhr-neutral.glb`), or a personal manifest id such as `personal-scaled`, whose body GLB is listed in `outputs/garments/personal/manifest.json`.
 
 Every GLB is bound to its body's MHR skeleton, as all garments are. Personal sizes are local and git-ignored, like every file under `outputs/`.
+
+### Gates and withheld sizes (Sprint 3.6)
+
+- **Every size is gated before it ships.** `generate_sizes.py` runs `services/garments/size_gates.py` on each size it writes, against the size's own avatar, at every supported pose:
+  - pants: 0 vertices more than 3 mm inside the body, 0 flipped triangles inside the body, max edge stretch ≤ 4.0, and flips ≤ 3 × the body's own at `walk`, `wide` and `l-hip-60`;
+  - T-shirt: the body's shoulder gates (both +90 max stretch ≤ half the original v1 shirt's; both +120 flips and self-intersections ≤ the original's) and 0 vertices more than 3 mm inside the body.
+- **The gate report** is `<entries dir>/<garment>-<size>-<bodyId>.gates.json`. It records the SHA-256 of the GLB it checked, so a report belongs to exactly one file.
+- **A size that fails is withheld.** Its `.glb`, `.correctives.json` and `.fit.json` move to `outputs/garments/sizes-withheld/`, with a note `<garment>-<size>-<bodyId>.withheld.json`:
+
+  ```json
+  {"version": 1, "size": "pants-v3.1-XL-neutral", "reason": "failed its deformation gates", "failed_gates": "l-hip-60:flips; walk:flips", "gates": "pants-v3.1-XL-neutral.gates.json"}
+  ```
+
+- **The recommendation** (§6) is still computed over all four sizes. The recommended size must pass its gates; if it fails, the run stops instead of withholding it.
+- **The web app** lists a withheld size as `{"size": "XL", "withheld": true}` next to the shipped sizes. The size picker shows it disabled with "This size isn't ready yet" on hover and keyboard focus. Its files are never served.
 
 ## 2. GLB attribute `_EASE_MM`
 
@@ -135,9 +150,12 @@ For each garment and body, take the sizes in order S, M, L, XL. Recommend the **
 - **Pants hem:** the geometric hem never goes below the ankle joint + 10 mm (into the foot). If the spec is longer, `length.delta_mm` reports the excess.
 - **Shirt shoulders and sleeves:** the drawn shoulder and sleeve eases never go below the base shirt's (v5.2). Below them, at 20° arm-down, the armhole wedges between the arm and the torso, whose skins are about 4 mm apart, and the cloth penetrates. Smaller sizes therefore keep the base armhole; `shoulders` is `clamped` and reported from the spec.
 - **Pants seat:** the drawn hip ease never goes below the base pants' (v2). A tighter seat ends up inside the belly/thigh skin fold at 90° hip flexion. `hips` is `clamped` and reported from the spec.
-- **Shirt over pants (layering):** every shirt size is drawn over the outer surface of pants v2 and of every pants size of the same body, all at once. A point counts as clear only when it is outside all of them, and each pants mesh only judges points below its own top edge. Shirt torso vertices up to 20 mm above the highest pants top are pushed **horizontally** (radially) until their inner surface is at least **3 mm** outside. The push magnitude is a field over angle and height, raised to a slope of at most 0.5 around and along the body, so the cloth tilts by at most 27° and never folds. Above the band, the push fades out over push / 0.5 (at most 15 cm). One shirt GLB therefore clears the loosest waistband (XL), and over smaller pants its hem stands off (largest push 53 mm, shirt L neutral over pants XL's seat). Gate, for every shirt × pants pair: no shirt vertex under the pants' outer surface, no shirt/pants interpenetration, and the shirt hem overlaps the waistband by at least 30 mm.
+- **Shirt over pants (layering):** every shirt size is drawn over the outer surface of the body's base pants (v3 under `tshirt-v5.3`, v2 under `tshirt-v5.2`; geometry identical, v3 only adds seams) and of every pants size of the same generation and body, all at once. A point counts as clear only when it is outside all of them, and each pants mesh only judges points below its own top edge. Shirt torso vertices up to 20 mm above the highest pants top are pushed **horizontally** (radially) until their inner surface is at least **3 mm** outside. The push magnitude is a field over angle and height, raised to a slope of at most 0.5 around and along the body, so the cloth tilts by at most 27° and never folds. Above the band, the push fades out over push / 0.5 (at most 15 cm) for `tshirt-v5.2`. For `tshirt-v5.3` it fades out smoothly: a smoothstep at least 5 cm tall, and 3 × the push where that is larger (at most 20 cm), so it starts with zero slope and leaves no ledge. Its steepest slope is still at most 0.5. One shirt GLB therefore clears the loosest waistband (XL), and over smaller pants its hem stands off (largest push 53 mm, shirt L neutral over pants XL's seat). Gate, for every shirt × pants pair: no shirt vertex under the pants' outer surface, no shirt/pants interpenetration, and the shirt hem overlaps the waistband by at least 30 mm.
 - **Torso arm weights:** shirt torso vertices more than 6 cm below the axilla carry no upper-arm skin weight. Their arm-joint weight share is scaled by a smoothstep from 1 at 3 cm to 0 at 6 cm below the axilla, and the remaining weights are renormalised. Larger sizes on wider bodies otherwise drag the side seam with the arm (personal XL at walk 20°).
 - **Arm-down correctives:** each size's arm-down corrective is solved with the first body clearance from 3, 4, 2, 5, 6 mm whose screened penetration stays within 2.5 mm.
+- **Clean-up (Sprint 3.6):** every size, on every body, has its degenerate triangles collapsed (edges < 1 mm, triangles < 1 mm², `personal_fit.collapse_degenerate`). Before 3.6, only personal sizes were cleaned, and neutral slivers on the waistband rim stretched 12–18×.
+- **Shoulder correctives (Sprint 3.6):** every body searches `personal_fit.SHOULDER_CANDIDATES_3_6` against its shoulder gates and keeps the first setting that passes.
+- **Hip correctives (Sprint 3.6):** pants sizes carry chained hip keys at 60° and 90° (corrective-morphs.md, "Pants sizes").
 
 On each body the garment is shaped to the body's surface, with these girths and lengths. Where a spec is smaller than the body, the garment is drawn onto the body at the minimum clearance (the pattern deficit is in `_EASE_MM` and `ease_mm`).
 

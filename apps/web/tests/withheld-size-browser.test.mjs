@@ -17,16 +17,16 @@ try {
         const request = isPersonal || sessionStorage.getItem('withholdAll') === '1' ? '/api/size-garment?body=neutral&slot='+url.searchParams.get('slot')+'&fixtures=1' : input;
         const response = await original(request, init); const options = await response.json();
         const all = sessionStorage.getItem('withholdAll') === '1';
-        return Response.json(options.map(option => (all || ['L','XL'].includes(option.size)) ? {size:option.size,status:'withheld'} : {...option, fit:{...option.fit, recommended:option.size === 'S', ...(isPersonal ? {body:'fixture_personal'} : {})}}));
+        return Response.json(options.map(option => (all || ['L','XL'].includes(option.size)) ? {size:option.size,withheld:true} : {...option, fit:{...option.fit, recommended:option.size === 'S', ...(isPersonal ? {body:'fixture_personal'} : {})}}));
       }
       return original(input, init);
     };
   ` });
   await b.send('Emulation.setDeviceMetricsOverride', {width:390,height:844,deviceScaleFactor:1,mobile:false});
   await b.send('Page.navigate', {url:'http://localhost:3100/try-on?fixtures=1'});
-  await b.waitFor('document.querySelector(".try-viewport.ready") && document.querySelector("[aria-label=\\"Top fit\\"] button[aria-label=\\"L\\"]")?.disabled', 'withheld sizes');
-  const state = await b.evaluate(`(() => { const root=document.querySelector('[aria-label="Top fit"]'), l=root.querySelector('button[aria-label="L"]'), x=root.querySelector('button[aria-label="XL"]'), wrap=l.closest('.fit-withheld'); wrap.focus(); return {disabled:l.disabled, aria:l.getAttribute('aria-disabled'), tip:document.getElementById(l.getAttribute('aria-describedby')).textContent, visible:getComputedStyle(wrap.querySelector('[role=tooltip]')).visibility, focus:document.activeElement===wrap, xl:x.disabled, selected:root.querySelector('button[aria-pressed=true]')?.textContent, recommended:!!root.querySelector('[aria-label="S, Recommended"]')}; })()`);
-  assert.deepEqual(state, {disabled:true,aria:'true',tip:"This size isn't ready yet",visible:'visible',focus:true,xl:true,selected:'S',recommended:true});
+  await b.waitFor('document.querySelector(".try-viewport.ready") && document.querySelector("[aria-label=\\"Top fit\\"] button[aria-label=\\"L\\"]")?.getAttribute(\"aria-disabled\") === \"true\"', 'withheld sizes');
+  const state = await b.evaluate(`(() => { const root=document.querySelector('[aria-label="Top fit"]'), l=root.querySelector('button[aria-label="L"]'), x=root.querySelector('button[aria-label="XL"]'), wrap=l.closest('.fit-withheld'); l.focus(); return {disabled:l.disabled, aria:l.getAttribute('aria-disabled'), tip:document.getElementById(l.getAttribute('aria-describedby')).textContent, visible:getComputedStyle(wrap.querySelector('[role=tooltip]')).visibility, focus:document.activeElement===l, xl:x.getAttribute("aria-disabled"), selected:root.querySelector('button[aria-pressed=true]')?.textContent, recommended:!!root.querySelector('[aria-label="S, Recommended"]')}; })()`);
+  assert.deepEqual(state, {disabled:false,aria:'true',tip:"This size isn't ready yet",visible:'visible',focus:true,xl:'true',selected:'S',recommended:true});
   await b.evaluate('document.querySelector("[aria-label=\\"Top fit\\"] button[aria-label=\\"L\\"]").click()');
   assert.equal(await b.evaluate('document.querySelector("[aria-label=\\"Top fit\\"] button[aria-pressed=true]").textContent'), 'S');
   await b.evaluate('document.querySelector("[aria-label=\\"Top fit\\"] button[aria-label=\\"M\\"]").click()');

@@ -1,5 +1,5 @@
 # Size discovery: withheld state
 
-The fitting room and lab accept the existing `/api/size-garment?body=?&slot=?` array entries unchanged. Sprint 3.6 may include `{ "size": "L", "status": "withheld" }` for a size that is not ready. A withheld entry needs no fit map or asset URLs. Available entries retain `size`, `fit`, `glb`, and `sidecar`; an optional `status: "available"` is accepted.
+The size discovery endpoint returns `{ "size": "L", "withheld": true }` for a size held back by the Sprint 3.6 gates. A withheld entry has no fit map or asset URLs; the picker also accepts `{ "size": "L", "status": "withheld" }`. Available entries retain `size`, `fit`, `glb`, and `sidecar`.
 
-Withheld sizes cannot be selected, recommended, or used for an asset fetch. If a saved or recommended size is withheld, the picker selects an available size using the existing priority. Duplicate entries resolve conservatively: withheld wins. Missing sizes retain their existing disabled behavior. The server remains responsible for gate decisions and for refusing direct asset requests when an asset is withheld; this change does not withhold any existing sizes or change the default generation.
+Withheld buttons cannot be selected but remain keyboard-focusable with `aria-disabled` and a tooltip. Duplicate entries resolve conservatively: withheld wins. The server is responsible for gating and refuses direct requests for withheld assets.

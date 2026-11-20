@@ -1,8 +1,9 @@
 import { parseSidecar, type Sidecar } from "./correctives.ts";
+import { DEFAULT_GENERATION, GENERATIONS } from "./generation.ts";
 
-export const DEFAULT_DEMO_VARIANT = "v5.2";
-export const DEFAULT_PANTS_VARIANT = "pants-v2";
-export const pantsUrl = (variant: "pants" | "pants-v2" | "pants-v3") => `/api/demo-garment?variant=${variant}`;
+export const DEFAULT_DEMO_VARIANT = GENERATIONS[DEFAULT_GENERATION].topVariant;
+export const DEFAULT_PANTS_VARIANT = GENERATIONS[DEFAULT_GENERATION].bottomVariant;
+export const pantsUrl = (variant: "pants" | "pants-v2" | "pants-v3" | "pants-v3.1") => `/api/demo-garment?variant=${variant}`;
 export function sidecarUrlForSelection(selection: { kind: string; url: string; variant?: string }): string | null {
   return selection.kind === "demo" && (selection.variant === "v5" || selection.variant === "v5.1" || selection.variant === "v5.2" || selection.variant === "v5.3") ? selection.url : null;
 }

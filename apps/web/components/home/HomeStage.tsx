@@ -3,9 +3,10 @@ import { Component, useCallback, useRef, useState, type ReactNode } from "react"
 import Link from "next/link";
 import { ArrowUpRight } from "@phosphor-icons/react";
 import { TryOnScene } from "../try-on/TryOnScene";
+import { DEFAULT_DEMO_VARIANT, DEFAULT_PANTS_VARIANT } from "../../lib/garment/demoResources";
 const view = { view: "front" as const, id: 0 };
-const top = { url: "/api/demo-garment?variant=v5.2", color: "#d8cdbb", sidecar: null };
-const bottom = { url: "/api/demo-garment?variant=pants-v2", color: "#777a61", sidecar: null };
+const top = { url: `/api/demo-garment?variant=${DEFAULT_DEMO_VARIANT}`, color: "#d8cdbb", sidecar: null };
+const bottom = { url: `/api/demo-garment?variant=${DEFAULT_PANTS_VARIANT}`, color: "#777a61", sidecar: null };
 class PreviewBoundary extends Component<{ children: ReactNode; onError: () => void }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }

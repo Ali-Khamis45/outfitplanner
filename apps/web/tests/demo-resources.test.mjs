@@ -67,13 +67,15 @@ async function verifyV5(selection) {
   assert.ok(Math.abs(weights.corr_L_abd90 - 1) < 1e-6);
   assert.ok(Math.abs(weights.corr_R_abd90 - 1) < 1e-6);
 }
-assert.equal(DEFAULT_DEMO_VARIANT, "v5.2");
+assert.equal(DEFAULT_DEMO_VARIANT, "v5.3");
 await Promise.all([verifyV5(select(DEFAULT_DEMO_VARIANT)), pants(), pants()]);
 assert.equal(calls.filter(url => url.includes("variant=pants")).length, 1);
-assert.equal(calls.filter(url => url.includes("variant=v5.2&sidecar=1")).length, 1);
+assert.equal(calls.filter(url => url.includes("variant=v5.3&sidecar=1")).length, 1);
 assert.equal(await load(sidecarUrlForSelection(select("v2"))), null);
-await verifyV5(select("v5.2"));
-assert.equal(calls.filter(url => url.includes("variant=v5.2&sidecar=1")).length, 2);
+await verifyV5(select("v5.3"));
+assert.equal(calls.filter(url => url.includes("variant=v5.3&sidecar=1")).length, 2);
+await verifyV5(select("v5.2"));  // the previous default, reachable for one sprint
+assert.equal(calls.filter(url => url.includes("variant=v5.2&sidecar=1")).length, 1);
 await verifyV5(select("v5"));
 assert.equal(calls.filter(url => url.includes("variant=v5&sidecar=1")).length, 1);
 assert.equal(calls.filter(url => url.includes("variant=v2")).length, 0);
@@ -112,28 +114,30 @@ assert.ok(pantsMesh.morphTargetInfluences.every(weight => weight === 0));
 // When the optional generated v5 is present, also exercise its real targets and the MHR rig.
 const outputs = new URL("../../../outputs/", import.meta.url);
 const avatarPath = new URL("avatars/mhr-neutral.glb", outputs);
-const shirtPath = new URL("garments/experiments/tshirt-v5.2-mhr-neutral.glb", outputs);
-const sidecarPath = new URL("garments/experiments/tshirt-v5.2-mhr-neutral.correctives.json", outputs);
-if ([avatarPath, shirtPath, sidecarPath].every(existsSync)) {
-  async function readMesh(path) {
-    const bytes = await readFile(path);
-    const scene = await new Promise((resolve, reject) => new GLTFLoader().parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), "", resolve, reject));
-    let result; scene.scene.traverse(node => { if (node instanceof SkinnedMesh) result = node; });
-    assert.ok(result); return result;
-  }
-  const avatar = await readMesh(avatarPath), shirt = await readMesh(shirtPath);
-  const rig = rigFromSkinnedMesh(avatar), rest = captureBindPose(rig.bones);
-  bindGarment(shirt, rig);
-  const file = await readFile(sidecarPath, "utf8");
-  const loadReal = createSidecarLoader(async () => new Response(file));
-  for (let i = 0; i < 2; i++) {
-    if (i) await loadReal(sidecarUrlForSelection(select("v2")));
-    const driver = createCorrectiveDriver(shirt, rig.bones, rest, await loadReal(sidecarUrlForSelection(select("v5.2"))));
-    applyPose(rig.bones, rest, findPose("both-90"));
-    const actual = driver(true);
-    assert.equal(actual.corr_L_abd90.toFixed(2), "1.00");
-    assert.equal(actual.corr_R_abd90.toFixed(2), "1.00");
-  }
-  console.log("Generated v5.2 and neutral MHR rig passed default/re-selection checks");
-} else console.log("Generated v5.2 integration check skipped: optional assets unavailable");
+for (const variant of ["v5.3", "v5.2"]) {
+  const shirtPath = new URL(`garments/experiments/tshirt-${variant}-mhr-neutral.glb`, outputs);
+  const sidecarPath = new URL(`garments/experiments/tshirt-${variant}-mhr-neutral.correctives.json`, outputs);
+  if ([avatarPath, shirtPath, sidecarPath].every(existsSync)) {
+    async function readMesh(path) {
+      const bytes = await readFile(path);
+      const scene = await new Promise((resolve, reject) => new GLTFLoader().parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), "", resolve, reject));
+      let result; scene.scene.traverse(node => { if (node instanceof SkinnedMesh) result = node; });
+      assert.ok(result); return result;
+    }
+    const avatar = await readMesh(avatarPath), shirt = await readMesh(shirtPath);
+    const rig = rigFromSkinnedMesh(avatar), rest = captureBindPose(rig.bones);
+    bindGarment(shirt, rig);
+    const file = await readFile(sidecarPath, "utf8");
+    const loadReal = createSidecarLoader(async () => new Response(file));
+    for (let i = 0; i < 2; i++) {
+      if (i) await loadReal(sidecarUrlForSelection(select("v2")));
+      const driver = createCorrectiveDriver(shirt, rig.bones, rest, await loadReal(sidecarUrlForSelection(select(variant))));
+      applyPose(rig.bones, rest, findPose("both-90"));
+      const actual = driver(true);
+      assert.equal(actual.corr_L_abd90.toFixed(2), "1.00");
+      assert.equal(actual.corr_R_abd90.toFixed(2), "1.00");
+    }
+    console.log(`Generated ${variant} and neutral MHR rig passed default/re-selection checks`);
+  } else console.log(`Generated ${variant} integration check skipped: optional assets unavailable`);
+}
 console.log("Default and re-selected corrective request lifecycle passed");

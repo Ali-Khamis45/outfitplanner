@@ -2,6 +2,7 @@ import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { CATEGORIES, SEASONS, type Wardrobe, type WardrobeItem } from "../wardrobe/schema.ts";
 import { parseFitMap, SIZES, type FitMap } from "../garment/fitMap.ts";
+import { garmentForTemplate, isBottomTemplate, isTopTemplate } from "../garment/generation.ts";
 import { loadWardrobe, serializeWardrobeWrite, writeWardrobe } from "../wardrobe/storage.ts";
 export { loadWardrobe } from "../wardrobe/storage.ts";
 
@@ -56,7 +57,7 @@ export function avatarUrl(wardrobe: Wardrobe, input: unknown) {
   const items = ids.map(id => wardrobe.items.find(item => item.id === id));
   if (items.some(item => !item)) throw new InputError("Unknown item.");
   const top = items.find(i => i?.category === "top"), bottom = items.find(i => i?.category === "bottom");
-  if (!top || !bottom || top.template !== "tshirt-v5.2" || !["pants-v2", "pants-basic-v2"].includes(bottom.template ?? "")) throw new InputError("Choose a supported top and bottom.");
+  if (!top || !bottom || !isTopTemplate(top.template) || !isBottomTemplate(bottom.template)) throw new InputError("Choose a supported top and bottom.");
   const params = new URLSearchParams({ top: top.id, bottom: bottom.id }); if (args.pose) params.set("pose", args.pose as string);
   return { url: `/try-on?${params}` };
 }
@@ -65,8 +66,8 @@ export async function getFit(outputs: string, wardrobe: Wardrobe, input: unknown
   if (!idValid(args.item_id) || (args.body !== "neutral" && args.body !== "personal-scaled")) throw new InputError("Invalid item_id or body.");
   const item: WardrobeItem | undefined = wardrobe.items.find(i => i.id === args.item_id);
   if (!item) throw new InputError("Unknown item.");
-  const garment = item.template === "pants-basic-v2" ? "pants-v2" : item.template, size = item.size.toUpperCase().trim();
-  if (!garment || !["tshirt-v5.2", "pants-v2"].includes(garment) || !SIZES.includes(size as typeof SIZES[number])) return { status: "unknown" };
+  const garment = garmentForTemplate(item.template), size = item.size.toUpperCase().trim();  // sizes of the default generation
+  if (!garment || !SIZES.includes(size as typeof SIZES[number])) return { status: "unknown" };
   try {
     const outputRoot = await realpath(outputs), garments = await realpath(path.join(outputRoot, "garments"));
     if (path.dirname(garments) !== outputRoot) throw new Error("Invalid garments location.");

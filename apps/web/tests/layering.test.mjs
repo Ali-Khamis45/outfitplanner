@@ -36,7 +36,7 @@ if (existsSync(pantsFile)) {
   console.log("Neutral pants binds to the same avatar skeleton as the shirt");
 } else console.log("Neutral pants binding skipped: asset not generated");
 const rest = captureBindPose(rig.bones);
-for (const [shirtVersion, pantsVersion] of [["v5", "v1"], ["v5.1", "v2"], ["v5.2", "v2"]]) {
+for (const [shirtVersion, pantsVersion] of [["v5", "v1"], ["v5.1", "v2"], ["v5.2", "v2"], ["v5.3", "v3"]]) {
   const shirtPath = `../../../outputs/garments/experiments/tshirt-${shirtVersion}-mhr-neutral.glb`;
   const pantsPath = `../../../outputs/garments/pants-basic-${pantsVersion}-mhr-neutral.glb`;
   const shirtFile = new URL(shirtPath, import.meta.url), pantsAsset = new URL(pantsPath, import.meta.url);
@@ -51,7 +51,7 @@ for (const [shirtVersion, pantsVersion] of [["v5", "v1"], ["v5.1", "v2"], ["v5.2
   const requests = [];
   const fetcher = async url => { requests.push(url); return new Response(url.includes("variant=pants") ? pantsJson : shirtJson); };
   const shirtLoader = createSidecarLoader(fetcher), pantsLoader = createSidecarLoader(fetcher);
-  const shirtUrl = `/api/demo-garment?variant=${shirtVersion}`, pantsUrl = `/api/demo-garment?variant=${pantsVersion === "v1" ? "pants" : "pants-v2"}`;
+  const shirtUrl = `/api/demo-garment?variant=${shirtVersion}`, pantsUrl = `/api/demo-garment?variant=${pantsVersion === "v1" ? "pants" : `pants-${pantsVersion}`}`;
   const shirtSidecar = await shirtLoader(shirtUrl);
   const pantsSidecar = await pantsLoader(pantsUrl);
   assert.deepEqual(requests, [`${shirtUrl}&sidecar=1`, `${pantsUrl}&sidecar=1`]);
@@ -74,8 +74,8 @@ for (const [shirtVersion, pantsVersion] of [["v5", "v1"], ["v5.1", "v2"], ["v5.2
     applyPose(rig.bones, rest, tryOnPose("walk"));
     const walking = driveShirt(true);
     assert.equal(walking.corr_L_abd90, 0); assert.equal(walking.corr_R_abd90, 0);
-    if (shirtVersion === "v5.2") {
-      assert.ok(walking.corr_L_add20 > 0.95 && walking.corr_R_add20 > 0.95, `v5.2 adduction correctives engage on walk: ${JSON.stringify(walking)}`);
+    if (shirtVersion === "v5.2" || shirtVersion === "v5.3") {
+      assert.ok(walking.corr_L_add20 > 0.95 && walking.corr_R_add20 > 0.95, `${shirtVersion} adduction correctives engage on walk: ${JSON.stringify(walking)}`);
     }
   }
   console.log(`${shirtVersion} / pants ${pantsVersion} sidecars drive their real targets independently`);

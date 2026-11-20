@@ -15,7 +15,7 @@ export function parseSizeOptions(value: unknown, body: string): SizeOption[] {
     if (!entry || typeof entry !== "object" || !SIZES.includes(entry.size)) continue;
     const size = entry.size as Size;
     // A withheld declaration wins over a duplicate available entry in either order.
-    if (entry.status === "withheld") { sizes.set(size, { size, status: "withheld" }); continue; }
+    if (entry.status === "withheld" || entry.withheld === true) { sizes.set(size, { size, status: "withheld" }); continue; }
     if (sizes.get(size)?.status === "withheld" || (entry.status !== undefined && entry.status !== "available")) continue;
     try {
       const fit = parseFitMap(entry.fit);
@@ -44,7 +44,7 @@ export function regionEstimateNote(region: Region): string | null {
 }
 
 export function isFullyClampedAndTight(fit: FitMap): boolean {
-  const majorRegions = ["tshirt-v5.2", "tshirt-v5.3"].includes(fit.garment) ? ["chest", "waist", "hips"] : ["pants-v2", "pants-v3"].includes(fit.garment) ? ["waist", "hips"] : [];
+  const majorRegions = ["tshirt-v5.2", "tshirt-v5.3"].includes(fit.garment) ? ["chest", "waist", "hips"] : ["pants-v2", "pants-v3", "pants-v3.1"].includes(fit.garment) ? ["waist", "hips"] : [];
   return majorRegions.length > 0 && majorRegions.every(name => fit.regions[name]?.clamped === true && fit.regions[name]?.status === "tight");
 }
 
@@ -54,7 +54,7 @@ export function formatRegion(name: string, region: Region, garment: string): str
     "tshirt-v5.2": { chest: 76, waist: 76, hips: 51, shoulders: 0, length: -40 },
     "pants-v2": { waist: 0, hips: 51, length: -40 },
   };
-  const baseGarment = garment === "tshirt-v5.3" ? "tshirt-v5.2" : garment === "pants-v3" ? "pants-v2" : garment;
+  const baseGarment = garment === "tshirt-v5.3" ? "tshirt-v5.2" : garment === "pants-v3" || garment === "pants-v3.1" ? "pants-v2" : garment;
   const minimum = region.status === "tight" ? minima[baseGarment]?.[name] : undefined;
   const suffix = minimum === undefined ? "" : ` (min ${(minimum / 10).toFixed(1)} cm${name === "length" ? " from target" : ""})`;
   if (name === "length") {

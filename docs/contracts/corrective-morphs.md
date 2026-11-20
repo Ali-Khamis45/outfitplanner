@@ -78,6 +78,17 @@ The T-shirt **v5.2** (`tshirt-v5.2-mhr-neutral.glb`, Sprint 2.2A, version 2 side
 | 6 | `corr_L_add20` | `l_uparm` → `l_lowarm` | `signed_swing_deg`, left abduction axis | [0, −20] | `l_uparm` [0,0,1] −20, also clearing the arm at ±10° about X |
 | 7 | `corr_R_add20` | `r_uparm` → `r_lowarm` | `signed_swing_deg`, right abduction axis | [0, −20] | `r_uparm` [0,0,1] +20, also clearing the arm at ±10° about X |
 
+**Pants sizes (Sprint 3.6)** (`outputs/garments/sizes/pants-v3.1-<size>-<bodyId>.glb`, the default since 2026-11-20; pants-v3 sizes before) and the v3 / v3.1 personal fits, version 2 sidecars, add a 60° hip key before each 90° one. The 90° target then holds only the correction beyond the 60° shape, as `abd120` does beyond `abd90`. The ramps meet at 60°, so the garment takes exactly its solved shape at 60° and at 90°. With the single 90° key, `l-hip-60` showed 56 % of the 90° shape, and the groin crease of the L and XL sizes folded.
+
+| Index | Target | `joint` → `child` | `ramp` | Solved at |
+| --- | --- | --- | --- | --- |
+| 0 | `corr_L_hip60` | `l_upleg` → `l_lowleg` | [20, 60] | `l_upleg` [1,0,0] −60 |
+| 1 | `corr_L_hip90` | `l_upleg` → `l_lowleg` | [60, 90] | `l_upleg` [1,0,0] −90, minus the solved 60° shape |
+| 2 | `corr_L_knee90` | `l_lowleg` → `l_foot` | [0, 90] | `l_lowleg` [1,0,0] +90 |
+| 3–5 | `corr_R_hip60`, `corr_R_hip90`, `corr_R_knee90` | right side, the same | | |
+
+The neutral base pants (v1–v3) and the v5.2 / pants-v2 sizes keep the four targets above, byte for byte.
+
 In version 1 sidecars (v5, pants v1), `swing_deg` has no direction. The hip ramps therefore start at 20°, so hip extension (15°) and abduction (20°), which swing the thigh as much as a small flexion, leave the hip targets at 0. Each target is solved alone. In combined poses (for example `step` = hip 90 + knee 90) the weights simply add, as §4 says.
 
 ## 3. `swing_deg`

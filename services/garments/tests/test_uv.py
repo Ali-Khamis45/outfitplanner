@@ -41,8 +41,8 @@ def uv_glbs() -> list[tuple[Path, str]]:
     found = [(GARMENTS / "experiments" / "tshirt-v5.2-mhr-neutral.glb", "tshirt"), (GARMENTS / "pants-basic-v2-mhr-neutral.glb", "pants")]
     found += [(p, "tshirt") for p in sorted((GARMENTS / "personal").glob("tshirt-v5.2-*.glb"))]
     found += [(p, "pants") for p in sorted((GARMENTS / "personal").glob("pants-basic-v2-*.glb"))]
-    found += [(p, "tshirt") for p in sorted((GARMENTS / "sizes").glob("tshirt-v5.2-*.glb"))]
-    found += [(p, "pants") for p in sorted((GARMENTS / "sizes").glob("pants-v2-*.glb"))]
+    found += [(p, "tshirt") for p in sorted((GARMENTS / "sizes-v5.2").glob("tshirt-v5.2-*.glb"))]
+    found += [(p, "pants") for p in sorted((GARMENTS / "sizes-v5.2").glob("pants-v2-*.glb"))]
     return [(p, kind) for p, kind in found if p.is_file()]
 
 

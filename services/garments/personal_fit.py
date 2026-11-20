@@ -167,6 +167,13 @@ SHOULDER_CANDIDATES = (
     {"anchor_weights": ((90.0, 0.1), (120.0, 1.0)), "iterations": 50},
     {"anchor_weights": ((90.0, 0.05), (120.0, 1.0)), "iterations": 50},
 )
+# Sprint 3.6 (sizes and the v5.3 personal fits): after the Sprint 2.3A candidates, compressible rest edges (rest_edge_scale 0,
+# the pants' Sprint 2.1A membrane setting) let graded shoulder cloth compress instead of folding at +120, and a wider region
+# (0.22-0.29 m) reaches the armpit cloth of larger sizes. The 2.3A candidates come first, so fits they pass are unchanged.
+SHOULDER_CANDIDATES_3_6 = SHOULDER_CANDIDATES + (
+    {"rest_edge_scale": 0.0},
+    {"rest_edge_scale": 0.0, "inner_radius_m": 0.22, "outer_radius_m": 0.29, "anchor_weights": ((90.0, 0.1), (120.0, 1.0))},
+)
 
 
 def body_gates(original_glb: Path, avatar: Any) -> dict[str, Any]:
@@ -210,7 +217,7 @@ def _passes(metrics: dict[str, Any], gates: dict[str, Any]) -> dict[str, bool]:
     }
 
 
-def fit_shoulders(arrays: dict[str, Any], outer: Any, avatar: Any, gates: dict[str, Any]) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+def fit_shoulders(arrays: dict[str, Any], outer: Any, avatar: Any, gates: dict[str, Any], candidates: tuple[dict[str, Any], ...] = SHOULDER_CANDIDATES) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
     """Solve the four shoulder targets with each candidate in turn; keep the first that passes the body's gates (else
     the one with the fewest failed gates, then the lowest +90 max stretch)."""
     import correctives
@@ -218,7 +225,7 @@ def fit_shoulders(arrays: dict[str, Any], outer: Any, avatar: Any, gates: dict[s
 
     sidecar = {"version": 2, "correctives": correctives.shoulder_signed_entries(avatar.skeleton)}
     tried, best = [], None
-    for index, overrides in enumerate(SHOULDER_CANDIDATES):
+    for index, overrides in enumerate(candidates):
         rules = replace(correctives.CorrectiveRules(), **overrides)
         morphs, solve_report = correctives.solve_targets(arrays, outer.vertices, outer.faces, avatar.skeleton, avatar, rules)
         asset = SkinnedAsset(avatar.skeleton, np.asarray(arrays["position"], dtype=np.float32).astype(np.float64), np.asarray(arrays["faces"]).reshape(-1, 3),

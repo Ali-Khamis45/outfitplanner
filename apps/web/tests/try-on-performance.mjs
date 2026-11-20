@@ -59,13 +59,13 @@ try {
     const data = (await send("Runtime.evaluate", { expression: "[window.__tryOnAvatarFrame ?? null, window.__tryOnOutfitFrame ?? null]", returnByValue: true })).result.value;
     [avatarFrame, outfitFrame] = data ?? [];
     const finished = [...requests.values()].filter(item => item.method === "GET" && item.bytes !== null).map(item => item.url);
-    allAssets = ["/api/demo-avatar", "variant=v5.2", "variant=pants-v2"].every(part => finished.some(item => item.includes(part) && !item.includes("sidecar=1")));
+    allAssets = ["/api/demo-avatar", "variant=v5.3", "variant=pants-v3.1"].every(part => finished.some(item => item.includes(part) && !item.includes("sidecar=1")));
     if (avatarFrame != null && outfitFrame != null && allAssets) break;
     await new Promise(resolve => setTimeout(resolve, 250));
   }
   assert.ok(avatarFrame != null, "a visible avatar draw was not observed"); assert.ok(outfitFrame != null, "all three visible meshes were not observed"); assert.ok(allAssets, "all three GLBs must complete");
   await new Promise(resolve => setTimeout(resolve, 1000));
-  const timings = (await send("Runtime.evaluate", { expression: `performance.getEntriesByType('resource').filter(e => ['/api/demo-avatar','variant=v5.2','variant=pants-v2'].some(part => e.name.includes(part)) && !e.name.includes('sidecar=1')).map(e => ({name:e.name,start:Math.round(e.startTime),end:Math.round(e.responseEnd)}))`, returnByValue: true })).result.value;
+  const timings = (await send("Runtime.evaluate", { expression: `performance.getEntriesByType('resource').filter(e => ['/api/demo-avatar','variant=v5.3','variant=pants-v3.1'].some(part => e.name.includes(part)) && !e.name.includes('sidecar=1')).map(e => ({name:e.name,start:Math.round(e.startTime),end:Math.round(e.responseEnd)}))`, returnByValue: true })).result.value;
   const message = (await send("Runtime.evaluate", { expression: "document.querySelector('.try-message')?.textContent ?? null", returnByValue: true })).result.value;
   assert.equal(message, null, `page reported a garment error: ${message}`);
   const completed = [...requests.values()].filter(item => item.bytes !== null && item.url.startsWith(new URL(url).origin));

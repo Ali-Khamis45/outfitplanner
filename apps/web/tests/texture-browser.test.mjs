@@ -41,7 +41,7 @@ try {
   }
   await send("Page.enable"); await send("Runtime.enable");
   await send("Emulation.setDeviceMetricsOverride", { width: 1400, height: 1000, deviceScaleFactor: 1, mobile: false });
-  await send("Page.navigate", { url: `${process.env.TRY_ON_URL ?? "http://localhost:3000/try-on"}?texture-fixture=1${process.env.TEST_CANDIDATE === "1" ? "&gen=v5.3" : ""}` });
+  await send("Page.navigate", { url: `${process.env.TRY_ON_URL ?? "http://localhost:3000/try-on"}?texture-fixture=1${process.env.TEST_LEGACY === "1" ? "&gen=v5.2" : ""}` });
   await waitFor("!!document.querySelector('[aria-label=\"Top: Original\"]') && !document.body.innerText.includes('Preparing your fitting room')", "fixture scene");
   assert.equal(await evaluate("document.querySelector('[aria-label=\"Top: Original\"]').getAttribute('aria-pressed')"), "true");
   async function sampleFrame(points = [[397,270],[395,255],[395,290],[380,290]]) {
@@ -53,16 +53,16 @@ try {
   let pixels;
   for (let i = 0; i < 40; i++) { pixels = await sampleFrame(); if (red(pixels[0])) break; await new Promise(resolve => setTimeout(resolve, 250)); }
   assert.ok(red(pixels[0]), `front chest logo should render red, got ${pixels[0]}`);
-  if (process.env.TEST_CANDIDATE !== "1") assert.ok(light(pixels[1]) && red(pixels[2]) && light(pixels[3]), `logo F must be upright: ${JSON.stringify(pixels)}`);
+  if (process.env.TEST_LEGACY === "1") assert.ok(light(pixels[1]) && red(pixels[2]) && light(pixels[3]), `logo F must be upright: ${JSON.stringify(pixels)}`);
   const blue = ([r,g,b]) => b > r * 1.25 && b > g * 1.1;
   const hem = await sampleFrame([[340,380], [340,410], [340,435]]);
-  if (process.env.TEST_CANDIDATE !== "1") assert.ok(blue(hem[0]) && light(hem[1]) && blue(hem[2]), `shirt hem stripes should remain spaced: ${JSON.stringify(hem)}`);
+  if (process.env.TEST_LEGACY === "1") assert.ok(blue(hem[0]) && light(hem[1]) && blue(hem[2]), `shirt hem stripes should remain spaced: ${JSON.stringify(hem)}`);
   await evaluate("Array.from(document.querySelectorAll('.try-camera button')).find(b => b.textContent === 'Back').click()");
   await new Promise(resolve => setTimeout(resolve, 1500));
   const back = await sampleFrame(Array.from({ length: 21 * 23 }, (_, i) => [300 + (i % 21) * 8, 220 + Math.floor(i / 21) * 10]));
   assert.ok(back.every(pixel => !red(pixel)), "back of shirt must not contain the red logo");
   const seat = await sampleFrame([[340,460], [340,470], [340,490], [340,500], [380,480], [380,500]]);
-  if (process.env.TEST_CANDIDATE !== "1") assert.ok(seat.filter(blue).length >= 4 && seat.filter(light).length >= 2, `pants seat should be striped without a blank patch: ${JSON.stringify(seat)}`);
+  if (process.env.TEST_LEGACY === "1") assert.ok(seat.filter(blue).length >= 4 && seat.filter(light).length >= 2, `pants seat should be striped without a blank patch: ${JSON.stringify(seat)}`);
   await evaluate("Array.from(document.querySelectorAll('.try-camera button')).find(b => b.textContent === 'Front').click()");
   await new Promise(resolve => setTimeout(resolve, 1500));
   await evaluate("document.querySelector('[aria-label=\"Top: Ocean\"]').click()");
@@ -72,7 +72,7 @@ try {
   await evaluate("document.querySelector('[aria-label=\"Top: Original\"]').click()");
   for (let i = 0; i < 40; i++) { pixels = await sampleFrame(); if (red(pixels[0])) break; await new Promise(resolve => setTimeout(resolve, 250)); }
   assert.ok(red(pixels[0]), "Original restores the texture");
-  console.log(process.env.TEST_CANDIDATE === "1" ? "Candidate front logo, clean back, swatch and Original restore passed" : "Upright front logo, clean back, striped seat and hem, swatch and Original restore passed");
+  console.log(process.env.TEST_LEGACY === "1" ? "v5.2: upright front logo, clean back, striped seat and hem, swatch and Original restore passed" : "v5.3: front logo, clean back, swatch and Original restore passed");
 } finally {
   chrome.kill();
   await new Promise(resolve => { if (chrome.exitCode !== null) resolve(); else { chrome.once("exit", resolve); setTimeout(resolve, 2000); } });

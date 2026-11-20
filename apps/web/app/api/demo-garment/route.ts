@@ -16,6 +16,7 @@ const VARIANTS: Record<string, string> = {
   "v5.2": "experiments/tshirt-v5.2-mhr-neutral.glb",
   "v5.3": "experiments/tshirt-v5.3-mhr-neutral.glb",
   "pants-v3": "pants-basic-v3-mhr-neutral.glb",
+  "pants-v3.1": "pants-basic-v3.1-mhr-neutral.glb",
   pants: "pants-basic-v1-mhr-neutral.glb",
   "pants-v2": "pants-basic-v2-mhr-neutral.glb",
 };
@@ -41,7 +42,7 @@ export async function GET(request: Request) {
     return new Response(new Uint8Array(bytes), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
   } catch (error) {
     const missing = (error as NodeJS.ErrnoException).code === "ENOENT";
-    if (!missing || (!sidecar && variant !== "pants" && variant !== "pants-v2")) console.error("Unable to read the local demo garment:", error);
-    return Response.json({ error: missing ? (variant === "pants" || variant === "pants-v2" ? "Pants not generated yet." : "Demo garment not found.") : "Unable to prepare the demo garment." }, { status: missing ? 404 : 500 });
+    if (!missing || (!sidecar && !variant.startsWith("pants"))) console.error("Unable to read the local demo garment:", error);
+    return Response.json({ error: missing ? (variant.startsWith("pants") ? "Pants not generated yet." : "Demo garment not found.") : "Unable to prepare the demo garment." }, { status: missing ? 404 : 500 });
   }
 }

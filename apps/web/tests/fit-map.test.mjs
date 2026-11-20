@@ -19,6 +19,7 @@ const fit = parseFitMap({ version: 1, garment: "tshirt", size: "M", body: "mhr-n
 const available = { size: "M", fit, glb: "/shirt.glb", sidecar: "/shirt.json" };
 const withheld = { size: "L", status: "withheld" };
 assert.deepEqual(parseSizeOptions([withheld, available], "mhr-neutral"), [available, withheld]);
+assert.deepEqual(parseSizeOptions([{ size: "L", withheld: true }], "mhr-neutral"), [withheld]);
 assert.deepEqual(parseSizeOptions([{ ...available, status: "available" }, { size: "M", status: "withheld" }, available], "mhr-neutral"), [{ size: "M", status: "withheld" }], "withheld wins conflicting duplicate entries");
 assert.deepEqual(parseSizeOptions([{ size: "XL", status: "withheld" }, { ...available, status: "unknown" }], "mhr-neutral"), [{ size: "XL", status: "withheld" }]);
 assert.deepEqual(parseSizeOptions([available], "other-body"), []);
