@@ -27,6 +27,13 @@ try {
   await b.waitFor('document.querySelector(".try-viewport.ready") && document.querySelector("[aria-label=\\"Top fit\\"] button[aria-label=\\"L\\"]")?.getAttribute(\"aria-disabled\") === \"true\"', 'withheld sizes');
   const state = await b.evaluate(`(() => { const root=document.querySelector('[aria-label="Top fit"]'), l=root.querySelector('button[aria-label="L"]'), x=root.querySelector('button[aria-label="XL"]'), wrap=l.closest('.fit-withheld'); l.focus(); return {disabled:l.disabled, aria:l.getAttribute('aria-disabled'), tip:document.getElementById(l.getAttribute('aria-describedby')).textContent, visible:getComputedStyle(wrap.querySelector('[role=tooltip]')).visibility, focus:document.activeElement===l, xl:x.getAttribute("aria-disabled"), selected:root.querySelector('button[aria-pressed=true]')?.textContent, recommended:!!root.querySelector('[aria-label="S, Recommended"]')}; })()`);
   assert.deepEqual(state, {disabled:false,aria:'true',tip:"This size isn't ready yet",visible:'visible',focus:true,xl:'true',selected:'S',recommended:true});
+  const xlDescriptions = await b.evaluate(`Array.from(document.querySelectorAll('button[aria-label="XL"][aria-disabled="true"]')).map(button => ({description:document.getElementById(button.getAttribute('aria-describedby'))?.textContent, hidden:button.disabled}))`);
+  assert.ok(xlDescriptions.length >= 2, "both size pickers expose the withheld XL");
+  assert.ok(xlDescriptions.every(item => item.description === "This size isn't ready yet" && !item.hidden), "every withheld XL has a focusable button and an accessible description");
+  await b.send("Accessibility.enable");
+  const ax = await b.send("Accessibility.getFullAXTree");
+  const xlNodes = ax.nodes.filter(node => node.role?.value === "button" && node.name?.value === "XL" && !node.ignored);
+  assert.ok(xlNodes.length > 0 && xlNodes.every(node => node.description?.value === "This size isn't ready yet"), "visible XL controls expose the description in the accessibility tree");
   await b.evaluate('document.querySelector("[aria-label=\\"Top fit\\"] button[aria-label=\\"L\\"]").click()');
   assert.equal(await b.evaluate('document.querySelector("[aria-label=\\"Top fit\\"] button[aria-pressed=true]").textContent'), 'S');
   await b.evaluate('document.querySelector("[aria-label=\\"Top fit\\"] button[aria-label=\\"M\\"]").click()');

@@ -56,6 +56,7 @@ try {
   assert.ok(!JSON.stringify(scripted.intentRequests).includes("eval-top"), "intent stage never receives wardrobe IDs");
   assert.ok(scripted.allRequests.every(r=>r.keep_alive==="30m" && r.reasoning_effort==="none"));
   const body = scripted.requests[0];
+  assert.equal(body.temperature, 0.3); assert.equal(scripted.intentRequests[0].temperature, 0);
   assert.equal(body.keep_alive, "30m");
   assert.equal(scripted.warmups[0].keep_alive, "30m");
   assert.equal(scripted.warmups[0].think, false);
@@ -95,6 +96,7 @@ try {
     assert.ok(server.requests.every(body => body.reasoning_effort === "none"));
     assert.ok(!JSON.stringify(server.requests).includes("PRIVATE_REASONING_SENTINEL")); assert.ok(!JSON.stringify(retry.body).includes("PRIVATE_REASONING_SENTINEL"));
     assert.equal(retry.body.evaluation.validation_attempts, 2);
+    if (!["malformed", "tool-call"].includes(invalid)) assert.equal(retry.body.evaluation.reason_samples.length, 2, "review exports rejected and accepted reasons only");
   }
   const failedModel = await model(() => completion('{"top_id":"invented"}'));
   const failed = await request(handlerFor(failedModel), { body: message });
@@ -105,10 +107,13 @@ try {
   const arabicModel = await model(body => completion(JSON.stringify(look(body, { language: "arz", occasion: "كاجوال", reason: "ده طقم مريح ومناسب ليك." }))));
   assert.equal((await request(handlerFor(arabicModel), { body: { ...message, messages: [{ role: "user", content: "اختارلي طقم كاجوال من دولابي." }] } })).body.status, "ok");
   assert.match(arabicModel.requests[0].messages[0].content, /Egyptian Arabic/);
+  assert.match(arabicModel.requests[0].messages[0].content, /التيشيرت الكحلي/);
   assert.doesNotMatch(arabicModel.requests[0].messages[0].content, /Latin script only/);
   const weatherModel = await model(body => completion(JSON.stringify(look(body, { weather_note: "Weather forecast is unavailable right now." }))));
   const weatherResult = await request(handlerFor(weatherModel, { weather: async () => { throw new Error("provider failed"); } }), { body: message });
   assert.equal(weatherResult.body.status, "ok"); assert.equal(weatherResult.body.calls[1].ok, false);
+  assert.match(result.body.structured.weather_note, /Cairo/, "the forecast identifies its actual location");
+  assert.equal(result.body.evaluation.reason_samples.length, 1);
 
   const intent = requestIntent("casual", date), casual = wardrobe.items.filter(item => item.formality <= 2);
   const allRecent = casual.map(item => ({ ...item, last_worn: date }));

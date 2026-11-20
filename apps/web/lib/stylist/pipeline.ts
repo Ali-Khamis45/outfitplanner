@@ -15,6 +15,7 @@ export function requestIntent(message: string, today: string, referenceCity?: st
   else if (/interview|business|presentation|client|professional|انترفيو|بريزنتيشن|عميل/.test(text)) { occasion = "business"; range = [4, 5]; }
   else if (/gym|sport|workout|جيم|رياضي/.test(text)) { occasion = "sport"; range = [1, 1]; }
   else if (/family|عائلي/.test(text)) { occasion = "outing"; range = [2, 3]; }
+  else if (/(?:dinner|عشا)/.test(text) && /friends|صحابي|اصحابي/.test(text) && !/formal|dressy|smart|رسمي|شيك/.test(text)) { occasion = "casual"; range = [1, 2]; }
   else if (/dinner|smart|عشا|شيك بس/.test(text)) { occasion = "outing"; range = [3, 4]; }
   else if (/office|work\b|شغل|مكتب/.test(text)) { occasion = "work"; range = [3, 4]; }
   else if (/travel|مسافر/.test(text)) { occasion = "travel"; range = [1, 2]; }

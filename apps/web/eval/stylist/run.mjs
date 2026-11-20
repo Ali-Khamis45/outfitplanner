@@ -14,7 +14,7 @@ import { BASE_URL, requireFreePort, startServer } from "./server.mjs";
 const directory = path.dirname(fileURLToPath(import.meta.url)), app = path.resolve(directory, "../..");
 const args = process.argv.slice(2);
 if (args.includes("--help")) {
-  console.log("Usage: node apps/web/eval/stylist/run.mjs [--mock]\nRuns all 48 scenarios through an owned development server on port 3100.\nReal mode uses apps/web/.env.local and live weather; --mock uses scripted local model + weather.\nReports: apps/web/eval/stylist/results/<run-id>/report.{json,md}\nExit: 0 all pass; 1 scenario checks fail; 2 harness/infrastructure error; 130 interrupted.");
+  console.log("Usage: node apps/web/eval/stylist/run.mjs [--mock]\nRuns all 50 scenarios through an owned development server on port 3100.\nReal mode uses apps/web/.env.local and live weather; --mock uses scripted local model + weather.\nReports: apps/web/eval/stylist/results/<run-id>/report.{json,md}; reasons for review: reasons.jsonl (ignored).\nExit: 0 all pass; 1 scenario checks fail; 2 harness/infrastructure error; 130 interrupted.");
 } else {
   if (args.some(arg => arg !== "--mock") || new Set(args).size !== args.length) { console.error("Unknown or duplicate argument. Use --help."); process.exitCode = 2; }
   else await main(args.includes("--mock"));
@@ -30,7 +30,8 @@ async function main(mock) {
     await requireFreePort(); // Never connect to or stop an existing server.
     const legacyText = await readFile(path.join(directory, "scenarios.json"), "utf8"), hardText = await readFile(path.join(directory, "hard-scenarios.json"), "utf8");
     const conversationText = await readFile(path.join(directory, "conversation-scenarios.json"), "utf8");
-    const scenarioText = legacyText + hardText + conversationText, scenarios = parseScenarios([...JSON.parse(legacyText), ...JSON.parse(hardText), ...JSON.parse(conversationText)]);
+    const socialText = await readFile(path.join(directory, "social-scenarios.json"), "utf8");
+    const scenarioText = legacyText + hardText + conversationText + socialText, scenarios = parseScenarios([...JSON.parse(legacyText), ...JSON.parse(hardText), ...JSON.parse(conversationText), ...JSON.parse(socialText)]);
     // Match Next's .env.local loading and precedence, independent of CLI cwd.
     nextEnv.loadEnvConfig(app, true);
     const startedAt = new Date().toISOString(), runId = startedAt.replace(/[:.]/g, "-") + "-" + randomUUID().slice(0, 8);
@@ -79,6 +80,10 @@ async function main(mock) {
       const report = makeReport({ ...metadata, completed: results.length === scenarios.length, finished_at: new Date().toISOString() }, results);
       await writeFile(path.join(reportDirectory, "report.json"), JSON.stringify(report, null, 2) + "\n");
       await writeFile(path.join(reportDirectory, "report.md"), markdownReport(report));
+      // Only synthetic evaluation outputs: each parsed model reason, including
+      // rejected attempts, is kept separately from the status-only reports.
+      const review = results.flatMap(({ scenario: s, response }) => (response?.evaluation?.reason_samples ?? []).map(sample => ({ scenario_id: s.id, language: s.language, attempt: sample.attempt, reason: sample.reason, rating: null })));
+      await writeFile(path.join(reportDirectory, "reasons.jsonl"), review.map(row => JSON.stringify(row)).join("\n") + (review.length ? "\n" : ""), { mode: 0o600 });
     }
     const report = makeReport(metadata, results);
     console.log(`Intent all fields ${report.summary.intent_all_fields_passed}/${scenarios.length}.`);

@@ -38,6 +38,21 @@ try {
   assert.equal((await request("get_wardrobe", { filter: { bogus: true } })).code, 400);
   assert.equal((await request("get_weather", { date: "2026-11-14" })).body.temperature_max_c, 25);
   await request("get_weather", { date: "2026-11-14", city: "CAIRO" }); assert.equal(calls, 2); clock += 3600001; await request("get_weather", { date: "2026-11-14" }); assert.equal(calls, 4);
+  const lookups = [];
+  const fallbackFetch = async url => {
+    const parsed = new URL(url);
+    if (parsed.hostname.startsWith("geocoding")) {
+      const name = parsed.searchParams.get("name"); lookups.push(name);
+      return { ok: true, json: async () => ({ results: name === "Cairo" || name === "Alexandria" ? [{ name, latitude: 30, longitude: 31 }] : [] }) };
+    }
+    return { ok: true, json: async () => ({ daily: { time: ["2026-11-14"], temperature_2m_min: [15], temperature_2m_max: [25], precipitation_probability_max: [20], wind_speed_10m_max: [12], weather_code: [0] } }) };
+  };
+  const fallbackWeather = createWeather(fallbackFetch, () => clock, "Alexandria");
+  const zamalek = await fallbackWeather({ date: "2026-11-14", city: "الزمالك" });
+  assert.equal(zamalek.city, "Cairo"); assert.equal(zamalek.fallback_from, "الزمالك");
+  const other = await fallbackWeather({ date: "2026-11-14", city: "Unknown Place" });
+  assert.equal(other.city, "Alexandria"); assert.equal(other.fallback_from, "Unknown Place");
+  assert.deepEqual(lookups, ["الزمالك", "Cairo", "Unknown Place", "Alexandria"]);
   await mkdir(path.join(root, "garments/sizes"), { recursive: true });
   for (const [size, recommended] of [["M", false], ["L", true]]) await writeFile(path.join(root, `garments/sizes/tshirt-v5.3-${size}-neutral.fit.json`), JSON.stringify({ version: 1, garment: "tshirt-v5.3", size, body: "neutral", regions: { chest: { status: "good", ease_mm: 20 } }, recommended }));
   result = await request("get_fit", { item_id: "example-1", body: "neutral" }); assert.equal(result.body.recommended_size, "L"); assert.equal(result.body.regions.chest.status, "good");

@@ -7,7 +7,7 @@ node apps/web/eval/stylist/run.mjs --mock
 node apps/web/eval/stylist/run.mjs
 ```
 
-Both commands run **all 40 scenarios through the real Next `/api/stylist/chat` route** on a server owned by the harness at `127.0.0.1:3100`. Port 3100 must be free. The harness refuses to borrow or stop an existing server and never connects to port 3000. It uses `.next-sprint-6d-eval` and a disposable synthetic wardrobe, not your personal wardrobe. Run sequentially; the shared port prevents overlapping runs. On Windows, the shell must be able to stop its own child process tree.
+Both commands run **all 50 scenarios through the real Next `/api/stylist/chat` route** on a server owned by the harness at `127.0.0.1:3100`. Port 3100 must be free. The harness refuses to borrow or stop an existing server and never connects to port 3000. It uses `.next-sprint-6d-eval` and a disposable synthetic wardrobe, not your personal wardrobe. Run sequentially; the shared port prevents overlapping runs. On Windows, the shell must be able to stop its own child process tree.
 
 Normal mode loads `apps/web/.env.local` using Next's environment loader (existing environment variables take precedence). Start your local inference service separately and configure:
 
@@ -125,3 +125,11 @@ All 40 scenarios now have explicit intent_labels added before inference. The mai
 Formality and warmth checks deliberately reuse the production filter in v2.1 and therefore measure enforcement, not model reasoning. They are conditional on the model's intent and are no longer comparable as independent quality scores to the previous 35/40. Date and reply-language end-to-end checks still use labelled expectations. Reports preserve old checks, the shared guarantees, intent accuracy, first-try results, per-stage attempts and total retries. Harness exit 1 also covers incorrect intent fields. The existing first-try quality metric now requires correct first intent plus a valid first choice; first-try validation counts schema acceptance only.
 
 No messages or fixture wardrobe data were changed when adding labels. The raw scenario-file hash changes because labels are now part of the files. The two old strict-formality failures on gap fixtures remain expected. Reports contain only status/counts; extracted intent values and model text stay out of persisted reports.
+
+## Reason review and location fallback
+
+The suite includes Arabic and English casual dinners with friends in `social-scenarios.json`. Its synthetic casual-only wardrobe checks that a suitable dinner does not receive a formality gap note.
+
+Each run writes `reasons.jsonl` under its ignored `results/<run-id>/` directory. Each line contains the synthetic scenario ID, language, choice attempt, generated reason and a `rating` initially set to `null`; rejected parsed reasons are included as well as accepted ones. Ali can add ratings to this local file. The regular JSON and Markdown reports remain status-only. Model reasoning is never exported. Because this file contains generated prose, keep it out of Git.
+
+When a requested place cannot be geocoded, weather lookup tries the known parent city for Zamalek, otherwise `STYLIST_DEFAULT_CITY` if set, defaulting to Cairo. The reply labels the city actually used. A network or forecast error remains an error rather than being presented as a successful fallback.

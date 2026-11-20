@@ -1,0 +1,26 @@
+[
+  {
+    "id": "social-dinner-ar",
+    "language": "arz",
+    "message": "عندي عشا مع صحابي بكرة بالليل في الزمالك",
+    "reference_date": "2026-11-19",
+    "date": "2026-11-20",
+    "city": "الزمالك",
+    "fixture": "gap",
+    "forecast": { "date": "2026-11-20", "city": "الزمالك", "temperature_min_c": 18, "temperature_max_c": 25, "precipitation_probability_percent": 0, "wind_max_kmh": 12, "condition": "Clear" },
+    "expect": { "must_call_get_wardrobe": true, "must_call_get_weather": true, "recommended_items_exist": true, "categories": { "top": "top", "bottom": "bottom" }, "occasion": "casual", "formality_range": [1, 2], "not_worn_days": null },
+    "intent_labels": { "intent_kind": "recommend", "occasion_type": "casual", "formality_min": 1, "formality_max": 2, "date": "2026-11-20", "indoor_outdoor": "unknown", "language": "arz" }
+  },
+  {
+    "id": "social-dinner-en",
+    "language": "en",
+    "message": "I have dinner with friends tomorrow night in Zamalek.",
+    "reference_date": "2026-11-19",
+    "date": "2026-11-20",
+    "city": "Zamalek",
+    "fixture": "gap",
+    "forecast": { "date": "2026-11-20", "city": "Zamalek", "temperature_min_c": 18, "temperature_max_c": 25, "precipitation_probability_percent": 0, "wind_max_kmh": 12, "condition": "Clear" },
+    "expect": { "must_call_get_wardrobe": true, "must_call_get_weather": true, "recommended_items_exist": true, "categories": { "top": "top", "bottom": "bottom" }, "occasion": "casual", "formality_range": [1, 2], "not_worn_days": null },
+    "intent_labels": { "intent_kind": "recommend", "occasion_type": "casual", "formality_min": 1, "formality_max": 2, "date": "2026-11-20", "indoor_outdoor": "unknown", "language": "en" }
+  }
+]

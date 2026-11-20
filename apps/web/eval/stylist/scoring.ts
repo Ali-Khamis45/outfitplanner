@@ -13,7 +13,7 @@ export type Scenario = { id: string; language: "en" | "arz"; message: string; da
 export type Check = { id: string; status: "PASS" | "FAIL" | "N/A"; detail: string };
 export type Score = { expected_kind?: string; id: string; language: string; status: "PASS" | "FAIL"; checks: Check[]; passed_checks: number; applicable_checks: number; score: number; tool_calls: number; valid_tool_calls: number; invalid_tool_calls: number; latency_ms: number; http_status: number; response_status: string; tool_failures: number; validation_attempts?: number; context_reads?: number; quality_checks?: Check[]; intent_checks?: Check[]; first_intent_checks?: Check[]; intent_attempts?: number; quality_status?: "PASS" | "FAIL"; first_try_pass?: boolean; first_try_validation_pass?: boolean; error?: string };
 export function parseScenarios(value: unknown): Scenario[] {
-  if (!Array.isArray(value) || ![30, 40, 48].includes(value.length)) throw new Error("The evaluation suite must contain 30 legacy, 40 combined, or 48 with conversations.");
+  if (!Array.isArray(value) || ![30, 40, 48, 50].includes(value.length)) throw new Error("The evaluation suite must contain 30 legacy, 40 combined, 48 with conversations, or 50 with social dinners.");
   const ids = new Set<string>();
   for (const s of value) {
     if (!record(s) || typeof s.id !== "string" || !/^[a-z0-9-]+$/.test(s.id) || ids.has(s.id) || !["en", "arz"].includes(String(s.language))

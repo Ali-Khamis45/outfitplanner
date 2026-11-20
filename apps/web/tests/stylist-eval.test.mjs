@@ -75,10 +75,10 @@ for (const hidden of ["PRIVATE_ERROR", "PRIVATE_PROMPT", "PRIVATE_REPLY", "PRIVA
 const root = await mkdtemp(path.join(os.tmpdir(), "stylist-eval-test-")), servers = [];
 try {
   await mkdir(path.join(root, "wardrobe"));
-  const allScenarios = parseScenarios([...scenarios, ...JSON.parse(await readFile(path.join(app, "eval/stylist/hard-scenarios.json"), "utf8"))]);
+  const allScenarios = parseScenarios([...scenarios, ...JSON.parse(await readFile(path.join(app, "eval/stylist/hard-scenarios.json"), "utf8")), ...JSON.parse(await readFile(path.join(app, "eval/stylist/conversation-scenarios.json"), "utf8")), ...JSON.parse(await readFile(path.join(app, "eval/stylist/social-scenarios.json"), "utf8"))]);
   const model = await startEvaluationModel(allScenarios); servers.push(model);
   const handler = createChatHandler({ outputs: root, environment: "development", evaluation: true, weather: evaluationWeather, settings: () => ({ model: "eval-fixture", baseUrl: model.baseUrl }) });
-  for (const s of allScenarios) {
+  for (const s of allScenarios.filter(s => !s.id.startsWith("conversation-"))) {
     const fixture = scenarioWardrobe(s); await writeFile(path.join(root, "wardrobe/wardrobe.json"), JSON.stringify(fixture));
     const result = await request(handler, { body: { messages: [{ role: "user", content: s.message }], context: { date: s.reference_date ?? s.date, city: s.city, ...(s.forecast ? { forecast: s.forecast } : {}) } } });
     const evaluated = scoreScenario(s, fixture, result.body, result.code, 0);
@@ -95,10 +95,11 @@ try {
     assert.equal(scoreScenario(s, fixture, altered, 200, 0).quality_checks.find(c=>c.id==="date_handled").status,"FAIL");
     altered.structured.reason = s.language === "en" ? "\u062f\u0647 \u0637\u0642\u0645." : "English only.";
     assert.equal(scoreScenario(s, fixture, altered, 200, 0).quality_checks.find(c=>c.id==="reply_language").status,"FAIL");
-    if(s.fixture === "gap") {
+    if(s.fixture === "gap" && !s.id.startsWith("social-")) {
       altered.structured.gap_note=null;
       assert.equal(scoreScenario(s, fixture, altered, 200, 0).quality_checks.find(c=>c.id==="gap_note").status,"FAIL");
     }
+    if (s.id.startsWith("social-")) assert.equal(result.body.structured.gap_note, null, "casual dinner fits the casual fixture without a gap");
     if(s.fixture === "cold") {
       altered.structured.top_id="eval-top-4-fresh"; altered.structured.outer_id=null;
       assert.equal(scoreScenario(s, fixture, altered, 200, 0).quality_checks.find(c=>c.id==="warmth_vs_forecast").status,"FAIL");
