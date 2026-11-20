@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, unlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { GET } from "../app/api/size-garment/route.ts";
@@ -67,6 +67,23 @@ try {
   assert.equal((await request({ body: "neutral", slot: "top", fixtures: "1", size: "M", asset: "glb" })).status, 200);
   assert.equal((await request({ body: "personal-scaled", slot: "top", fixtures: "1" })).status, 404);
   assert.equal((await request({ body: "personal-scaled", slot: "top" })).status, 307);
+  const personalStem = "tshirt-v5.3-M-personal-scaled";
+  const personalGlb = path.join(sizes, `${personalStem}.glb`);
+  await writeFile(personalGlb, bytes);
+  await writeFile(path.join(sizes, `${personalStem}.correctives.json`), "{}");
+  await writeFile(path.join(sizes, `${personalStem}.fit.json`), JSON.stringify({ version: 1, garment: "tshirt-v5.3", size: "M", body: "personal-scaled", regions: { chest: { ease_mm: 62, status: "good" } }, recommended: true }));
+  const cacheDirectory = path.join(web, ".asset-cache");
+  const beforePersonal = (await readdir(cacheDirectory)).sort();
+  const personalRequest = async () => {
+    const req = { socket: { remoteAddress: "127.0.0.1" }, headers: { host: "localhost:3100", "accept-encoding": "gzip" }, method: "GET", query: { body: "personal-scaled", slot: "top", size: "M", asset: "glb" } };
+    const res = { code: 0, headers: {}, setHeader(k, v) { this.headers[k] = v; }, status(code) { this.code = code; return this; }, end() { return this; }, send() { return this; }, json() { return this; } };
+    await personalHandler(req, res); return res;
+  };
+  assert.equal((await personalRequest()).code, 200);
+  assert.deepEqual((await readdir(cacheDirectory)).sort(), beforePersonal, "personal-sized garments never enter the disk cache");
+  await unlink(personalGlb);
+  assert.equal((await personalRequest()).code, 404);
+  assert.deepEqual((await readdir(cacheDirectory)).sort(), beforePersonal, "a deleted personal-sized garment leaves no disk cache copy");
   const req = { socket: { remoteAddress: "192.0.2.1" }, headers: { host: "localhost:3000" }, method: "GET", query: { body: "personal-scaled", slot: "top" } };
   const res = { code: 0, setHeader() {}, status(code) { this.code = code; return this; }, end() { return this; } };
   await personalHandler(req, res); assert.equal(res.code, 404);

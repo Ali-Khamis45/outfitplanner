@@ -2,7 +2,7 @@ import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import type { NextApiRequest, NextApiResponse } from "next";
-import { compressedAsset } from "../asset-compression/compress.mjs";
+import { clearPersonalAssetMemory, compressedPersonalAsset, prepareAssetCache } from "../asset-compression/compress.mjs";
 
 type Asset = "body" | "shirt" | "pants" | "shirtSidecar" | "pantsSidecar";
 type Entries = Record<Asset, string | null>;
@@ -52,6 +52,7 @@ export function createPersonalFitHandler(outputsRoot = path.resolve(process.cwd(
     res.setHeader("X-Content-Type-Options", "nosniff");
     if (environment !== "development" || !localRequest(req) || (req.method !== "GET" && req.method !== "HEAD")) return res.status(404).end();
     try {
+      await prepareAssetCache(cacheDir);
       const personalRoot = path.join(outputsRoot, "garments", "personal");
       const manifest = JSON.parse(await readFile(path.join(personalRoot, "manifest.json"), "utf8"));
       const entries = manifestEntries(manifest);
@@ -74,13 +75,13 @@ export function createPersonalFitHandler(outputsRoot = path.resolve(process.cwd(
       const gzip = accepts.split(",").map(value => value.trim()).find(value => /^gzip(?:\s*;|$)/i.test(value));
       const quality = gzip?.match(/;\s*q=([\d.]+)/i);
       const encoded = !!gzip && (!quality || Number(quality[1]) > 0);
-      const bytes = Buffer.from(await compressedAsset(file, cacheDir, encoded));
+      const bytes = Buffer.from(await compressedPersonalAsset(file, encoded));
       const etag = `"${createHash("sha256").update(bytes).digest("hex")}"`;
       res.setHeader("Vary", "Accept-Encoding"); res.setHeader("ETag", etag);
       if ((req.headers["if-none-match"] ?? "").split(",").some(tag => tag.trim() === etag || tag.trim() === "*")) return res.status(304).end();
       if (encoded) res.setHeader("Content-Encoding", "gzip");
       res.setHeader("Content-Length", String(bytes.length));
       return res.status(200).end(bytes);
-    } catch { return res.status(404).end(); }
+    } catch { clearPersonalAssetMemory(); return res.status(404).end(); }
   };
 }

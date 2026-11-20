@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, stat, unlink, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { gunzipSync } from "node:zlib";
@@ -18,7 +19,13 @@ try {
   for (const file of ["body.glb", "shirt.glb", "pants.glb"]) await writeFile(path.join(personal, file), fixture);
   for (const file of ["shirt.json", "pants.json"]) await writeFile(path.join(personal, file), `fixture ${file}`);
   const cacheDir = path.join(root, "cache");
-  const cacheBefore = await readdir(cacheDir).catch(error => { if (error.code === "ENOENT") return []; throw error; });
+  await mkdir(cacheDir);
+  const bodyPath = path.join(personal, "body.glb"), bodyStat = await stat(bodyPath);
+  const oldHash = createHash("sha256").update(`${path.resolve(bodyPath)}:${bodyStat.size}:${bodyStat.mtimeMs}`).digest("hex");
+  const oldBase = `meshopt-v3-uv-high-${oldHash}.glb`;
+  await writeFile(path.join(cacheDir, oldBase), fixture);
+  await writeFile(path.join(cacheDir, `${oldBase}.gz`), fixture);
+  await writeFile(path.join(cacheDir, "unrelated.txt"), "keep");
   async function meshOf(bytes) {
     const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
     const gltf = await new Promise((resolve, reject) => loader.parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), "", resolve, reject));
@@ -26,10 +33,10 @@ try {
     assert.ok(mesh); return mesh;
   }
   const original = await meshOf(fixture);
-  const request = async (environment, overrides = {}) => {
+  const request = async (environment, overrides = {}, requestCacheDir = cacheDir) => {
     const req = { socket: { remoteAddress: "127.0.0.1" }, headers: { host: "localhost:3000" }, method: "GET", query: {}, ...overrides };
     const res = { headers: {}, code: 0, body: null, setHeader(key, value) { this.headers[key] = value; }, status(code) { this.code = code; return this; }, end(value) { this.body = value ?? null; return this; }, json(value) { this.body = value; return this; }, send(value) { this.body = value; return this; } };
-    await createPersonalFitHandler(outputs, environment, cacheDir)(req, res);
+    await createPersonalFitHandler(outputs, environment, requestCacheDir)(req, res);
     return res;
   };
   const found = await request("development");
@@ -52,7 +59,26 @@ try {
   assert.deepEqual((await meshOf(gunzipSync(zipped.body))).morphTargetDictionary, original.morphTargetDictionary);
   const noGzip = await request("development", { headers: { host: "localhost:3000", "accept-encoding": "gzip;q=0" }, query: { asset: "shirt" } });
   assert.equal(noGzip.headers["Content-Encoding"], undefined);
-  assert.ok((await readdir(cacheDir)).length > cacheBefore.length, "personal requests use their private local compression cache");
+  assert.deepEqual(await readdir(cacheDir), ["unrelated.txt"], "legacy personal and neutral cache format is purged; personal assets do not create disk files");
+  const firstBody = await request("development", { query: { asset: "body" } });
+  const replacement = Buffer.from(fixture), nodeName = replacement.indexOf(Buffer.from('"shirt"'));
+  assert.ok(nodeName >= 0); replacement.write('"skirt"', nodeName, "utf8");
+  await writeFile(bodyPath, replacement);
+  const replaced = await request("development", { query: { asset: "body" }, headers: { host: "localhost:3000", "if-none-match": firstBody.headers.ETag } });
+  assert.equal(replaced.code, 200); assert.notEqual(replaced.headers.ETag, firstBody.headers.ETag, "a replacement cannot reuse the previous mesh");
+  assert.deepEqual(await readdir(cacheDir), ["unrelated.txt"]);
+  await unlink(bodyPath);
+  const deleted = await request("development", { query: { asset: "body" }, headers: { host: "localhost:3000", "if-none-match": replaced.headers.ETag } });
+  assert.equal(deleted.code, 404, "deleted personal avatars never return cached bytes");
+  assert.deepEqual(await readdir(cacheDir), ["unrelated.txt"], "no compressed personal copy remains on disk after deletion");
+  const staleCache = path.join(root, "stale-cache"); await mkdir(staleCache);
+  await writeFile(path.join(staleCache, oldBase), fixture);
+  await writeFile(path.join(staleCache, `${oldBase}.gz`), fixture);
+  await writeFile(path.join(staleCache, `meshopt-v1-medium-${oldHash}.glb`), fixture);
+  await writeFile(path.join(staleCache, `meshopt-v2-high-${oldHash}.glb.gz`), fixture);
+  assert.equal((await request("development", { query: { asset: "body" } }, staleCache)).code, 404);
+  assert.deepEqual(await readdir(staleCache), [], "a first request after deletion also removes legacy disk copies");
+  await writeFile(bodyPath, fixture);
   const notModified = await request("development", { headers: { host: "localhost:3000", "accept-encoding": "gzip", "if-none-match": zipped.headers.ETag }, query: { asset: "shirt" } });
   assert.equal(notModified.code, 304);
   assert.equal((await request("production")).code, 404);
