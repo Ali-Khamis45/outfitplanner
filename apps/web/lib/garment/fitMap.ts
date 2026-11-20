@@ -4,7 +4,30 @@ export type Slot = "top" | "bottom";
 export type FitStatus = "tight" | "good" | "loose";
 export type Region = { status: FitStatus; ease_mm?: number; delta_mm?: number; clamped?: boolean };
 export interface FitMap { version: 1; garment: string; size: Size; body: string; regions: Record<string, Region>; recommended: boolean }
-export interface SizeOption { size: Size; fit: FitMap; glb: string; sidecar: string }
+export type AvailableSize = { size: Size; status?: "available"; fit: FitMap; glb: string; sidecar: string };
+export type SizeOption = AvailableSize | { size: Size; status: "withheld" };
+
+/** Parse discovery results without requiring assets for deliberately withheld sizes. */
+export function parseSizeOptions(value: unknown, body: string): SizeOption[] {
+  if (!Array.isArray(value)) return [];
+  const sizes = new Map<Size, SizeOption>();
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object" || !SIZES.includes(entry.size)) continue;
+    const size = entry.size as Size;
+    // A withheld declaration wins over a duplicate available entry in either order.
+    if (entry.status === "withheld") { sizes.set(size, { size, status: "withheld" }); continue; }
+    if (sizes.get(size)?.status === "withheld" || (entry.status !== undefined && entry.status !== "available")) continue;
+    try {
+      const fit = parseFitMap(entry.fit);
+      if (fit.body === body && fit.size === size && typeof entry.glb === "string" && typeof entry.sidecar === "string") sizes.set(size, { size, fit, glb: entry.glb, sidecar: entry.sidecar });
+    } catch { /* Ignore incomplete or malformed entries. */ }
+  }
+  return SIZES.flatMap(size => sizes.has(size) ? [sizes.get(size)!] : []);
+}
+
+export function isAvailableSize(option: SizeOption): option is AvailableSize {
+  return option.status !== "withheld";
+}
 
 export function parseFitMap(value: unknown): FitMap {
   if (!value || typeof value !== "object") throw new Error("Invalid fit map");

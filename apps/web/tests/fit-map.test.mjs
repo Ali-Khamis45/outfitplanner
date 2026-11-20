@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
-import { easeAttributeName, formatRegion, isFullyClampedAndTight, parseFitMap, regionEstimateNote } from "../lib/garment/fitMap.ts";
+import { easeAttributeName, formatRegion, isFullyClampedAndTight, parseFitMap, parseSizeOptions, isAvailableSize, regionEstimateNote } from "../lib/garment/fitMap.ts";
 import { configureHeatmap } from "../lib/garment/heatmap.ts";
 import { compressGlb } from "../asset-compression/compress.mjs";
 import { fixtureEase } from "./fixture-ease.mjs";
@@ -16,6 +16,14 @@ for (const garment of ["tshirt-v5.2", "pants-v2"]) for (const size of ["S", "M",
 }
 
 const fit = parseFitMap({ version: 1, garment: "tshirt", size: "M", body: "mhr-neutral", regions: { chest: { ease_mm: 62, status: "good" }, length: { delta_mm: -15, status: "tight" } }, recommended: true });
+const available = { size: "M", fit, glb: "/shirt.glb", sidecar: "/shirt.json" };
+const withheld = { size: "L", status: "withheld" };
+assert.deepEqual(parseSizeOptions([withheld, available], "mhr-neutral"), [available, withheld]);
+assert.deepEqual(parseSizeOptions([{ ...available, status: "available" }, { size: "M", status: "withheld" }, available], "mhr-neutral"), [{ size: "M", status: "withheld" }], "withheld wins conflicting duplicate entries");
+assert.deepEqual(parseSizeOptions([{ size: "XL", status: "withheld" }, { ...available, status: "unknown" }], "mhr-neutral"), [{ size: "XL", status: "withheld" }]);
+assert.deepEqual(parseSizeOptions([available], "other-body"), []);
+assert.equal(isAvailableSize(withheld), false);
+assert.equal(isAvailableSize(available), true);
 assert.equal(formatRegion("chest", { ease_mm: 62, status: "tight" }, "tshirt-v5.2"), "Chest: tight, 6.2 cm ease (min 7.6 cm)");
 assert.equal(formatRegion("hips", { ease_mm: 40, status: "tight" }, "pants-v2"), "Hips: tight, 4.0 cm ease (min 5.1 cm)");
 assert.equal(formatRegion("waist", { ease_mm: -10, status: "tight" }, "pants-v2"), "Waist: tight, -1.0 cm ease (min 0.0 cm)");

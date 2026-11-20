@@ -2,7 +2,7 @@
 import { useEffect, useId, useState } from "react";
 import { emptyMeasurements, measurementError, measurementFields, names, serializeMeasurements, type Measurements } from "../lib/measurements";
 import { parseSidecar, type Sidecar } from "../lib/garment/correctives";
-import { formatRegion, isFullyClampedAndTight, parseFitMap, regionEstimateNote, SIZES, type Size, type SizeOption, type Slot } from "../lib/garment/fitMap";
+import { formatRegion, isAvailableSize, isFullyClampedAndTight, parseSizeOptions, regionEstimateNote, SIZES, type Size, type SizeOption, type Slot } from "../lib/garment/fitMap";
 
 export function useSizes(body: string | null, slot: Slot, fixtures = false, preferredSize = "", candidate = false) {
   const key = JSON.stringify([body, slot, fixtures, preferredSize, candidate]);
@@ -17,33 +17,39 @@ export function useSizes(body: string | null, slot: Slot, fixtures = false, pref
     if (fixtures) query.set("fixtures", "1");
     fetch(`/api/size-garment?${query}`, { cache: "no-store" })
       .then(response => response.ok ? response.json() : [])
-      .then((items: SizeOption[]) => {
+      .then((items: unknown) => {
         if (!active) return;
-        const options = Array.isArray(items) ? items.filter(item => { try { const fit = parseFitMap(item.fit); return fit.body === body && fit.size === item.size && SIZES.includes(item.size) && typeof item.glb === "string" && typeof item.sidecar === "string"; } catch { return false; } }) : [];
-        const initial = options.find(item => item.size === preferredSize)?.size ?? options.find(item => item.fit.recommended)?.size ?? options[0]?.size ?? null;
+        const options = parseSizeOptions(items, body), available = options.filter(isAvailableSize);
+        const initial = available.find(item => item.size === preferredSize)?.size ?? available.find(item => item.fit.recommended)?.size ?? available[0]?.size ?? null;
         setDiscovery({ key, options, initial });
       }).catch(() => { if (active) setDiscovery({ key, options: [], initial: null }); });
     return () => { active = false; };
   }, [body, slot, fixtures, preferredSize, candidate, key]);
   const resolved = !body || discovery?.key === key;
   const options = resolved && body ? discovery?.options ?? [] : [];
-  const size = resolved ? (choice?.key === key ? choice.size : discovery?.initial ?? null) : null;
-  const selected = options.find(option => option.size === size) ?? null;
+  const requestedSize = choice?.key === key ? choice.size : discovery?.initial ?? null;
+  const selected = options.filter(isAvailableSize).find(option => option.size === requestedSize) ?? null;
+  const size = resolved ? selected?.size ?? null : null;
   useEffect(() => {
     if (!selected) return;
     let active = true;
     fetch(selected.sidecar, { cache: "no-store" }).then(response => { if (!response.ok) throw new Error("Sidecar unavailable"); return response.json(); }).then(value => { if (active) setLoaded({ url: selected.glb, sidecar: parseSidecar(value) }); }).catch(() => { if (active) setLoaded({ url: selected.glb, sidecar: null }); });
     return () => { active = false; };
   }, [selected]);
-  const setSize = (next: Size) => setChoice({ key, size: next });
+  const setSize = (next: Size) => { if (options.some(option => option.size === next && isAvailableSize(option))) setChoice({ key, size: next }); };
   return { options, size, setSize, selected, resolved, garment: selected && loaded?.url === selected.glb ? { url: selected.glb, sidecar: loaded.sidecar } : null };
 }
 
 export function FitPicker({ title, options, selected, onSize, editorial = false }: { title: string; options: SizeOption[]; selected: Size | null; onSize: (size: Size) => void; editorial?: boolean }) {
-  const fit = options.find(option => option.size === selected)?.fit;
+  const tooltipId = useId();
+  const available = options.filter(isAvailableSize), fit = available.find(option => option.size === selected)?.fit;
   return <section className={`fit-picker${editorial ? " fit-editorial" : ""}`} aria-label={`${title} fit`}>
-    <div className="fit-heading"><strong>{title} size</strong>{options.some(option => option.fit.recommended) && <span>● Recommended</span>}</div>
-    <div className="fit-sizes" role="group" aria-label={`${title} size`}>{SIZES.map(size => { const recommended = options.some(option => option.size === size && option.fit.recommended); return <button type="button" key={size} disabled={!options.some(option => option.size === size)} aria-label={recommended ? `${size}, Recommended` : size} aria-pressed={selected === size} onClick={() => onSize(size)}>{size}{recommended && <span className="fit-recommended-dot" aria-hidden="true" title="Recommended" />}</button>; })}</div>
+    <div className="fit-heading"><strong>{title} size</strong>{available.some(option => option.fit.recommended) && <span>● Recommended</span>}</div>
+    <div className="fit-sizes" role="group" aria-label={`${title} size`}>{SIZES.map(size => {
+      const option = options.find(entry => entry.size === size), withheld = option?.status === "withheld", recommended = available.some(entry => entry.size === size && entry.fit.recommended);
+      const button = <button key={size} type="button" disabled={!option || withheld} aria-disabled={withheld ? true : undefined} aria-describedby={withheld ? `${tooltipId}-${size}` : undefined} aria-label={recommended ? `${size}, Recommended` : size} aria-pressed={selected === size} onClick={() => onSize(size)}>{size}{recommended && <span className="fit-recommended-dot" aria-hidden="true" title="Recommended" />}</button>;
+      return withheld ? <span className="fit-withheld" key={size} tabIndex={0} aria-label={`${size}: This size isn't ready yet`} aria-describedby={`${tooltipId}-${size}`}><span className="fit-withheld-button">{button}</span><span role="tooltip" id={`${tooltipId}-${size}`} className="fit-withheld-tooltip">This size isn&apos;t ready yet</span></span> : button;
+    })}</div>
     {fit ? <div className="fit-summary">{isFullyClampedAndTight(fit) && <p className="fit-clamped-warning">Too small for this body. Shown at the closest wearable fit.</p>}<strong>{editorial ? "Fit analysis" : "Fit summary"}</strong>{Object.entries(fit.regions).map(([name, region]) => <p key={name} className="fit-label" data-fit={region.status}>{editorial && <><span className="fit-region-name">{name.replaceAll("_", " ")}</span><span className="fit-status">{region.status}</span></>}<span className="fit-region-detail">{formatRegion(name, region, fit.garment)}</span>{regionEstimateNote(region) && <small className="fit-estimate-note"> {regionEstimateNote(region)}</small>}</p>)}</div> : <p className="fit-unavailable">Size fits are not available yet.</p>}
   </section>;
 }
